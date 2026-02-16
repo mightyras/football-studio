@@ -100,7 +100,6 @@ export function StatusBar({ zoomLevel = 1 }: StatusBarProps) {
             left: '50%',
             transform: 'translateX(-50%)',
             color: theme.accent,
-            fontStyle: 'italic',
             whiteSpace: 'nowrap',
           }}
         >
