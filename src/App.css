@@ -1,0 +1,57 @@
+.app-layout {
+  display: grid;
+  grid-template-columns: 60px 1fr 0px;
+  grid-template-rows: 48px 1fr 28px;
+  grid-template-areas:
+    "topbar   topbar     topbar"
+    "toolbar  canvas     formations"
+    "status   status     status";
+  height: 100vh;
+  width: 100vw;
+}
+
+.app-layout--panel-open {
+  grid-template-columns: 60px 1fr 240px;
+}
+
+/* Animation mode layout: keyframe strip + playback controls below canvas */
+.app-layout--animation {
+  grid-template-rows: 48px 1fr auto auto 28px;
+  grid-template-areas:
+    "topbar   topbar         topbar"
+    "toolbar  canvas         formations"
+    "toolbar  kf-strip       formations"
+    "toolbar  pb-controls    formations"
+    "status   status         status";
+}
+
+.topbar {
+  grid-area: topbar;
+}
+
+.toolbar {
+  grid-area: toolbar;
+}
+
+.canvas-area {
+  grid-area: canvas;
+  background: #0d1117;
+  overflow: hidden;
+}
+
+.formations {
+  grid-area: formations;
+  overflow: hidden;
+}
+
+.statusbar {
+  grid-area: status;
+}
+
+.keyframe-strip {
+  grid-area: kf-strip;
+}
+
+.playback-controls {
+  grid-area: pb-controls;
+}

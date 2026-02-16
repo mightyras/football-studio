@@ -1,0 +1,16 @@
+export const THEME = {
+  bg: '#0a0e1a',
+  surface: '#111827',
+  surfaceHover: '#1f2937',
+  border: '#1e293b',
+  text: '#e2e8f0',
+  textMuted: '#94a3b8',
+  accent: '#f59e0b',
+  accentHover: '#d97706',
+  pitchGreen: '#1a5c2a',
+  pitchStripe: '#1e6b32',
+  pitchLines: 'rgba(255, 255, 255, 0.9)',
+  pitchBackground: '#0d1117',
+  teamA: '#ef4444',
+  teamB: '#3b82f6',
+} as const;
