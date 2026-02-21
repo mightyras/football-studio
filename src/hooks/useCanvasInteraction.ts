@@ -6,6 +6,7 @@ import { getPlayerScreenRadius } from '../canvas/PlayerRenderer';
 import { findAnnotationAtScreen } from '../utils/annotationHitTest';
 import { getBenchBounds } from '../canvas/BenchRenderer';
 import { PITCH } from '../constants/pitch';
+import { computeMinStepForGhostStart } from '../utils/ghostUtils';
 
 /** Clamp a world coordinate to the playable area (pitch + green buffer) */
 const clampX = (x: number) => Math.max(-PITCH.padding, Math.min(PITCH.length + PITCH.padding, x));
@@ -102,6 +103,7 @@ export function useCanvasInteraction(
       // Check for annotation double-click (text editing)
       const annHit = findAnnotationAtScreen(
         screen.x, screen.y, state.annotations, state.players, transform,
+        state.ghostAnnotationIds, state.ghostPlayers, state.previewGhosts,
       );
       if (annHit && (annHit.type === 'text' || annHit.type === 'passing-line' || annHit.type === 'running-line' || annHit.type === 'curved-run' || annHit.type === 'dribble-line' || annHit.type === 'player-marking')) {
         dispatch({ type: 'START_EDITING_ANNOTATION', annotationId: annHit.id });
@@ -194,6 +196,24 @@ export function useCanvasInteraction(
               : null;
             const endPlayerId = (endSnapPlayer && endSnapPlayer.id !== dp.startPlayerId) ? endSnapPlayer.id : undefined;
             const endPoint = endPlayerId && endSnapPlayer ? { x: endSnapPlayer.x, y: endSnapPlayer.y } : { x: clampX(world.x), y: clampY(world.y) };
+
+            // Compute default step: max existing step + 1
+            const animatableTypes = ['running-line', 'curved-run', 'passing-line', 'dribble-line'];
+            const existingLineAnns = state.annotations.filter(
+              a => animatableTypes.includes(a.type) && !state.ghostAnnotationIds.includes(a.id)
+            );
+            const maxStep = existingLineAnns.reduce((max, a) => Math.max(max, ('animStep' in a ? (a.animStep ?? 1) : 1)), 0);
+            let nextStep = maxStep + 1;
+
+            // Guardrail: if drawing from a ghost, step must be > the incoming annotation's step
+            if (dp.startFromGhost && dp.startPlayerId) {
+              const minStep = computeMinStepForGhostStart(
+                dp.startPlayerId, dp.start,
+                state.annotations, state.previewGhosts,
+              );
+              nextStep = Math.max(nextStep, minStep);
+            }
+
             const ann: Annotation = {
               id: `ann-${Date.now()}`,
               type: dp.subTool,
@@ -202,14 +222,26 @@ export function useCanvasInteraction(
               startPlayerId: dp.startPlayerId,
               endPlayerId,
               color: '#ffffff',
+              animStep: nextStep,
               ...(dp.subTool === 'curved-run' ? { curveDirection: e.shiftKey ? 'right' : 'left' } : {}),
             };
             dispatch({ type: 'ADD_ANNOTATION', annotation: ann });
+            dispatch({ type: 'SELECT_ANNOTATION', annotationId: ann.id });
             dispatch({ type: 'CANCEL_DRAWING' });
           } else {
-            // First click: start drawing — snap to player if near one
-            const snapPlayer = findPlayerAtScreen(screen.x, screen.y, state.players, transform, state.playerRadius);
-            // Running-line, curved-run, passing-line and dribble-line MUST start from a player
+            // First click: start drawing — snap to player or preview ghost if near one
+            let snapPlayer = findPlayerAtScreen(screen.x, screen.y, state.players, transform, state.playerRadius);
+            let startFromGhost = false;
+            // If no real player hit, check preview ghosts (future positions)
+            if (!snapPlayer && state.previewGhosts.length > 0) {
+              const ghostAsPlayers: Player[] = state.previewGhosts.map(g => ({
+                id: g.playerId, team: g.team, number: g.number, name: g.name,
+                x: g.x, y: g.y, facing: g.facing, isGK: g.isGK,
+              }));
+              snapPlayer = findPlayerAtScreen(screen.x, screen.y, ghostAsPlayers, transform, state.playerRadius);
+              if (snapPlayer) startFromGhost = true;
+            }
+            // Running-line, curved-run, passing-line and dribble-line MUST start from a player (or ghost)
             if ((subTool === 'running-line' || subTool === 'curved-run' || subTool === 'passing-line' || subTool === 'dribble-line' || subTool === 'player-marking') && !snapPlayer) return;
             dispatch({
               type: 'START_DRAWING',
@@ -218,6 +250,7 @@ export function useCanvasInteraction(
                 subTool,
                 start: snapPlayer ? { x: snapPlayer.x, y: snapPlayer.y } : { x: clampX(world.x), y: clampY(world.y) },
                 startPlayerId: snapPlayer?.id,
+                startFromGhost,
                 curveDirection: undefined,
               },
             });
@@ -425,7 +458,7 @@ export function useCanvasInteraction(
           // outer edge of the player hit area (not dead-center on the player).
           const ghostAnnHit = findAnnotationAtScreen(
             screen.x, screen.y, state.annotations, state.players, transform,
-            state.ghostAnnotationIds, state.ghostPlayers,
+            state.ghostAnnotationIds, state.ghostPlayers, state.previewGhosts,
           );
           const hitPos = transform.worldToScreen(hit.x, hit.y);
           const dxH = screen.x - hitPos.x;
@@ -451,7 +484,7 @@ export function useCanvasInteraction(
           // Check for annotation hit
           const annHit = findAnnotationAtScreen(
             screen.x, screen.y, state.annotations, state.players, transform,
-            state.ghostAnnotationIds, state.ghostPlayers,
+            state.ghostAnnotationIds, state.ghostPlayers, state.previewGhosts,
           );
           if (annHit) {
             // Select and start dragging the annotation
@@ -550,7 +583,7 @@ export function useCanvasInteraction(
           // Also allow deleting annotations in delete mode
           const annHit = findAnnotationAtScreen(
             screen.x, screen.y, state.annotations, state.players, transform,
-            state.ghostAnnotationIds, state.ghostPlayers,
+            state.ghostAnnotationIds, state.ghostPlayers, state.previewGhosts,
           );
           if (annHit) {
             dispatch({ type: 'DELETE_ANNOTATION', annotationId: annHit.id });
@@ -691,6 +724,7 @@ export function useCanvasInteraction(
             if (!overSomething) {
               const annHit = findAnnotationAtScreen(
                 screen.x, screen.y, state.annotations, state.players, transform,
+                [], [], state.previewGhosts,
               );
               overAnnotation = annHit != null;
             }
@@ -716,9 +750,14 @@ export function useCanvasInteraction(
             if ((subTool === 'player-polygon' || subTool === 'player-line' || subTool === 'player-marking') && hit) {
               canvas.style.cursor = 'pointer';
             } else if (
-              (subTool === 'passing-line' || subTool === 'running-line' || subTool === 'curved-run' || subTool === 'dribble-line') && hit
+              (subTool === 'passing-line' || subTool === 'running-line' || subTool === 'curved-run' || subTool === 'dribble-line')
+              && (hit || (!state.drawingInProgress && state.previewGhosts.length > 0 && findPlayerAtScreen(
+                screen.x, screen.y,
+                state.previewGhosts.map(g => ({ id: g.playerId, team: g.team, number: g.number, name: g.name, x: g.x, y: g.y, facing: g.facing, isGK: g.isGK })),
+                transform, state.playerRadius,
+              )))
             ) {
-              canvas.style.cursor = 'pointer'; // snap affordance
+              canvas.style.cursor = 'pointer'; // snap affordance (real player or preview ghost)
             } else {
               canvas.style.cursor = 'crosshair';
             }

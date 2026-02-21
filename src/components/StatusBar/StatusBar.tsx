@@ -21,11 +21,7 @@ const DRAW_HELP: Record<string, string> = {
   'player-marking': 'Step 1: Click the player being marked (target)',
 };
 
-interface StatusBarProps {
-  zoomLevel?: number;
-}
-
-export function StatusBar({ zoomLevel = 1 }: StatusBarProps) {
+export function StatusBar() {
   const { state } = useAppState();
   const theme = useThemeColors();
 
@@ -107,9 +103,6 @@ export function StatusBar({ zoomLevel = 1 }: StatusBarProps) {
         </div>
       )}
       <div style={{ display: 'flex', gap: 24 }}>
-        {zoomLevel > 1 && (
-          <span style={{ color: theme.accent }}>Zoom: {Math.round(zoomLevel * 100)}%</span>
-        )}
         <span>{coordText}</span>
       </div>
     </div>

@@ -235,7 +235,7 @@ function SceneCard({
         ) : (
           <IconButton
             onClick={e => { e.stopPropagation(); setConfirmDelete(true); }}
-            title="Delete scene"
+            title="Delete board"
             danger
           >
             <TrashIcon />
@@ -367,7 +367,7 @@ export function ScenesPanel({ saveRequested, onSaveHandled }: ScenesPanelProps) 
           onMouseLeave={e => { e.currentTarget.style.background = hexToRgba(theme.accent, 0.1); }}
         >
           <SaveIcon />
-          Save Scene
+          Save Board
         </button>
 
         {/* Inline name input (shown when saving) */}
@@ -382,7 +382,7 @@ export function ScenesPanel({ saveRequested, onSaveHandled }: ScenesPanelProps) 
                 if (e.key === 'Escape') setSaving(false);
                 e.stopPropagation();
               }}
-              placeholder="Scene name..."
+              placeholder="Board name..."
               style={{
                 flex: 1,
                 fontSize: 11,
@@ -495,7 +495,7 @@ export function ScenesPanel({ saveRequested, onSaveHandled }: ScenesPanelProps) 
             fontSize: 11,
             lineHeight: 1.5,
           }}>
-            No saved scenes yet.
+            No saved boards yet.
             <br />
             <span style={{ fontSize: 10, color: '#4b5563' }}>
               Save your current board to get started.

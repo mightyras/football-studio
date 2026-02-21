@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useAppState } from '../../state/AppStateContext';
 import { useThemeColors } from '../../hooks/useThemeColors';
 import { hexToRgba } from '../../utils/colorUtils';
+import { computeStepOrder } from '../../animation/annotationAnimator';
 import type { Annotation, PitchTransform, TextAnnotation } from '../../types';
 
 const getColorPresets = (accent: string) => [
@@ -29,19 +30,21 @@ const isLineAnnotation = (a: Annotation): a is LineAnnotation =>
 function LineAnnotationEditor({
   ann,
   transform,
+  effectiveStep,
 }: {
   ann: LineAnnotation;
   transform: PitchTransform;
+  effectiveStep: number;
 }) {
   const { dispatch } = useAppState();
   const theme = useThemeColors();
-  const [step, setStep] = useState(ann.animStep ?? 1);
+  const [step, setStep] = useState(effectiveStep);
   const [color, setColor] = useState(ann.color);
 
   useEffect(() => {
-    setStep(ann.animStep ?? 1);
+    setStep(effectiveStep);
     setColor(ann.color);
-  }, [ann.id]);
+  }, [ann.id, effectiveStep]);
 
   // Compute position: midpoint of line
   const midX = (ann.start.x + ann.end.x) / 2;
@@ -214,7 +217,14 @@ export function AnnotationEditPopover({ transform }: { transform: PitchTransform
 
   // Line annotation editor
   if (isLineAnnotation(ann)) {
-    return <LineAnnotationEditor ann={ann} transform={transform} />;
+    // Compute effective step from auto-ordering
+    const allLineAnns = state.annotations.filter(isLineAnnotation);
+    const stepOrder = computeStepOrder(allLineAnns);
+    const annIndex = allLineAnns.findIndex(a => a.id === ann.id);
+    const effectiveStep = stepOrder && annIndex >= 0
+      ? stepOrder[annIndex]
+      : (ann.animStep ?? 1);
+    return <LineAnnotationEditor ann={ann} transform={transform} effectiveStep={effectiveStep} />;
   }
 
   // Text annotation editor

@@ -14,6 +14,8 @@ import { computeRunFrame } from '../../animation/playerRunAnimator';
 import { isPointInGoal } from '../../utils/goalDetection';
 import { curvedRunControlPoint } from '../../utils/curveGeometry';
 import { playKickSound } from '../../utils/sound';
+import { findStepBadgeAtScreen } from '../../utils/annotationHitTest';
+import { findClosestGhost, computeMinStepForGhostStart } from '../../utils/ghostUtils';
 
 interface ZoomProps {
   zoomState: ZoomState;
@@ -34,7 +36,7 @@ interface ZoomProps {
 
 interface PitchCanvasProps {
   playbackRef?: React.RefObject<PlaybackController | null>;
-  playerRunAnimRef?: React.MutableRefObject<PlayerRunAnimation | null>;
+  playerRunAnimRef?: React.MutableRefObject<PlayerRunAnimation[]>;
   animationQueueRef?: React.MutableRefObject<QueuedAnimation[]>;
   goalCelebrationRef?: React.MutableRefObject<GoalCelebration | null>;
   onGoalScored?: (celebration: GoalCelebration) => void;
@@ -57,17 +59,55 @@ export function PitchCanvas({ playbackRef, playerRunAnimRef, animationQueueRef, 
   // Track annotation IDs completed during a queued animation sequence,
   // so they are hidden during subsequent steps (e.g. pass line drops when run starts).
   const completedQueueAnimIds = useRef<Set<string>>(new Set());
+  // Track which badge is focused for number-key editing
+  const focusedBadgeAnnId = useRef<string | null>(null);
   transformRef.current = transform;
   stateRef.current = state;
 
   const { onPointerDown, onPointerMove, onPointerUp, onDoubleClick } =
     useCanvasInteraction(canvasRef, transformRef, stateRef, dispatch);
 
-  // Track CMD and Shift keys for rotate mode and curve direction
+  // Track CMD and Shift keys for rotate mode and curve direction,
+  // and number keys for step badge editing
   useEffect(() => {
+    const isLineAnnotation = (type: string) =>
+      type === 'passing-line' || type === 'running-line' || type === 'curved-run' || type === 'dribble-line';
+
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Meta') dispatch({ type: 'SET_CMD_HELD', held: true });
       if (e.key === 'Shift') dispatch({ type: 'SET_SHIFT_HELD', held: true });
+
+      // Number keys 1-9: set step on selected line annotation (badge or just-drawn)
+      if (e.key >= '1' && e.key <= '9') {
+        const currentState = stateRef.current;
+        const selId = focusedBadgeAnnId.current || currentState.selectedAnnotationId;
+        if (selId) {
+          const selAnn = currentState.annotations.find(a => a.id === selId);
+          if (selAnn && isLineAnnotation(selAnn.type)) {
+            const requestedStep = parseInt(e.key);
+            // Guardrail: prevent setting a step lower than the incoming annotation's step
+            const lineAnn = selAnn as { startPlayerId?: string; start: { x: number; y: number } };
+            if (lineAnn.startPlayerId) {
+              const minStep = computeMinStepForGhostStart(
+                lineAnn.startPlayerId, lineAnn.start,
+                currentState.annotations, currentState.previewGhosts,
+              );
+              if (requestedStep < minStep) {
+                e.preventDefault();
+                return; // reject too-low step
+              }
+            }
+            e.preventDefault();
+            dispatch({ type: 'EDIT_ANNOTATION', annotationId: selId, changes: { animStep: requestedStep } });
+            return;
+          }
+        }
+      }
+      // Escape: clear badge focus and selection
+      if (e.key === 'Escape' && focusedBadgeAnnId.current) {
+        focusedBadgeAnnId.current = null;
+        dispatch({ type: 'SELECT_ANNOTATION', annotationId: null });
+      }
     };
     const handleKeyUp = (e: KeyboardEvent) => {
       if (e.key === 'Meta') dispatch({ type: 'SET_CMD_HELD', held: false });
@@ -77,6 +117,7 @@ export function PitchCanvas({ playbackRef, playerRunAnimRef, animationQueueRef, 
     const handleBlur = () => {
       dispatch({ type: 'SET_CMD_HELD', held: false });
       dispatch({ type: 'SET_SHIFT_HELD', held: false });
+      focusedBadgeAnnId.current = null;
     };
 
     window.addEventListener('keydown', handleKeyDown);
@@ -114,7 +155,7 @@ export function PitchCanvas({ playbackRef, playerRunAnimRef, animationQueueRef, 
     [canvasRef],
   );
 
-  // Wrap pointer handlers to intercept middle-click pan
+  // Wrap pointer handlers to intercept middle-click pan and badge clicks
   const wrappedPointerDown = useCallback(
     (e: React.PointerEvent<HTMLCanvasElement>) => {
       if (e.button === 1 && zoom.zoomState.zoom > 1) {
@@ -124,9 +165,21 @@ export function PitchCanvas({ playbackRef, playerRunAnimRef, animationQueueRef, 
         canvasRef.current?.setPointerCapture(e.pointerId);
         return;
       }
+      // Check if clicking on a step badge — if so, focus it for number-key editing
+      if (e.button === 0 && transformRef.current && stateRef.current.showStepNumbers) {
+        const screen = getCanvasCoords(e);
+        const annId = findStepBadgeAtScreen(screen.x, screen.y, stateRef.current.annotations, stateRef.current.players, transformRef.current, stateRef.current.previewGhosts);
+        if (annId) {
+          focusedBadgeAnnId.current = annId;
+          dispatch({ type: 'SELECT_ANNOTATION', annotationId: annId });
+          return; // consumed — don't pass through to normal interaction
+        }
+      }
+      // Clear badge focus when clicking elsewhere
+      focusedBadgeAnnId.current = null;
       onPointerDown(e);
     },
-    [onPointerDown, zoom.zoomState.zoom, zoom.startPan, getCanvasCoords, canvasRef],
+    [onPointerDown, zoom.zoomState.zoom, zoom.startPan, getCanvasCoords, canvasRef, dispatch],
   );
 
   const wrappedPointerMove = useCallback(
@@ -188,22 +241,31 @@ export function PitchCanvas({ playbackRef, playerRunAnimRef, animationQueueRef, 
           }
         : baseState;
 
-      // Hide annotations that finished in an earlier step of a queued sequence,
-      // so the completed pass/run line disappears before the next step starts
+      // Annotations that finished in an earlier step of a queued sequence:
+      // treat them as ghost annotations so they render at ghost opacity
+      // instead of full opacity while the remaining queue plays out.
+      // (EXECUTE_RUN adds them to ghostAnnotationIds, but React may not
+      // have processed the dispatch yet on the very next frame.)
       if (completedQueueAnimIds.current.size > 0) {
         const completedIds = completedQueueAnimIds.current;
-        renderState = {
-          ...renderState,
-          annotations: renderState.annotations.filter(a => !completedIds.has(a.id)),
-        };
+        const extraGhostIds = [...completedIds].filter(id => !renderState.ghostAnnotationIds.includes(id));
+        if (extraGhostIds.length > 0) {
+          renderState = {
+            ...renderState,
+            ghostAnnotationIds: [...renderState.ghostAnnotationIds, ...extraGhostIds],
+          };
+        }
       }
 
-      // Per-player run animation tick
-      const runAnim = playerRunAnimRef?.current;
-      let runAnimOverlay: RunAnimationOverlay | undefined;
+      // Timestamp for this frame (used for animation, ghost fading, etc.)
+      const now = performance.now();
 
-      if (runAnim) {
-        const now = performance.now();
+      // Per-player run animation tick — process all concurrent animations
+      const activeAnims = playerRunAnimRef?.current ?? [];
+      const runAnimOverlays: RunAnimationOverlay[] = [];
+      const finishedAnims: PlayerRunAnimation[] = [];
+
+      for (const runAnim of activeAnims) {
         const runFrame = computeRunFrame(runAnim, now);
         const animType = runAnim.animationType ?? 'run';
 
@@ -239,7 +301,7 @@ export function PitchCanvas({ playbackRef, playerRunAnimRef, animationQueueRef, 
         // Build transient visual overlay (ghost + line progress) for the render pipeline
         const player = baseState.players.find(p => p.id === runFrame.playerId);
         if (player) {
-          runAnimOverlay = {
+          runAnimOverlays.push({
             annotationId: runAnim.annotationId,
             playerId: runFrame.playerId,
             progress: runFrame.easedProgress,
@@ -252,15 +314,18 @@ export function PitchCanvas({ playbackRef, playerRunAnimRef, animationQueueRef, 
               y: runAnim.startPos.y,
               facing: player.facing,
               isGK: player.isGK,
+              createdAt: 0, // transient — never fades during animation
             },
             ballPos: (runFrame.ballX != null && runFrame.ballY != null)
               ? { x: runFrame.ballX, y: runFrame.ballY }
               : undefined,
             animationType: animType,
-          };
+          });
         }
 
         if (runFrame.finished) {
+          finishedAnims.push(runAnim);
+
           // Dispatch state update — move player/ball to endpoint and create ghost
           if (player) {
             dispatch({
@@ -278,6 +343,7 @@ export function PitchCanvas({ playbackRef, playerRunAnimRef, animationQueueRef, 
                 y: runAnim.startPos.y,
                 facing: player.facing,
                 isGK: player.isGK,
+                createdAt: 0, // stamped when animation queue empties
               },
               annotationId: runAnim.annotationId,
               ...(animType === 'pass' || animType === 'dribble' ? {
@@ -314,91 +380,132 @@ export function PitchCanvas({ playbackRef, playerRunAnimRef, animationQueueRef, 
               }
             }
           }
+        }
+      }
 
-          // Check animation queue for next animation
-          const queue = animationQueueRef?.current;
-          if (queue && queue.length > 0) {
-            // Mark just-finished annotation as completed so it renders ghosted
-            // even before React processes the EXECUTE_RUN dispatch
-            completedQueueAnimIds.current.add(runAnim.annotationId);
+      // When ALL concurrent animations in the current step are done, advance to next step
+      if (finishedAnims.length > 0 && finishedAnims.length === activeAnims.length) {
+        // Mark all finished annotations as completed for ghost rendering
+        for (const fa of finishedAnims) {
+          completedQueueAnimIds.current.add(fa.annotationId);
+        }
 
-            const next = queue.shift()!;
+        // Check animation queue for next batch (same step = simultaneous)
+        const queue = animationQueueRef?.current;
+        if (queue && queue.length > 0) {
+          const nextStep = queue[0].step;
+          const batch: QueuedAnimation[] = [];
+          while (queue.length > 0 && queue[0].step === nextStep) {
+            batch.push(queue.shift()!);
+          }
 
-            // Resolve start position: use the player's actual position after the
-            // previous animation. For same player: pass → stays at startPos,
-            // run/dribble → moves to endPos. For different player: look up state.
-            const currentState = stateRef.current;
-            let startPos: { x: number; y: number };
-            if (next.playerId === runAnim.playerId) {
-              // Same player — position depends on animation type:
-              // pass: player stayed at startPos; run/dribble: player moved to endPos
-              startPos = animType === 'pass'
-                ? { x: runAnim.startPos.x, y: runAnim.startPos.y }
-                : { x: runAnim.endPos.x, y: runAnim.endPos.y };
-            } else {
+          const currentState = stateRef.current;
+          const nowMs = performance.now();
+          const nextAnims: PlayerRunAnimation[] = [];
+          let didKick = false;
+
+          for (const next of batch) {
+            // Resolve start position: check just-finished animations first (state is stale)
+            let startPos: { x: number; y: number } | undefined;
+            for (const fa of finishedAnims) {
+              if (next.playerId === fa.playerId) {
+                const faType = fa.animationType ?? 'run';
+                startPos = faType === 'pass'
+                  ? { x: fa.startPos.x, y: fa.startPos.y }
+                  : { x: fa.endPos.x, y: fa.endPos.y };
+                break;
+              }
+            }
+            if (!startPos) {
+              // Check if the annotation starts from a preview ghost (future position)
+              const annForNext = currentState.annotations.find(a => a.id === next.annotationId);
               const nextPlayer = currentState.players.find(p => p.id === next.playerId);
-              startPos = nextPlayer
-                ? { x: nextPlayer.x, y: nextPlayer.y }
-                : { x: 0, y: 0 };
+              const lineAnnStart = annForNext && 'start' in annForNext ? (annForNext as { start: { x: number; y: number } }).start : undefined;
+              const pg = lineAnnStart ? findClosestGhost(currentState.previewGhosts, next.playerId, lineAnnStart) : undefined;
+              if (annForNext && pg && nextPlayer && 'start' in annForNext) {
+                const lineAnn = annForNext as { start: { x: number; y: number } };
+                const dxReal = lineAnn.start.x - nextPlayer.x;
+                const dyReal = lineAnn.start.y - nextPlayer.y;
+                const distReal = dxReal * dxReal + dyReal * dyReal;
+                const dxGhost = lineAnn.start.x - pg.x;
+                const dyGhost = lineAnn.start.y - pg.y;
+                const distGhost = dxGhost * dxGhost + dyGhost * dyGhost;
+                startPos = distGhost < distReal ? { x: pg.x, y: pg.y } : { x: nextPlayer.x, y: nextPlayer.y };
+              } else {
+                startPos = nextPlayer
+                  ? { x: nextPlayer.x, y: nextPlayer.y }
+                  : { x: 0, y: 0 };
+              }
+            }
+
+            // Resolve endPos dynamically
+            let resolvedEndPos = next.endPos;
+            if (next.endPlayerId) {
+              // Check if the target player has a same-batch run (simultaneous run + pass)
+              const sameBatchRun = batch.find(
+                b => b.playerId === next.endPlayerId && b.animationType !== 'pass'
+              );
+              if (sameBatchRun) {
+                // Pass should go to where the player is running TO, not where they are now
+                resolvedEndPos = sameBatchRun.endPos;
+              } else {
+                // Check if the target player was moved by a just-finished animation
+                const finishedForTarget = finishedAnims.find(
+                  fa => fa.playerId === next.endPlayerId && (fa.animationType ?? 'run') !== 'pass'
+                );
+                if (finishedForTarget) {
+                  resolvedEndPos = { x: finishedForTarget.endPos.x, y: finishedForTarget.endPos.y };
+                } else {
+                  const targetPlayer = currentState.players.find(p => p.id === next.endPlayerId);
+                  if (targetPlayer) {
+                    resolvedEndPos = { x: targetPlayer.x, y: targetPlayer.y };
+                  }
+                }
+              }
             }
 
             // Compute control point for curved runs
             const controlPoint = next.curveDirection
-              ? curvedRunControlPoint(startPos, next.endPos, next.curveDirection)
+              ? curvedRunControlPoint(startPos, resolvedEndPos, next.curveDirection)
               : next.controlPoint;
-
-            // Resolve endPos dynamically: if the next animation targets a player
-            // (endPlayerId), figure out where that player actually is RIGHT NOW.
-            // We can't rely on currentState.players because EXECUTE_RUN was just
-            // dispatched but React hasn't re-rendered yet — state is stale.
-            // Instead: if the just-finished animation moved the target player,
-            // use the animation's endPos as the player's current position.
-            let resolvedEndPos = next.endPos;
-            if (next.endPlayerId) {
-              if (next.endPlayerId === runAnim.playerId && animType !== 'pass') {
-                // The just-finished animation was a run/dribble for the target player —
-                // they're now at runAnim.endPos (state hasn't caught up yet).
-                resolvedEndPos = { x: runAnim.endPos.x, y: runAnim.endPos.y };
-              } else {
-                // Target player wasn't moved by the just-finished animation,
-                // so their state position is still accurate.
-                const targetPlayer = currentState.players.find(p => p.id === next.endPlayerId);
-                if (targetPlayer) {
-                  resolvedEndPos = { x: targetPlayer.x, y: targetPlayer.y };
-                }
-              }
-            }
 
             // For pass/dribble: snap ball to start player
             if (next.animationType === 'pass' || next.animationType === 'dribble') {
               dispatch({ type: 'MOVE_BALL', x: startPos.x, y: startPos.y });
             }
-            if (next.animationType === 'pass') {
+            if (next.animationType === 'pass' && !didKick) {
               playKickSound();
+              didKick = true;
             }
 
-            // Recompute control point with resolved endpoint
-            const resolvedControlPoint = next.curveDirection
-              ? curvedRunControlPoint(startPos, resolvedEndPos, next.curveDirection)
-              : controlPoint;
-
-            // Start next animation
-            playerRunAnimRef.current = {
+            nextAnims.push({
               playerId: next.playerId,
               annotationId: next.annotationId,
               startPos,
               endPos: resolvedEndPos,
-              controlPoint: resolvedControlPoint,
-              startTime: performance.now(),
+              controlPoint,
+              startTime: nowMs,
               durationMs: next.durationMs,
               animationType: next.animationType,
               endPlayerId: next.endPlayerId,
-            };
-          } else {
-            // No more in queue — clear the animation ref and completed tracking
-            completedQueueAnimIds.current.clear();
-            playerRunAnimRef.current = null;
+              isOneTouch: next.isOneTouch,
+            });
           }
+
+          playerRunAnimRef.current = nextAnims;
+        } else {
+          // No more in queue — clear the animation ref
+          playerRunAnimRef.current = [];
+          // Clear completed tracking (annotations are now in ghostAnnotationIds)
+          completedQueueAnimIds.current.clear();
+          // Stamp all ghosts with current time so their fade timers start now
+          dispatch({ type: 'STAMP_GHOST_FADE_START', time: performance.now() });
+        }
+      } else if (finishedAnims.length > 0) {
+        // Some finished but not all — remove finished ones, keep remaining active
+        playerRunAnimRef.current = activeAnims.filter(a => !finishedAnims.includes(a));
+        for (const fa of finishedAnims) {
+          completedQueueAnimIds.current.add(fa.annotationId);
         }
       }
 
@@ -410,8 +517,17 @@ export function PitchCanvas({ playbackRef, playerRunAnimRef, animationQueueRef, 
         }
       }
 
-      render(ctx, transformRef.current!, renderState, size.width, size.height, runAnimOverlay, goalCelebrationRef?.current ?? undefined);
+      render(ctx, transformRef.current!, renderState, size.width, size.height, runAnimOverlays, goalCelebrationRef?.current ?? undefined, now);
       ctx.restore();
+
+      // Auto-cleanup fully faded ghosts (3s hold + 3s fade = 6s total)
+      const GHOST_TOTAL_MS = 6000;
+      for (const ghost of stateRef.current.ghostPlayers) {
+        if (ghost.createdAt > 0 && now - ghost.createdAt > GHOST_TOTAL_MS) {
+          dispatch({ type: 'CLEAR_PLAYER_GHOSTS', playerId: ghost.playerId });
+        }
+      }
+
       animId = requestAnimationFrame(frame);
     };
 

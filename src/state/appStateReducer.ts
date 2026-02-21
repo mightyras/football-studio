@@ -43,6 +43,8 @@ export type AppAction =
   | { type: 'SET_POSSESSION'; possession: 'A' | 'B' | 'auto' }
   | { type: 'SET_SHOW_ORIENTATION'; show: boolean }
   | { type: 'SET_SHOW_COVER_SHADOW'; show: boolean }
+  | { type: 'SET_SHOW_STEP_NUMBERS'; show: boolean }
+  | { type: 'SET_AUTO_ORIENT_TO_BALL'; enabled: boolean }
   | { type: 'SET_FOV_MODE'; mode: 'off' | 'A' | 'B' | 'both' }
   | { type: 'SET_FOV_EXPANDED'; expanded: boolean }
   | { type: 'SET_SHOW_PLAYER_NAMES'; team: 'A' | 'B'; show: boolean }
@@ -84,13 +86,12 @@ export type AppAction =
   | { type: 'CLEAR_ANIMATION' }
   | { type: 'LOAD_ANIMATION'; sequence: AnimationSequence }
   | { type: 'LOAD_SCENE'; data: SceneData }
-  | { type: 'START_ANNOTATION_PLAYBACK' }
-  | { type: 'STOP_ANNOTATION_PLAYBACK' }
   | { type: 'SET_CLUB_IDENTITY'; identity: Partial<ClubIdentity> }
   | { type: 'CLEAR_CLUB_IDENTITY' }
   | { type: 'EXECUTE_RUN'; playerId: string; x: number; y: number; facing: number; ghost: GhostPlayer; annotationId: string; ballX?: number; ballY?: number; animationType?: 'run' | 'pass' | 'dribble' }
   | { type: 'CLEAR_PLAYER_GHOSTS'; playerId: string }
-  | { type: 'RESET_RUN'; playerId: string };
+  | { type: 'RESET_RUN'; playerId: string }
+  | { type: 'STAMP_GHOST_FADE_START'; time: number };
 
 export function defaultFacing(team: 'A' | 'B', dir: AttackDirection): number {
   return defendsHighX(team, dir) ? Math.PI : 0;
@@ -212,6 +213,33 @@ function withUndo(state: AppState): Pick<AppState, 'undoStack' | 'redoStack'> {
   };
 }
 
+/**
+ * Rotate every off-ball player so they face the ball.
+ * Players within `playerRadius * 1.5` of the ball are skipped (ball carrier).
+ */
+function autoOrientPlayers(
+  players: Player[],
+  ballX: number,
+  ballY: number,
+  playerRadius: number,
+): Player[] {
+  const thresholdSq = (playerRadius * 1.5) ** 2;
+  const snap = Math.PI / 8; // 22.5° — matches ROTATE_PLAYER
+
+  return players.map(p => {
+    const dx = ballX - p.x;
+    const dy = ballY - p.y;
+    if (dx * dx + dy * dy < thresholdSq) return p;
+
+    const raw = Math.atan2(dy, dx);
+    const normalized = ((raw % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
+    const snapped = Math.round(normalized / snap) * snap;
+
+    if (Math.abs(p.facing - snapped) < 0.001) return p;
+    return { ...p, facing: snapped };
+  });
+}
+
 export const initialState: AppState = {
   players: createDefaultPlayers('up'),
   ball: { ...defaultBall },
@@ -237,6 +265,7 @@ export const initialState: AppState = {
   showCoverShadow: false,
   fovMode: 'off',
   fovExpanded: false,
+  autoOrientToBall: false,
   teamADirection: 'up',
   teamAFormation: '4-4-2',
   teamBFormation: '4-4-2',
@@ -272,7 +301,7 @@ export const initialState: AppState = {
   animationMode: false,
   animationSequence: null,
   activeKeyframeIndex: null,
-  annotationPlayback: false,
+  showStepNumbers: true,
   clubIdentity: {
     logoDataUrl: null,
     primaryColor: null,
@@ -405,17 +434,55 @@ export function appStateReducer(state: AppState, action: AppAction): AppState {
     }
 
     case 'MOVE_FORMATION': {
-      return {
-        ...state,
-        players: state.players.map(p => {
-          if (p.team !== action.team || p.isGK) return p;
-          return {
-            ...p,
-            x: clampX(p.x + action.dx),
-            y: clampY(p.y + action.dy),
-          };
-        }),
-      };
+      const team = action.team;
+      const highX = defendsHighX(team, state.teamADirection);
+
+      // Move outfield players
+      const updatedPlayers = state.players.map(p => {
+        if (p.team !== team || p.isGK) return p;
+        return { ...p, x: clampX(p.x + action.dx), y: clampY(p.y + action.dy) };
+      });
+
+      // Compute smart GK position from outfield state
+      const outfield = updatedPlayers.filter(p => p.team === team && !p.isGK);
+      if (outfield.length === 0) return { ...state, players: updatedPlayers };
+
+      const baseline = highX ? PITCH.length - 4 : 4;
+      const penaltyEdge = highX
+        ? PITCH.length - PITCH.penaltyAreaLength
+        : PITCH.penaltyAreaLength;
+      const midline = PITCH.length / 2;
+
+      // Default deepest defender position (normalized x≈0.12 mapped to world coords).
+      // Uses the same halfStart/halfEnd as formationToWorld so GK sits at baseline
+      // when the formation is at its default positions.
+      const defaultDeepest = PITCH.length * (0.08 + 0.12 * (0.55 - 0.08)); // ≈14.32
+
+      // Deepest outfield player (closest to own goal)
+      const deepestX = highX
+        ? Math.max(...outfield.map(p => p.x))
+        : Math.min(...outfield.map(p => p.x));
+
+      // How far the deepest defender has moved beyond its default position,
+      // toward the midline. Progress 0 = at default, 1 = at midline.
+      const defenderDefault = highX ? PITCH.length - defaultDeepest : defaultDeepest;
+      const t = Math.max(0, Math.min(1,
+        highX
+          ? (defenderDefault - deepestX) / (defenderDefault - midline)
+          : (deepestX - defenderDefault) / (midline - defenderDefault)
+      ));
+      const gkX = baseline + t * (penaltyEdge - baseline);
+
+      // Lateral: GK gets 15% of formation's average offset from center
+      const avgY = outfield.reduce((sum, p) => sum + p.y, 0) / outfield.length;
+      const centerY = PITCH.width / 2;
+      const gkY = centerY + (avgY - centerY) * 0.15;
+
+      const finalPlayers = updatedPlayers.map(p =>
+        p.team === team && p.isGK ? { ...p, x: gkX, y: gkY } : p
+      );
+
+      return { ...state, players: finalPlayers };
     }
 
     case 'ADD_PLAYER': {
@@ -534,7 +601,11 @@ export function appStateReducer(state: AppState, action: AppAction): AppState {
       return { ...state, formationMoveTeam: action.team };
 
     case 'END_DRAG': {
-      const newState = { ...state, dragTarget: null };
+      const wasBallDrag = state.dragTarget?.type === 'ball';
+      const players = wasBallDrag && state.autoOrientToBall
+        ? autoOrientPlayers(state.players, state.ball.x, state.ball.y, state.playerRadius)
+        : state.players;
+      const newState = { ...state, dragTarget: null, players };
       return {
         ...newState,
         resolvedPossession: computePossession(newState.players, newState.ball, newState.possession, state.resolvedPossession),
@@ -647,12 +718,25 @@ export function appStateReducer(state: AppState, action: AppAction): AppState {
       return {
         ...state,
         showOrientation: action.show,
-        // Cover shadow and FOV require orientation — turn them off when orientation is disabled
-        ...(action.show ? {} : { showCoverShadow: false, fovMode: 'off' as const }),
+        // Cover shadow, FOV, and auto-orient require orientation — turn them off when orientation is disabled
+        ...(action.show ? {} : { showCoverShadow: false, fovMode: 'off' as const, autoOrientToBall: false }),
       };
 
     case 'SET_SHOW_COVER_SHADOW':
       return { ...state, showCoverShadow: action.show };
+
+    case 'SET_SHOW_STEP_NUMBERS':
+      return { ...state, showStepNumbers: action.show };
+
+    case 'SET_AUTO_ORIENT_TO_BALL': {
+      if (!action.enabled) return { ...state, autoOrientToBall: false };
+      // Immediately snap all off-ball players to face the ball
+      return {
+        ...state,
+        autoOrientToBall: true,
+        players: autoOrientPlayers(state.players, state.ball.x, state.ball.y, state.playerRadius),
+      };
+    }
 
     case 'SET_FOV_MODE':
       return { ...state, fovMode: action.mode };
@@ -800,7 +884,7 @@ export function appStateReducer(state: AppState, action: AppAction): AppState {
       const ann = action.annotation;
       // Create a preview ghost at the destination when a running-line or curved-run is drawn from a player
       let newPreviewGhosts = state.previewGhosts;
-      if ((ann.type === 'running-line' || ann.type === 'curved-run') && ann.startPlayerId) {
+      if ((ann.type === 'running-line' || ann.type === 'curved-run' || ann.type === 'dribble-line') && ann.startPlayerId) {
         const srcPlayer = state.players.find(p => p.id === ann.startPlayerId);
         if (srcPlayer) {
           const dx = ann.end.x - ann.start.x;
@@ -817,8 +901,9 @@ export function appStateReducer(state: AppState, action: AppAction): AppState {
             isGK: srcPlayer.isGK,
             sourceAnnotationId: ann.id,
           };
-          // Replace any existing preview ghost for same player
-          newPreviewGhosts = [...state.previewGhosts.filter(g => g.playerId !== srcPlayer.id), ghost];
+          // Allow multiple ghosts per player (chained runs/dribbles).
+          // Only replace if re-adding the same annotation (e.g. after undo).
+          newPreviewGhosts = [...state.previewGhosts.filter(g => g.sourceAnnotationId !== ann.id), ghost];
         }
       }
       return {
@@ -866,42 +951,57 @@ export function appStateReducer(state: AppState, action: AppAction): AppState {
     }
 
     case 'MOVE_ANNOTATION': {
-      return {
-        ...state,
-        annotations: state.annotations.map(ann => {
-          if (ann.id !== action.annotationId) return ann;
-          switch (ann.type) {
-            case 'text':
-              return { ...ann, position: { x: ann.position.x + action.dx, y: ann.position.y + action.dy } };
-            case 'passing-line':
-            case 'running-line':
-            case 'curved-run':
-            case 'dribble-line': {
-              // Fully player-anchored — don't move
-              if (ann.startPlayerId && ann.endPlayerId) return ann;
-              return {
-                ...ann,
-                start: ann.startPlayerId ? ann.start : { x: clampX(ann.start.x + action.dx), y: clampY(ann.start.y + action.dy) },
-                end: ann.endPlayerId ? ann.end : { x: clampX(ann.end.x + action.dx), y: clampY(ann.end.y + action.dy) },
-              };
-            }
-            case 'polygon':
-              return {
-                ...ann,
-                points: ann.points.map(p => ({ x: clampX(p.x + action.dx), y: clampY(p.y + action.dy) })),
-              };
-            case 'ellipse':
-              return {
-                ...ann,
-                center: { x: clampX(ann.center.x + action.dx), y: clampY(ann.center.y + action.dy) },
-              };
-            // player-polygon, player-line, and player-marking are anchored to players — don't move
-            case 'player-marking':
-            default:
-              return ann;
+      const movedAnnotations = state.annotations.map(ann => {
+        if (ann.id !== action.annotationId) return ann;
+        switch (ann.type) {
+          case 'text':
+            return { ...ann, position: { x: ann.position.x + action.dx, y: ann.position.y + action.dy } };
+          case 'passing-line':
+          case 'running-line':
+          case 'curved-run':
+          case 'dribble-line': {
+            // Fully player-anchored — don't move
+            if (ann.startPlayerId && ann.endPlayerId) return ann;
+            return {
+              ...ann,
+              start: ann.startPlayerId ? ann.start : { x: clampX(ann.start.x + action.dx), y: clampY(ann.start.y + action.dy) },
+              end: ann.endPlayerId ? ann.end : { x: clampX(ann.end.x + action.dx), y: clampY(ann.end.y + action.dy) },
+            };
           }
-        }),
-      };
+          case 'polygon':
+            return {
+              ...ann,
+              points: ann.points.map(p => ({ x: clampX(p.x + action.dx), y: clampY(p.y + action.dy) })),
+            };
+          case 'ellipse':
+            return {
+              ...ann,
+              center: { x: clampX(ann.center.x + action.dx), y: clampY(ann.center.y + action.dy) },
+            };
+          // player-polygon, player-line, and player-marking are anchored to players — don't move
+          case 'player-marking':
+          default:
+            return ann;
+        }
+      });
+
+      // Update preview ghosts: keep ghost position in sync with its source annotation endpoint
+      const movedAnn = movedAnnotations.find(a => a.id === action.annotationId);
+      let previewGhosts = state.previewGhosts;
+      if (movedAnn && (movedAnn.type === 'running-line' || movedAnn.type === 'curved-run' || movedAnn.type === 'dribble-line') && !movedAnn.endPlayerId) {
+        const endX = movedAnn.end.x;
+        const endY = movedAnn.end.y;
+        const dx = movedAnn.end.x - movedAnn.start.x;
+        const dy = movedAnn.end.y - movedAnn.start.y;
+        const facing = (dx === 0 && dy === 0) ? undefined : Math.atan2(dy, dx);
+        previewGhosts = state.previewGhosts.map(g =>
+          g.sourceAnnotationId === action.annotationId
+            ? { ...g, x: endX, y: endY, ...(facing !== undefined ? { facing } : {}) }
+            : g
+        );
+      }
+
+      return { ...state, annotations: movedAnnotations, previewGhosts };
     }
 
     case 'SELECT_ANNOTATION':
@@ -1230,6 +1330,7 @@ export function appStateReducer(state: AppState, action: AppAction): AppState {
         showCoverShadow: d.showCoverShadow,
         fovMode: d.fovMode ?? 'off',
         fovExpanded: d.fovExpanded ?? false,
+        autoOrientToBall: d.autoOrientToBall ?? false,
         possession: d.possession,
         substitutesA: d.substitutesA ?? [],
         substitutesB: d.substitutesB ?? [],
@@ -1253,12 +1354,6 @@ export function appStateReducer(state: AppState, action: AppAction): AppState {
         drawingInProgress: null,
       };
     }
-
-    case 'START_ANNOTATION_PLAYBACK':
-      return { ...state, annotationPlayback: true };
-
-    case 'STOP_ANNOTATION_PLAYBACK':
-      return { ...state, annotationPlayback: false };
 
     // --- Club identity actions ---
 
@@ -1304,23 +1399,33 @@ export function appStateReducer(state: AppState, action: AppAction): AppState {
         };
       }
 
+      // Auto-orient off-ball players toward the new ball position
+      const finalPlayers = state.autoOrientToBall && (animType === 'pass' || animType === 'dribble')
+        ? autoOrientPlayers(players, ball.x, ball.y, state.playerRadius)
+        : players;
+
       // Ghost player: keep only the latest ghost per player (replaces previous)
       // Ghost annotation IDs: accumulate — don't remove previous ones.
       // Cleanup of old ghosts happens in CLEAR_PLAYER_GHOSTS / RESET_RUN.
-      // Preview ghost: remove for this player — they've arrived at the destination.
+      // Preview ghost: only remove when the player physically moves (run/dribble).
+      // A pass from a player doesn't move them, so their preview ghost (showing a
+      // future run destination) must stay visible until that run actually completes.
+      const removePreviewGhost = animType !== 'pass';
       return {
         ...state,
         ...undo,
-        players,
+        players: finalPlayers,
         ball,
         ghostPlayers: [
           ...state.ghostPlayers.filter(g => g.playerId !== action.playerId),
-          action.ghost,
+          { ...action.ghost, createdAt: 0 }, // 0 = fade not started; stamped when queue empties
         ],
         ghostAnnotationIds: state.ghostAnnotationIds.includes(action.annotationId)
           ? state.ghostAnnotationIds
           : [...state.ghostAnnotationIds, action.annotationId],
-        previewGhosts: state.previewGhosts.filter(g => g.playerId !== action.playerId),
+        previewGhosts: removePreviewGhost
+          ? state.previewGhosts.filter(g => g.sourceAnnotationId !== action.annotationId)
+          : state.previewGhosts,
       };
     }
 
@@ -1337,7 +1442,9 @@ export function appStateReducer(state: AppState, action: AppAction): AppState {
         // Also remove the ghost annotations themselves — they represent the previous run
         // and would otherwise render as stale artifacts from the player's new position.
         annotations: state.annotations.filter(a => !ghostAnnIdsToRemove.includes(a.id)),
-        previewGhosts: state.previewGhosts.filter(g => g.playerId !== action.playerId),
+        // Keep preview ghosts — they represent future positions the user drew,
+        // not artifacts from completed animations. They should persist until
+        // their corresponding run/dribble actually executes.
       };
     }
 
@@ -1365,6 +1472,14 @@ export function appStateReducer(state: AppState, action: AppAction): AppState {
         ghostAnnotationIds: state.ghostAnnotationIds.filter(id => !resetGhostAnnIds.includes(id)),
       };
     }
+
+    case 'STAMP_GHOST_FADE_START':
+      return {
+        ...state,
+        ghostPlayers: state.ghostPlayers.map(g =>
+          g.createdAt === 0 ? { ...g, createdAt: action.time } : g
+        ),
+      };
 
     default:
       return state;

@@ -1,5 +1,6 @@
-import type { Annotation, GhostPlayer, Player, PitchTransform, WorldPoint } from '../types';
+import type { Annotation, GhostPlayer, Player, PitchTransform, PreviewGhost, WorldPoint } from '../types';
 import { curvedRunControlPoint } from './curveGeometry';
+import { findClosestGhost } from './ghostUtils';
 
 const LINE_HIT_THRESHOLD = 8; // screen pixels
 
@@ -101,6 +102,59 @@ function resolvePlayerPositions(
 }
 
 /**
+ * Resolve a startPlayerId to a position, checking preview ghosts
+ * when the annotation was started from a future position.
+ */
+function resolveStartpoint(
+  ann: { start: WorldPoint; startPlayerId?: string },
+  players: Player[],
+  previewGhosts: PreviewGhost[],
+): WorldPoint {
+  if (!ann.startPlayerId) return ann.start;
+  const pg = findClosestGhost(previewGhosts, ann.startPlayerId, ann.start);
+  const p = players.find(pl => pl.id === ann.startPlayerId);
+  if (pg && p) {
+    const dxReal = ann.start.x - p.x;
+    const dyReal = ann.start.y - p.y;
+    const distReal = dxReal * dxReal + dyReal * dyReal;
+    const dxGhost = ann.start.x - pg.x;
+    const dyGhost = ann.start.y - pg.y;
+    const distGhost = dxGhost * dxGhost + dyGhost * dyGhost;
+    return distGhost < distReal ? { x: pg.x, y: pg.y } : { x: p.x, y: p.y };
+  }
+  if (pg) return { x: pg.x, y: pg.y };
+  if (p) return { x: p.x, y: p.y };
+  return ann.start;
+}
+
+/**
+ * Resolve an endpoint playerId to a position, checking preview ghosts
+ * when the annotation was snapped to a future position.
+ */
+function resolveEndpoint(
+  ann: { start: WorldPoint; end: WorldPoint; endPlayerId?: string },
+  players: Player[],
+  previewGhosts: PreviewGhost[],
+): WorldPoint {
+  if (!ann.endPlayerId) return ann.end;
+  const pg = findClosestGhost(previewGhosts, ann.endPlayerId, ann.end);
+  const p = players.find(pl => pl.id === ann.endPlayerId);
+  if (pg && p) {
+    // Use whichever position is closer to the stored endpoint
+    const dxReal = ann.end.x - p.x;
+    const dyReal = ann.end.y - p.y;
+    const distReal = dxReal * dxReal + dyReal * dyReal;
+    const dxGhost = ann.end.x - pg.x;
+    const dyGhost = ann.end.y - pg.y;
+    const distGhost = dxGhost * dxGhost + dyGhost * dyGhost;
+    return distGhost < distReal ? { x: pg.x, y: pg.y } : { x: p.x, y: p.y };
+  }
+  if (pg) return { x: pg.x, y: pg.y };
+  if (p) return { x: p.x, y: p.y };
+  return ann.end;
+}
+
+/**
  * Find the annotation under the given screen position.
  * Iterates in reverse (last rendered = on top).
  */
@@ -112,6 +166,7 @@ export function findAnnotationAtScreen(
   transform: PitchTransform,
   ghostAnnotationIds: string[] = [],
   ghostPlayers: GhostPlayer[] = [],
+  previewGhosts: PreviewGhost[] = [],
 ): Annotation | null {
   // Check in reverse order (topmost first)
   for (let i = annotations.length - 1; i >= 0; i--) {
@@ -153,17 +208,10 @@ export function findAnnotationAtScreen(
       case 'passing-line':
       case 'running-line':
       case 'dribble-line': {
-        // Resolve player-snapped endpoints (use effectivePlayers for ghost annotations)
-        let startPt = ann.start;
-        let endPt = ann.end;
-        if (ann.startPlayerId) {
-          const p = effectivePlayers.find(pl => pl.id === ann.startPlayerId);
-          if (p) startPt = { x: p.x, y: p.y };
-        }
-        if (ann.endPlayerId) {
-          const p = effectivePlayers.find(pl => pl.id === ann.endPlayerId);
-          if (p) endPt = { x: p.x, y: p.y };
-        }
+        // Resolve player-snapped endpoints (use effectivePlayers for ghost annotations,
+        // preview ghosts for start-from-ghost and future-position endpoints)
+        const startPt = resolveStartpoint(ann, effectivePlayers, previewGhosts);
+        const endPt = resolveEndpoint(ann, effectivePlayers, previewGhosts);
         const s = transform.worldToScreen(startPt.x, startPt.y);
         const e = transform.worldToScreen(endPt.x, endPt.y);
         const d = distToSegment(screenX, screenY, s.x, s.y, e.x, e.y);
@@ -171,17 +219,10 @@ export function findAnnotationAtScreen(
         break;
       }
       case 'curved-run': {
-        // Resolve player-snapped endpoints (use effectivePlayers for ghost annotations)
-        let startPt = ann.start;
-        let endPt = ann.end;
-        if (ann.startPlayerId) {
-          const p = effectivePlayers.find(pl => pl.id === ann.startPlayerId);
-          if (p) startPt = { x: p.x, y: p.y };
-        }
-        if (ann.endPlayerId) {
-          const p = effectivePlayers.find(pl => pl.id === ann.endPlayerId);
-          if (p) endPt = { x: p.x, y: p.y };
-        }
+        // Resolve player-snapped endpoints (use effectivePlayers for ghost annotations,
+        // preview ghosts for start-from-ghost and future-position endpoints)
+        const startPt = resolveStartpoint(ann, effectivePlayers, previewGhosts);
+        const endPt = resolveEndpoint(ann, effectivePlayers, previewGhosts);
         // Compute control point in world space, convert all to screen space
         const cpWorld = curvedRunControlPoint(startPt, endPt, ann.curveDirection);
         const s = transform.worldToScreen(startPt.x, startPt.y);
@@ -246,6 +287,48 @@ export function findAnnotationAtScreen(
         if (segDist <= capRadius + LINE_HIT_THRESHOLD) return ann;
         break;
       }
+    }
+  }
+
+  return null;
+}
+
+const BADGE_HIT_RADIUS = 12; // screen pixels — slightly larger than visual radius (8) for easier targeting
+const BADGE_Y_OFFSET = -12;  // screen pixels — must match AnnotationRenderer drawStepBadge offset
+
+/**
+ * Find a step badge under the given screen position.
+ * Returns the annotation ID if a badge is hit, or null.
+ */
+export function findStepBadgeAtScreen(
+  screenX: number,
+  screenY: number,
+  annotations: Annotation[],
+  players: Player[],
+  transform: PitchTransform,
+  previewGhosts: PreviewGhost[] = [],
+): string | null {
+  for (const ann of annotations) {
+    if (
+      ann.type !== 'passing-line' && ann.type !== 'running-line' &&
+      ann.type !== 'curved-run' && ann.type !== 'dribble-line'
+    ) continue;
+
+    // Resolve endpoints (including preview ghost positions)
+    const startPt = resolveStartpoint(ann, players, previewGhosts);
+    const endPt = resolveEndpoint(ann, players, previewGhosts);
+
+    // Badge is at midpoint of line, offset up in screen space
+    const midX = (startPt.x + endPt.x) / 2;
+    const midY = (startPt.y + endPt.y) / 2;
+    const badgePos = transform.worldToScreen(midX, midY);
+    const bx = badgePos.x;
+    const by = badgePos.y + BADGE_Y_OFFSET;
+
+    const dx = screenX - bx;
+    const dy = screenY - by;
+    if (dx * dx + dy * dy <= BADGE_HIT_RADIUS * BADGE_HIT_RADIUS) {
+      return ann.id;
     }
   }
 

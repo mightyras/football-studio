@@ -25,6 +25,7 @@ function saveable(state: AppState): Partial<AppState> {
     showCoverShadow: state.showCoverShadow,
     fovMode: state.fovMode,
     fovExpanded: state.fovExpanded,
+    autoOrientToBall: state.autoOrientToBall,
     teamADirection: state.teamADirection,
     teamAFormation: state.teamAFormation,
     teamBFormation: state.teamBFormation,
@@ -61,6 +62,7 @@ export function extractSceneData(state: AppState): SceneData {
     showCoverShadow: state.showCoverShadow,
     fovMode: state.fovMode,
     fovExpanded: state.fovExpanded,
+    autoOrientToBall: state.autoOrientToBall,
     possession: state.possession,
     substitutesA: state.substitutesA,
     substitutesB: state.substitutesB,
@@ -120,9 +122,6 @@ function loadState(): AppState {
     if (merged.animationMode === undefined) merged.animationMode = false;
     if (merged.animationSequence === undefined) merged.animationSequence = null;
     if (merged.activeKeyframeIndex === undefined) merged.activeKeyframeIndex = null;
-    // Annotation playback is transient — always start as false
-    merged.annotationPlayback = false;
-
     // Recompute resolved possession from loaded state
     merged.resolvedPossession = computePossession(merged.players, merged.ball, merged.possession, 'A');
 

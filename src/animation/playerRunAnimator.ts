@@ -1,5 +1,5 @@
 import type { PlayerRunAnimation } from '../types';
-import { easeInOutCubic } from './interpolationEngine';
+import { easeInOutCubic, easeOutCubic } from './interpolationEngine';
 
 export type PlayerRunFrame = {
   playerId: string;
@@ -60,7 +60,8 @@ export function computeRunFrame(
 ): PlayerRunFrame {
   const elapsed = now - anim.startTime;
   const rawT = Math.min(1, Math.max(0, elapsed / anim.durationMs));
-  const t = easeInOutCubic(rawT);
+  // One-touch passes: ease-out only (ball launches instantly, no slow ramp-up)
+  const t = anim.isOneTouch ? easeOutCubic(rawT) : easeInOutCubic(rawT);
 
   const { x, y, tangentX, tangentY } = interpolatePath(anim, t);
 

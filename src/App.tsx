@@ -13,13 +13,14 @@ import { DeletePlayerConfirmDialog } from './components/DeletePlayerConfirmDialo
 import { GoalCelebrationOverlay } from './components/GoalCelebrationOverlay';
 import { usePlayback } from './hooks/usePlayback';
 import { useZoom } from './hooks/useZoom';
-import { PlaybackController } from './animation/playbackController';
-import { buildSequenceFromAnnotations, computeStepOrder, type LineAnnotation } from './animation/annotationAnimator';
+import { computeStepOrder, computeOneTouchIndices, ONE_TOUCH_DURATION_MS, type LineAnnotation } from './animation/annotationAnimator';
 import { ExportController, type ExportOptions } from './animation/exportController';
+import { RunAnimExportController } from './animation/runAnimExportController';
 import type { AnimationSequence, CurvedRunAnnotation, GoalCelebration, PanelTab, PlayerRunAnimation, QueuedAnimation } from './types';
 import { renderSceneToBlob } from './utils/sceneRenderer';
 import { curvedRunControlPoint } from './utils/curveGeometry';
 import { playKickSound, playGoalNetSound } from './utils/sound';
+import { findClosestGhost } from './utils/ghostUtils';
 
 function AppContent() {
   const { state, dispatch } = useAppState();
@@ -45,12 +46,14 @@ function AppContent() {
     setSpeed,
   } = usePlayback(state.animationSequence);
 
-  // ── Annotation playback (Play Lines) ──
-  const annotationControllerRef = useRef<PlaybackController | null>(null);
-
-  // ── Per-player run animation (Space key) ──
-  const playerRunAnimRef = useRef<PlayerRunAnimation | null>(null);
+  // ── Per-player run animation (Space key / Play Lines) ──
+  // Array of concurrent animations (same-step animations run simultaneously)
+  const playerRunAnimRef = useRef<PlayerRunAnimation[]>([]);
   const animationQueueRef = useRef<QueuedAnimation[]>([]);
+
+  // ── Arrow key step-through ──
+  const stepQueueRef = useRef<QueuedAnimation[]>([]);
+  const completedStepBatchesRef = useRef<{ batch: QueuedAnimation[]; undoCount: number }[]>([]);
 
   // ── Copy-to-clipboard toast ──
   const [copyToast, setCopyToast] = useState(false);
@@ -70,39 +73,15 @@ function AppContent() {
     setGoalCelebration(null);
   }, []);
 
-  // Determine which playback ref PitchCanvas should read from
-  const activePlaybackRef = state.annotationPlayback ? annotationControllerRef : controllerRef;
-
-  const handlePlayLines = useCallback(() => {
-    const seq = buildSequenceFromAnnotations(state.players, state.ball, state.annotations, 1000);
-    if (!seq) return;
-
-    dispatch({ type: 'START_ANNOTATION_PLAYBACK' });
-
-    const onFrame = (status: import('./animation/playbackController').PlaybackStatus) => {
-      if (status === 'idle') {
-        dispatch({ type: 'STOP_ANNOTATION_PLAYBACK' });
-        annotationControllerRef.current = null;
-      }
-    };
-
-    const controller = new PlaybackController(seq, onFrame);
-    annotationControllerRef.current = controller;
-    controller.play();
-  }, [state.players, state.ball, state.annotations, dispatch]);
-
-  const handleStopAnnotationPlayback = useCallback(() => {
-    annotationControllerRef.current?.stop();
-    annotationControllerRef.current = null;
-    dispatch({ type: 'STOP_ANNOTATION_PLAYBACK' });
-  }, [dispatch]);
+  // Playback ref for PitchCanvas (Animation Mode only now)
+  const activePlaybackRef = controllerRef;
 
   // ── Export ──
   const [showExportDialog, setShowExportDialog] = useState(false);
   const [exportSequence, setExportSequence] = useState<AnimationSequence | null>(null);
   const [exporting, setExporting] = useState(false);
   const [exportProgress, setExportProgress] = useState(0);
-  const exportControllerRef = useRef<ExportController | null>(null);
+  const exportControllerRef = useRef<ExportController | RunAnimExportController | null>(null);
 
   const handleOpenExport = useCallback((seq: AnimationSequence) => {
     setExportSequence(seq);
@@ -112,10 +91,12 @@ function AppContent() {
   }, []);
 
   const handleExportLines = useCallback(() => {
-    const seq = buildSequenceFromAnnotations(state.players, state.ball, state.annotations, 1000);
-    if (!seq) return;
-    handleOpenExport(seq);
-  }, [state.players, state.ball, state.annotations, handleOpenExport]);
+    // Open export dialog for run-animation export (no sequence needed)
+    setExportSequence(null);
+    setShowExportDialog(true);
+    setExporting(false);
+    setExportProgress(0);
+  }, []);
 
   const handleExportKeyframes = useCallback(() => {
     if (!state.animationSequence || state.animationSequence.keyframes.length < 2) return;
@@ -123,23 +104,33 @@ function AppContent() {
   }, [state.animationSequence, handleOpenExport]);
 
   const handleExport = useCallback(async (options: ExportOptions) => {
-    if (!exportSequence) return;
     setExporting(true);
     setExportProgress(0);
 
-    const controller = new ExportController(exportSequence, state, options);
-    exportControllerRef.current = controller;
-
     try {
-      const blob = await controller.exportWebM((progress) => {
-        setExportProgress(progress);
-      });
+      let blob: Blob;
+
+      if (exportSequence) {
+        // Keyframe-based export (Animation Mode)
+        const controller = new ExportController(exportSequence, state, options);
+        exportControllerRef.current = controller;
+        blob = await controller.exportWebM((progress) => {
+          setExportProgress(progress);
+        });
+      } else {
+        // Run-animation export (Lines)
+        const controller = new RunAnimExportController(state, options);
+        exportControllerRef.current = controller;
+        blob = await controller.exportWebM((progress) => {
+          setExportProgress(progress);
+        });
+      }
 
       // Trigger download
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `${exportSequence.name.replace(/[^a-zA-Z0-9_-]/g, '_') || 'animation'}.webm`;
+      a.download = `animation-export.webm`;
       a.click();
       URL.revokeObjectURL(url);
 
@@ -164,19 +155,333 @@ function AppContent() {
     setExportProgress(0);
   }, [exporting]);
 
+  // ── Shared helpers for Space auto-play and arrow-key stepping ──
+
+  /** Build the full animation queue from current annotations */
+  const buildAnimQueue = useCallback((): { queue: QueuedAnimation[]; selectedId: string; isReplay: boolean; allLineAnns: LineAnnotation[] } | null => {
+    // Determine the triggering player: either directly selected, or derived from a selected line annotation
+    let selectedId = state.selectedPlayerId;
+    if (!selectedId && state.selectedAnnotationId) {
+      const selAnn = state.annotations.find(a => a.id === state.selectedAnnotationId);
+      if (selAnn && 'startPlayerId' in selAnn && selAnn.startPlayerId) {
+        selectedId = selAnn.startPlayerId;
+      }
+    }
+    if (!selectedId) return null;
+
+    const animatableTypes = ['running-line', 'curved-run', 'passing-line', 'dribble-line'] as const;
+    const allLineAnns = state.annotations.filter(
+      (a): a is LineAnnotation => (animatableTypes as readonly string[]).includes(a.type),
+    );
+
+    const playerAnns = allLineAnns.filter(a => a.startPlayerId === selectedId);
+    if (playerAnns.length === 0) return null;
+
+    const nonGhostPlayerAnns = playerAnns.filter(a => !state.ghostAnnotationIds.includes(a.id));
+    const ghostPlayerAnns = playerAnns.filter(a => state.ghostAnnotationIds.includes(a.id));
+    const isReplay = nonGhostPlayerAnns.length === 0 && ghostPlayerAnns.length > 0;
+
+    const ghostIds = new Set(state.ghostAnnotationIds);
+    const annsToAnimate = allLineAnns.filter(a =>
+      isReplay ? true : !ghostIds.has(a.id)
+    );
+    if (annsToAnimate.length === 0) return null;
+
+    const stepOrder = computeStepOrder(annsToAnimate);
+    type AnnWithStep = { ann: LineAnnotation; step: number };
+    const ordered: AnnWithStep[] = annsToAnimate.map((ann, i) => ({
+      ann,
+      step: stepOrder ? stepOrder[i] : (ann.animStep ?? 1),
+    }));
+    ordered.sort((a, b) => a.step - b.step);
+
+    const orderedAnns = ordered.map(o => o.ann);
+    const oneTouchIndices = computeOneTouchIndices(orderedAnns);
+
+    const queue: QueuedAnimation[] = [];
+    for (let idx = 0; idx < ordered.length; idx++) {
+      const { ann } = ordered[idx];
+      const animationType: 'run' | 'pass' | 'dribble' =
+        ann.type === 'passing-line' ? 'pass'
+        : ann.type === 'dribble-line' ? 'dribble'
+        : 'run';
+      const isOneTouch = oneTouchIndices.has(idx);
+      queue.push({
+        annotationId: ann.id,
+        playerId: ann.startPlayerId ?? '',
+        endPos: ann.end,
+        curveDirection: ann.type === 'curved-run'
+          ? ((ann as CurvedRunAnnotation).curveDirection ?? 'left')
+          : undefined,
+        durationMs: isOneTouch ? ONE_TOUCH_DURATION_MS : 1000,
+        animationType,
+        endPlayerId: ann.endPlayerId,
+        isOneTouch,
+        step: ordered[idx].step,
+      });
+    }
+    if (queue.length === 0) return null;
+
+    return { queue, selectedId, isReplay, allLineAnns };
+  }, [state]);
+
+  /** Build animation queue for ALL line annotations (used by Play Lines / Step / Export) */
+  const buildAnimQueueForAll = useCallback((): { queue: QueuedAnimation[]; allLineAnns: LineAnnotation[] } | null => {
+    const animatableTypes = ['running-line', 'curved-run', 'passing-line', 'dribble-line'] as const;
+    const allLineAnns = state.annotations.filter(
+      (a): a is LineAnnotation => (animatableTypes as readonly string[]).includes(a.type),
+    );
+    const nonGhostAnns = allLineAnns.filter(a => !state.ghostAnnotationIds.includes(a.id));
+    if (nonGhostAnns.length === 0) return null;
+
+    const stepOrder = computeStepOrder(nonGhostAnns);
+    type AnnWithStep = { ann: LineAnnotation; step: number };
+    const ordered: AnnWithStep[] = nonGhostAnns.map((ann, i) => ({
+      ann,
+      step: stepOrder ? stepOrder[i] : (ann.animStep ?? 1),
+    }));
+    ordered.sort((a, b) => a.step - b.step);
+
+    const orderedAnns = ordered.map(o => o.ann);
+    const oneTouchIndices = computeOneTouchIndices(orderedAnns);
+
+    const queue: QueuedAnimation[] = [];
+    for (let idx = 0; idx < ordered.length; idx++) {
+      const { ann } = ordered[idx];
+      const animationType: 'run' | 'pass' | 'dribble' =
+        ann.type === 'passing-line' ? 'pass'
+        : ann.type === 'dribble-line' ? 'dribble'
+        : 'run';
+      const isOneTouch = oneTouchIndices.has(idx);
+      queue.push({
+        annotationId: ann.id,
+        playerId: ann.startPlayerId ?? '',
+        endPos: ann.end,
+        curveDirection: ann.type === 'curved-run'
+          ? ((ann as CurvedRunAnnotation).curveDirection ?? 'left')
+          : undefined,
+        durationMs: isOneTouch ? ONE_TOUCH_DURATION_MS : 1000,
+        animationType,
+        endPlayerId: ann.endPlayerId,
+        isOneTouch,
+        step: ordered[idx].step,
+      });
+    }
+    if (queue.length === 0) return null;
+
+    return { queue, allLineAnns };
+  }, [state]);
+
+  /** Start a batch of animations from the queue, resolving positions dynamically */
+  const startAnimBatch = useCallback((
+    batch: QueuedAnimation[],
+    allLineAnns: LineAnnotation[],
+    finishedAnims: PlayerRunAnimation[] = [],
+    startOverrides?: Map<string, { x: number; y: number }>,
+  ) => {
+    const nowMs = performance.now();
+    const startedAnims: PlayerRunAnimation[] = [];
+    let didKick = false;
+
+    for (const item of batch) {
+      // Resolve start position
+      let startPos: { x: number; y: number } | undefined;
+
+      // Check explicit overrides first (used for replay: state is stale after RESET_RUN)
+      if (startOverrides?.has(item.playerId)) {
+        startPos = startOverrides.get(item.playerId);
+      }
+
+      // Check just-finished animations (state may be stale)
+      if (!startPos) for (const fa of finishedAnims) {
+        if (item.playerId === fa.playerId) {
+          const faType = fa.animationType ?? 'run';
+          startPos = faType === 'pass'
+            ? { x: fa.startPos.x, y: fa.startPos.y }
+            : { x: fa.endPos.x, y: fa.endPos.y };
+          break;
+        }
+      }
+
+      if (!startPos) {
+        // Check if the annotation starts from a preview ghost (future position)
+        const annForItem = allLineAnns.find(a => a.id === item.annotationId);
+        const realP = state.players.find(p => p.id === item.playerId);
+        const pg = annForItem ? findClosestGhost(state.previewGhosts, item.playerId, annForItem.start) : undefined;
+        if (annForItem && pg && realP) {
+          const dxReal = annForItem.start.x - realP.x;
+          const dyReal = annForItem.start.y - realP.y;
+          const distReal = dxReal * dxReal + dyReal * dyReal;
+          const dxGhost = annForItem.start.x - pg.x;
+          const dyGhost = annForItem.start.y - pg.y;
+          const distGhost = dxGhost * dxGhost + dyGhost * dyGhost;
+          startPos = distGhost < distReal ? { x: pg.x, y: pg.y } : { x: realP.x, y: realP.y };
+        } else if (realP) {
+          startPos = { x: realP.x, y: realP.y };
+        } else {
+          startPos = { x: 0, y: 0 };
+        }
+      }
+
+      // Resolve endPos dynamically if targeting a player
+      let resolvedEndPos = item.endPos;
+      if (item.endPlayerId) {
+        // Check if the target player has a same-batch run (simultaneous run + pass)
+        const sameBatchRun = batch.find(
+          b => b.playerId === item.endPlayerId && b.animationType !== 'pass'
+        );
+        if (sameBatchRun) {
+          // Pass should go to where the player is running TO, not where they are now
+          resolvedEndPos = sameBatchRun.endPos;
+        } else {
+          // Check if the target player was moved by a just-finished animation
+          const finishedForTarget = finishedAnims.find(
+            fa => fa.playerId === item.endPlayerId && (fa.animationType ?? 'run') !== 'pass'
+          );
+          if (finishedForTarget) {
+            resolvedEndPos = { x: finishedForTarget.endPos.x, y: finishedForTarget.endPos.y };
+          } else {
+            const targetPlayer = state.players.find(p => p.id === item.endPlayerId);
+            if (targetPlayer) {
+              resolvedEndPos = { x: targetPlayer.x, y: targetPlayer.y };
+            }
+          }
+        }
+      }
+
+      // Compute control point for curved runs
+      const controlPoint = item.curveDirection
+        ? curvedRunControlPoint(startPos, resolvedEndPos, item.curveDirection)
+        : item.controlPoint;
+
+      // For pass/dribble: snap ball to start player
+      if (item.animationType === 'pass' || item.animationType === 'dribble') {
+        dispatch({ type: 'MOVE_BALL', x: startPos.x, y: startPos.y });
+      }
+      if (item.animationType === 'pass' && !didKick) {
+        playKickSound();
+        didKick = true;
+      }
+
+      startedAnims.push({
+        playerId: item.playerId,
+        annotationId: item.annotationId,
+        startPos,
+        endPos: resolvedEndPos,
+        controlPoint,
+        startTime: nowMs,
+        durationMs: item.durationMs,
+        animationType: item.animationType,
+        endPlayerId: item.endPlayerId,
+        isOneTouch: item.isOneTouch,
+      });
+    }
+
+    playerRunAnimRef.current = startedAnims;
+  }, [state, dispatch]);
+
+  // ── Play Lines button handler (plays ALL annotations, like Space but without needing selection) ──
+  const handlePlayLines = useCallback(() => {
+    if (playerRunAnimRef.current.length > 0) return; // already animating
+
+    // Cancel any active stepping session
+    stepQueueRef.current = [];
+    completedStepBatchesRef.current = [];
+
+    const result = buildAnimQueueForAll();
+    if (!result) return;
+    const { queue, allLineAnns } = result;
+
+    // Clear existing ghosts for all involved players
+    const involvedPlayerIds = new Set(queue.map(q => q.playerId));
+    for (const pid of involvedPlayerIds) {
+      const existingGhost = state.ghostPlayers.find(g => g.playerId === pid);
+      if (existingGhost) {
+        dispatch({ type: 'CLEAR_PLAYER_GHOSTS', playerId: pid });
+      }
+    }
+
+    // Pull first batch (same step = simultaneous)
+    const firstStep = queue[0].step;
+    const batch: QueuedAnimation[] = [];
+    while (queue.length > 0 && queue[0].step === firstStep) {
+      batch.push(queue.shift()!);
+    }
+
+    // Store remaining for PitchCanvas to auto-advance through
+    animationQueueRef.current = queue;
+    startAnimBatch(batch, allLineAnns);
+  }, [state, dispatch, buildAnimQueueForAll, startAnimBatch]);
+
+  // ── Step Lines button handler (step-by-step through ALL annotations, like Right arrow) ──
+  const handleStepLines = useCallback(() => {
+    if (playerRunAnimRef.current.length > 0) return; // animation playing
+
+    // If no stepping queue yet, build one (first press)
+    if (stepQueueRef.current.length === 0 && completedStepBatchesRef.current.length === 0) {
+      // Cancel any active auto-play
+      animationQueueRef.current = [];
+
+      const result = buildAnimQueueForAll();
+      if (!result) return;
+      const { queue } = result;
+
+      // Clear existing ghosts for all involved players
+      const involvedPlayerIds = new Set(queue.map(q => q.playerId));
+      for (const pid of involvedPlayerIds) {
+        const existingGhost = state.ghostPlayers.find(g => g.playerId === pid);
+        if (existingGhost) {
+          dispatch({ type: 'CLEAR_PLAYER_GHOSTS', playerId: pid });
+        }
+      }
+
+      stepQueueRef.current = queue;
+      completedStepBatchesRef.current = [];
+    }
+
+    // Pull next batch from step queue
+    const queue = stepQueueRef.current;
+    if (queue.length === 0) {
+      // All steps played — end stepping session
+      stepQueueRef.current = [];
+      completedStepBatchesRef.current = [];
+      dispatch({ type: 'STAMP_GHOST_FADE_START', time: performance.now() });
+      return;
+    }
+
+    const nextStep = queue[0].step;
+    const batch: QueuedAnimation[] = [];
+    while (queue.length > 0 && queue[0].step === nextStep) {
+      batch.push(queue.shift()!);
+    }
+
+    // Track for Left arrow undo
+    completedStepBatchesRef.current.push({ batch, undoCount: batch.length });
+
+    // Don't store in animationQueueRef — PitchCanvas won't auto-advance
+    const animatableTypes = ['running-line', 'curved-run', 'passing-line', 'dribble-line'] as const;
+    const allLineAnns = state.annotations.filter(
+      (a): a is LineAnnotation => (animatableTypes as readonly string[]).includes(a.type),
+    );
+    startAnimBatch(batch, allLineAnns);
+  }, [state, dispatch, buildAnimQueueForAll, startAnimBatch]);
+
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       // Don't handle shortcuts while editing a player or annotation
       if (state.editingPlayerId || state.editingAnnotationId || state.pendingDeletePlayerId) return;
 
       if (e.key === 'Escape') {
-        // Stop annotation playback if running
-        if (state.annotationPlayback) {
-          handleStopAnnotationPlayback();
-          return;
-        }
         if (state.animationMode && playbackStatus !== 'idle') {
           stop();
+          return;
+        }
+        // Cancel arrow-key stepping session
+        if (stepQueueRef.current.length > 0 || completedStepBatchesRef.current.length > 0) {
+          playerRunAnimRef.current = [];
+          stepQueueRef.current = [];
+          completedStepBatchesRef.current = [];
+          dispatch({ type: 'STAMP_GHOST_FADE_START', time: performance.now() });
           return;
         }
         dispatch({ type: 'SELECT_PLAYER', playerId: null });
@@ -236,76 +541,22 @@ function AppContent() {
         }
       }
 
-      // ── Per-player run/pass/dribble animation (Space outside animation mode) ──
-      if ((e.key === ' ' || e.code === 'Space') && !state.animationMode && !state.annotationPlayback) {
+      // ── Per-player run/pass/dribble animation (Space = auto-play all steps) ──
+      if ((e.key === ' ' || e.code === 'Space') && !state.animationMode) {
         const tag = (e.target as HTMLElement)?.tagName;
         if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (e.target as HTMLElement)?.isContentEditable) return;
         e.preventDefault();
-        if (state.selectedPlayerId && !state.drawingInProgress && !playerRunAnimRef.current) {
-          const selectedId = state.selectedPlayerId;
+        if (!state.drawingInProgress && playerRunAnimRef.current.length === 0) {
+          // Cancel any active stepping session
+          stepQueueRef.current = [];
+          completedStepBatchesRef.current = [];
 
-          // Gather ALL line annotations for auto-ordering
-          const animatableTypes = ['running-line', 'curved-run', 'passing-line', 'dribble-line'] as const;
-          const allLineAnns = state.annotations.filter(
-            (a): a is LineAnnotation => (animatableTypes as readonly string[]).includes(a.type),
-          );
+          const result = buildAnimQueue();
+          if (!result) return;
+          const { queue, selectedId, isReplay, allLineAnns } = result;
 
-          // Check if selected player has any annotations starting from them
-          const playerAnns = allLineAnns.filter(a => a.startPlayerId === selectedId);
-          if (playerAnns.length === 0) { return; }
-
-          // Check for replay: all of the selected player's annotations are ghosted
-          const nonGhostPlayerAnns = playerAnns.filter(a => !state.ghostAnnotationIds.includes(a.id));
-          const ghostPlayerAnns = playerAnns.filter(a => state.ghostAnnotationIds.includes(a.id));
-          const isReplay = nonGhostPlayerAnns.length === 0 && ghostPlayerAnns.length > 0;
-
-          // Determine which annotations to animate:
-          // - Non-ghost annotations (freshly drawn, not yet animated)
-          // - In replay mode, include ghost annotations too
-          const ghostIds = new Set(state.ghostAnnotationIds);
-          const annsToAnimate = allLineAnns.filter(a =>
-            isReplay ? true : !ghostIds.has(a.id)
-          );
-
-          if (annsToAnimate.length === 0) { return; }
-
-          // Compute auto-ordering across annotations to animate
-          const stepOrder = computeStepOrder(annsToAnimate);
-
-          // Build ordered list: (annotation, step) pairs sorted by step
-          type AnnWithStep = { ann: LineAnnotation; step: number };
-          const ordered: AnnWithStep[] = annsToAnimate.map((ann, i) => ({
-            ann,
-            step: stepOrder ? stepOrder[i] : (ann.animStep ?? 1),
-          }));
-          ordered.sort((a, b) => a.step - b.step);
-
-          // Build the animation queue from ordered annotations
-          const queue: QueuedAnimation[] = [];
-          for (const { ann } of ordered) {
-            const animationType: 'run' | 'pass' | 'dribble' =
-              ann.type === 'passing-line' ? 'pass'
-              : ann.type === 'dribble-line' ? 'dribble'
-              : 'run';
-
-            queue.push({
-              annotationId: ann.id,
-              playerId: ann.startPlayerId ?? '',
-              endPos: ann.end,
-              curveDirection: ann.type === 'curved-run'
-                ? ((ann as CurvedRunAnnotation).curveDirection ?? 'left')
-                : undefined,
-              durationMs: 1000,
-              animationType,
-              endPlayerId: ann.endPlayerId,
-            });
-          }
-
-          if (queue.length === 0) { return; }
-
-          // Handle ghost cleanup for the selected player
           const player = state.players.find(p => p.id === selectedId);
-          if (!player) { return; }
+          if (!player) return;
 
           const existingGhost = state.ghostPlayers.find(g => g.playerId === player.id);
           if (isReplay && existingGhost) {
@@ -314,51 +565,104 @@ function AppContent() {
             dispatch({ type: 'CLEAR_PLAYER_GHOSTS', playerId: player.id });
           }
 
-          // Start the first animation from the queue
-          const first = queue.shift()!;
-          const startPlayer = isReplay && existingGhost && first.playerId === player.id
-            ? { x: existingGhost.x, y: existingGhost.y }
-            : { x: (state.players.find(p => p.id === first.playerId) ?? player).x,
-                y: (state.players.find(p => p.id === first.playerId) ?? player).y };
-
-          // Resolve endPos dynamically if targeting a player
-          let firstEndPos = first.endPos;
-          if (first.endPlayerId) {
-            const targetPlayer = state.players.find(p => p.id === first.endPlayerId);
-            if (targetPlayer) {
-              firstEndPos = { x: targetPlayer.x, y: targetPlayer.y };
-            }
+          // Pull first batch (same step = simultaneous)
+          const firstStep = queue[0].step;
+          const batch: QueuedAnimation[] = [];
+          while (queue.length > 0 && queue[0].step === firstStep) {
+            batch.push(queue.shift()!);
           }
 
-          // Compute control point for curved runs using actual start position
-          const firstControlPoint = first.curveDirection
-            ? curvedRunControlPoint(startPlayer, firstEndPos, first.curveDirection)
-            : first.controlPoint;
-
-          // For pass/dribble: snap ball to start player
-          if (first.animationType === 'pass' || first.animationType === 'dribble') {
-            dispatch({ type: 'MOVE_BALL', x: startPlayer.x, y: startPlayer.y });
-          }
-          if (first.animationType === 'pass') {
-            playKickSound();
-          }
-
-          // Store remaining queue for PitchCanvas to consume
+          // Store remaining queue for PitchCanvas to auto-advance through
           animationQueueRef.current = queue;
 
-          playerRunAnimRef.current = {
-            playerId: first.playerId,
-            annotationId: first.annotationId,
-            startPos: startPlayer,
-            endPos: firstEndPos,
-            controlPoint: firstControlPoint,
-            startTime: performance.now(),
-            durationMs: first.durationMs,
-            animationType: first.animationType,
-            endPlayerId: first.endPlayerId,
-          };
+          // For replay, player position hasn't updated yet — provide override
+          const overrides = isReplay && existingGhost
+            ? new Map([[player.id, { x: existingGhost.x, y: existingGhost.y }]])
+            : undefined;
+          startAnimBatch(batch, allLineAnns, [], overrides);
         }
         return;
+      }
+
+      // ── Arrow key step-through (Right = next step, Left = undo last step) ──
+      if ((e.key === 'ArrowRight' || e.key === 'ArrowLeft') && !state.animationMode && !state.drawingInProgress) {
+        const tag = (e.target as HTMLElement)?.tagName;
+        if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (e.target as HTMLElement)?.isContentEditable) return;
+
+        // Right arrow: advance to next step
+        if (e.key === 'ArrowRight') {
+          // If animation is currently playing, ignore (let it finish)
+          if (playerRunAnimRef.current.length > 0) return;
+
+          // If no stepping queue yet, build one (first press)
+          let replayOverrides: Map<string, { x: number; y: number }> | undefined;
+          if (stepQueueRef.current.length === 0 && completedStepBatchesRef.current.length === 0) {
+            const result = buildAnimQueue();
+            if (!result) return;
+            const { queue, selectedId, isReplay } = result;
+
+            const player = state.players.find(p => p.id === selectedId);
+            if (!player) return;
+
+            const existingGhost = state.ghostPlayers.find(g => g.playerId === player.id);
+            if (isReplay && existingGhost) {
+              dispatch({ type: 'RESET_RUN', playerId: player.id });
+              // State hasn't updated yet — provide start position override
+              replayOverrides = new Map([[player.id, { x: existingGhost.x, y: existingGhost.y }]]);
+            } else if (existingGhost) {
+              dispatch({ type: 'CLEAR_PLAYER_GHOSTS', playerId: player.id });
+            }
+
+            stepQueueRef.current = queue;
+            completedStepBatchesRef.current = [];
+          }
+
+          // Pull next batch from step queue
+          const queue = stepQueueRef.current;
+          if (queue.length === 0) {
+            // All steps played — end stepping session
+            stepQueueRef.current = [];
+            completedStepBatchesRef.current = [];
+            dispatch({ type: 'STAMP_GHOST_FADE_START', time: performance.now() });
+            return;
+          }
+
+          e.preventDefault();
+          const nextStep = queue[0].step;
+          const batch: QueuedAnimation[] = [];
+          while (queue.length > 0 && queue[0].step === nextStep) {
+            batch.push(queue.shift()!);
+          }
+
+          // Track for Left arrow undo
+          completedStepBatchesRef.current.push({ batch, undoCount: batch.length });
+
+          // Don't store in animationQueueRef — PitchCanvas won't auto-advance
+          const animatableTypes = ['running-line', 'curved-run', 'passing-line', 'dribble-line'] as const;
+          const allLineAnns = state.annotations.filter(
+            (a): a is LineAnnotation => (animatableTypes as readonly string[]).includes(a.type),
+          );
+          startAnimBatch(batch, allLineAnns, [], replayOverrides);
+          return;
+        }
+
+        // Left arrow: undo last completed step
+        if (e.key === 'ArrowLeft') {
+          if (playerRunAnimRef.current.length > 0) return; // animation playing, ignore
+          if (completedStepBatchesRef.current.length === 0) return; // nothing to undo
+
+          e.preventDefault();
+          const last = completedStepBatchesRef.current.pop()!;
+
+          // Undo the EXECUTE_RUN dispatches (one per animation in the batch)
+          for (let i = 0; i < last.undoCount; i++) {
+            dispatch({ type: 'UNDO' });
+          }
+
+          // Prepend the batch back to the step queue
+          stepQueueRef.current = [...last.batch, ...stepQueueRef.current];
+          return;
+        }
       }
 
       // ── Animation mode shortcuts ──
@@ -506,18 +810,24 @@ function AppContent() {
         e.preventDefault();
         dispatch({ type: 'REDO' });
       }
-      // Zoom presets
-      if (e.key === '1' && !e.metaKey && !e.ctrlKey) {
-        zoom.setPreset('full');
-      }
-      if (e.key === '2' && !e.metaKey && !e.ctrlKey) {
-        zoom.setPreset('top-half');
-      }
-      if (e.key === '3' && !e.metaKey && !e.ctrlKey) {
-        zoom.setPreset('bottom-half');
-      }
-      if (e.key === '0' && !e.metaKey && !e.ctrlKey) {
-        zoom.resetZoom();
+      // Zoom presets (skip when a line annotation is selected — number keys edit step)
+      const hasSelectedLine = state.selectedAnnotationId && state.annotations.some(
+        a => a.id === state.selectedAnnotationId &&
+          (a.type === 'passing-line' || a.type === 'running-line' || a.type === 'curved-run' || a.type === 'dribble-line'),
+      );
+      if (!hasSelectedLine) {
+        if (e.key === '1' && !e.metaKey && !e.ctrlKey) {
+          zoom.setPreset('full');
+        }
+        if (e.key === '2' && !e.metaKey && !e.ctrlKey) {
+          zoom.setPreset('top-half');
+        }
+        if (e.key === '3' && !e.metaKey && !e.ctrlKey) {
+          zoom.setPreset('bottom-half');
+        }
+        if (e.key === '0' && !e.metaKey && !e.ctrlKey) {
+          zoom.resetZoom();
+        }
       }
       // Zoom in/out with Cmd +/-
       if ((e.key === '=' || e.key === '+') && (e.metaKey || e.ctrlKey)) {
@@ -571,7 +881,7 @@ function AppContent() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [dispatch, state, playbackStatus, playbackIndex, play, pause, stop, seekToKeyframe, handleStopAnnotationPlayback, zoom]);
+  }, [dispatch, state, playbackStatus, playbackIndex, play, pause, stop, seekToKeyframe, zoom, buildAnimQueue, startAnimBatch]);
 
   const totalKeyframes = state.animationSequence?.keyframes.length ?? 0;
 
@@ -620,6 +930,7 @@ function AppContent() {
       <div className="topbar">
         <TopBar
           onPlayLines={handlePlayLines}
+          onStepLines={handleStepLines}
           onExportLines={handleExportLines}
           showPanel={showPanel}
           onTogglePanel={() => setShowPanel(p => !p)}
@@ -674,7 +985,7 @@ function AppContent() {
         />
       </div>
       <div className="statusbar">
-        <StatusBar zoomLevel={zoom.zoomState.zoom} />
+        <StatusBar />
       </div>
 
       {/* Export Dialog */}

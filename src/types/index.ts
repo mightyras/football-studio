@@ -73,6 +73,7 @@ export type GhostPlayer = {
   y: number;
   facing: number;
   isGK?: boolean;
+  createdAt: number;   // performance.now() timestamp; 0 = fade not started yet
 };
 
 /** Preview ghost at run/curved-run destination, shown immediately when annotation is drawn.
@@ -100,6 +101,7 @@ export type PlayerRunAnimation = {
   durationMs: number;          // ~1000ms
   animationType: 'run' | 'pass' | 'dribble';  // what kind of animation
   endPlayerId?: string;        // target player for pass animations
+  isOneTouch?: boolean;        // one-touch bounce pass — no ease-in, ball leaves instantly
 };
 
 /** A queued animation waiting to start (no startTime yet) */
@@ -112,6 +114,8 @@ export type QueuedAnimation = {
   durationMs: number;
   animationType: 'run' | 'pass' | 'dribble';
   endPlayerId?: string;
+  isOneTouch?: boolean;        // one-touch bounce pass — no ease-in, ball leaves instantly
+  step: number;                // animation step — same step = simultaneous
 };
 
 /** Visual overlay data passed through render pipeline during run animation */
@@ -267,7 +271,7 @@ export type Annotation =
   | PlayerMarkingAnnotation;
 
 export type DrawingInProgress =
-  | { type: 'line'; subTool: 'passing-line' | 'running-line' | 'curved-run' | 'dribble-line'; start: WorldPoint; startPlayerId?: string; curveDirection?: 'left' | 'right' }
+  | { type: 'line'; subTool: 'passing-line' | 'running-line' | 'curved-run' | 'dribble-line'; start: WorldPoint; startPlayerId?: string; startFromGhost?: boolean; curveDirection?: 'left' | 'right' }
   | { type: 'polygon'; points: WorldPoint[] }
   | { type: 'player-polygon'; playerIds: string[] }
   | { type: 'player-line'; playerIds: string[] }
@@ -351,6 +355,7 @@ export type SceneData = {
   showCoverShadow: boolean;
   fovMode: 'off' | 'A' | 'B' | 'both';
   fovExpanded: boolean;
+  autoOrientToBall: boolean;
   possession: 'A' | 'B' | 'auto';
   substitutesA: SubstitutePlayer[];
   substitutesB: SubstitutePlayer[];
@@ -396,6 +401,7 @@ export type AppState = {
   showCoverShadow: boolean;
   fovMode: 'off' | 'A' | 'B' | 'both';
   fovExpanded: boolean;
+  autoOrientToBall: boolean;
   pitchSettings: PitchSettings;
   cmdHeld: boolean;
   shiftHeld: boolean;
@@ -414,7 +420,7 @@ export type AppState = {
   animationMode: boolean;
   animationSequence: AnimationSequence | null;
   activeKeyframeIndex: number | null;
-  annotationPlayback: boolean;
+  showStepNumbers: boolean;
   clubIdentity: ClubIdentity;
   ghostPlayers: GhostPlayer[];
   ghostAnnotationIds: string[];

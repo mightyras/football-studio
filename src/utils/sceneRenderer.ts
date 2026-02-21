@@ -60,7 +60,6 @@ export function renderSceneToCanvas(
     editingAnnotationId: null,
     cmdHeld: false,
     shiftHeld: false,
-    annotationPlayback: false,
   };
 
   const transform = computeTransform(

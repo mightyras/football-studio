@@ -132,6 +132,13 @@ const ExportIcon = () => (
   </svg>
 );
 
+const StepIcon = () => (
+  <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
+    <polygon points="4,4 14,12 4,20" />
+    <rect x="16" y="4" width="3" height="16" />
+  </svg>
+);
+
 const HelpIcon = ({ active, accentColor }: { active: boolean; accentColor: string }) => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={active ? accentColor : 'currentColor'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <circle cx="12" cy="12" r="10" />
@@ -250,6 +257,61 @@ function DisplayDropdown() {
             />
             Orientation
             <span style={{ color: '#64748b', fontSize: 10, marginLeft: 'auto' }}>O</span>
+          </label>
+          {/* Orientation mode sub-items */}
+          <label
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              padding: '4px 12px 4px 24px',
+              cursor: state.showOrientation ? 'pointer' : 'not-allowed',
+              fontSize: 11,
+              color: state.showOrientation ? '#cbd5e1' : '#4b5563',
+              opacity: state.showOrientation ? 1 : 0.5,
+              transition: 'background 0.1s',
+            }}
+            onMouseEnter={e => {
+              if (state.showOrientation) (e.currentTarget as HTMLElement).style.background = '#334155';
+            }}
+            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+          >
+            <input
+              type="radio"
+              name="orientMode"
+              checked={!state.autoOrientToBall}
+              disabled={!state.showOrientation}
+              onChange={() => dispatch({ type: 'SET_AUTO_ORIENT_TO_BALL', enabled: false })}
+              style={{ accentColor: theme.accent }}
+            />
+            Manual
+          </label>
+          <label
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              padding: '4px 12px 4px 24px',
+              cursor: state.showOrientation ? 'pointer' : 'not-allowed',
+              fontSize: 11,
+              color: state.showOrientation ? '#cbd5e1' : '#4b5563',
+              opacity: state.showOrientation ? 1 : 0.5,
+              transition: 'background 0.1s',
+            }}
+            onMouseEnter={e => {
+              if (state.showOrientation) (e.currentTarget as HTMLElement).style.background = '#334155';
+            }}
+            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+          >
+            <input
+              type="radio"
+              name="orientMode"
+              checked={state.autoOrientToBall}
+              disabled={!state.showOrientation}
+              onChange={() => dispatch({ type: 'SET_AUTO_ORIENT_TO_BALL', enabled: true })}
+              style={{ accentColor: theme.accent }}
+            />
+            Auto (eyes on ball)
           </label>
           <label
             style={{
@@ -444,6 +506,7 @@ function ResetConfirmDialog({ onConfirm, onCancel }: { onConfirm: () => void; on
 
 interface TopBarProps {
   onPlayLines?: () => void;
+  onStepLines?: () => void;
   onExportLines?: () => void;
   showPanel: boolean;
   onTogglePanel: () => void;
@@ -451,7 +514,7 @@ interface TopBarProps {
   helpActive: boolean;
 }
 
-export function TopBar({ onPlayLines, onExportLines, showPanel, onTogglePanel, onOpenHelp, helpActive }: TopBarProps) {
+export function TopBar({ onPlayLines, onStepLines, onExportLines, showPanel, onTogglePanel, onOpenHelp, helpActive }: TopBarProps) {
   const { state, dispatch } = useAppState();
   const theme = useThemeColors();
   const [showResetConfirm, setShowResetConfirm] = useState(false);
@@ -548,9 +611,27 @@ export function TopBar({ onPlayLines, onExportLines, showPanel, onTogglePanel, o
           <>
             <div style={{ width: 1, height: 18, background: '#334155', flexShrink: 0 }} />
             <button
+              onClick={() =>
+                dispatch({ type: 'SET_SHOW_STEP_NUMBERS', show: !state.showStepNumbers })
+              }
+              title="Toggle step number badges"
+              style={{
+                padding: '4px 10px',
+                fontSize: 11,
+                fontFamily: 'inherit',
+                border: state.showStepNumbers ? `1px solid ${theme.accent}` : '1px solid #374151',
+                borderRadius: 4,
+                background: state.showStepNumbers ? hexToRgba(theme.accent, 0.15) : 'transparent',
+                color: state.showStepNumbers ? theme.accent : '#94a3b8',
+                cursor: 'pointer',
+                transition: 'all 0.15s',
+              }}
+            >
+              Steps
+            </button>
+            <button
               onClick={onPlayLines}
-              disabled={state.annotationPlayback}
-              title="Play line animations"
+              title="Play line animations (Space)"
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -558,21 +639,40 @@ export function TopBar({ onPlayLines, onExportLines, showPanel, onTogglePanel, o
                 padding: '4px 10px',
                 fontSize: 11,
                 fontFamily: 'inherit',
-                border: state.annotationPlayback ? `1px solid ${theme.accent}` : '1px solid #374151',
+                border: '1px solid #374151',
                 borderRadius: 4,
-                background: state.annotationPlayback ? hexToRgba(theme.accent, 0.15) : 'transparent',
-                color: state.annotationPlayback ? theme.accent : '#94a3b8',
-                cursor: state.annotationPlayback ? 'not-allowed' : 'pointer',
+                background: 'transparent',
+                color: '#94a3b8',
+                cursor: 'pointer',
                 transition: 'all 0.15s',
-                opacity: state.annotationPlayback ? 0.7 : 1,
               }}
             >
               <PlayIcon />
-              Play Lines
+              Play
+            </button>
+            <button
+              onClick={onStepLines}
+              title="Step through animation (→ arrow)"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 4,
+                padding: '4px 10px',
+                fontSize: 11,
+                fontFamily: 'inherit',
+                border: '1px solid #374151',
+                borderRadius: 4,
+                background: 'transparent',
+                color: '#94a3b8',
+                cursor: 'pointer',
+                transition: 'all 0.15s',
+              }}
+            >
+              <StepIcon />
+              Step
             </button>
             <button
               onClick={onExportLines}
-              disabled={state.annotationPlayback}
               title="Export line animations"
               style={{
                 display: 'flex',
@@ -584,10 +684,9 @@ export function TopBar({ onPlayLines, onExportLines, showPanel, onTogglePanel, o
                 border: '1px solid #374151',
                 borderRadius: 4,
                 background: 'transparent',
-                color: state.annotationPlayback ? '#4b5563' : '#94a3b8',
-                cursor: state.annotationPlayback ? 'not-allowed' : 'pointer',
+                color: '#94a3b8',
+                cursor: 'pointer',
                 transition: 'all 0.15s',
-                opacity: state.annotationPlayback ? 0.5 : 1,
               }}
             >
               <ExportIcon />

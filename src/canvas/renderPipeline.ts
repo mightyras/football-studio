@@ -7,6 +7,7 @@ import { drawPlayer, drawCoverShadow, drawFOV } from './PlayerRenderer';
 import { renderBenches } from './BenchRenderer';
 import { renderZoneOverlay } from './ZoneOverlayRenderer';
 import { renderAnnotationsBase, renderAnnotationsText, renderSnapIndicators, renderDrawingPreview } from './AnnotationRenderer';
+import { computeStepOrder, type LineAnnotation } from '../animation/annotationAnimator';
 
 // ── Logo watermark (cached Image for performance) ──
 
@@ -52,14 +53,28 @@ function renderLogoWatermark(
   ctx.restore();
 }
 
+// Ghost fade constants
+const GHOST_HOLD_MS = 3000;  // visible at full opacity for 3s after animation
+const GHOST_FADE_MS = 3000;  // then fade out over 3s
+
+/** Compute ghost opacity based on elapsed time since fade started. */
+function ghostOpacity(baseOpacity: number, createdAt: number, now: number): number {
+  if (createdAt <= 0 || !now) return baseOpacity; // fade not started yet
+  const elapsed = now - createdAt;
+  if (elapsed <= GHOST_HOLD_MS) return baseOpacity;
+  const fadeProgress = Math.min(1, (elapsed - GHOST_HOLD_MS) / GHOST_FADE_MS);
+  return baseOpacity * (1 - fadeProgress);
+}
+
 export function render(
   ctx: CanvasRenderingContext2D,
   transform: PitchTransform,
   state: AppState,
   width: number,
   height: number,
-  runAnimOverlay?: RunAnimationOverlay,
+  runAnimOverlays?: RunAnimationOverlay[],
   goalCelebration?: GoalCelebration,
+  now?: number,
 ) {
   ctx.clearRect(0, 0, width, height);
 
@@ -127,24 +142,40 @@ export function render(
     }
   }
 
-  // Collect all ghost players (state + transient animation ghost)
+  // Collect all ghost players (state + transient animation ghosts)
   const allGhosts: GhostPlayer[] = [
     ...(state.ghostPlayers || []),
-    ...(runAnimOverlay ? [runAnimOverlay.ghostPlayer] : []),
+    ...(runAnimOverlays ? runAnimOverlays.map(o => o.ghostPlayer) : []),
   ];
 
+  // Compute effective animation step order for badges
+  const lineAnns = state.annotations.filter(
+    (a): a is LineAnnotation =>
+      a.type === 'passing-line' || a.type === 'running-line' ||
+      a.type === 'curved-run' || a.type === 'dribble-line',
+  );
+  const effectiveSteps = new Map<string, number>();
+  if (lineAnns.length > 0) {
+    const stepOrder = computeStepOrder(lineAnns);
+    lineAnns.forEach((ann, i) => {
+      effectiveSteps.set(ann.id, stepOrder ? stepOrder[i] : (ann.animStep ?? 1));
+    });
+  }
+
   // Annotations layer 1: lines and polygons (below players)
-  renderAnnotationsBase(ctx, transform, state.annotations, state.players, state.selectedAnnotationId, state.playerRadius, accent, state.ghostAnnotationIds, runAnimOverlay, allGhosts, state.previewGhosts ?? []);
+  renderAnnotationsBase(ctx, transform, state.annotations, state.players, state.selectedAnnotationId, state.playerRadius, accent, state.ghostAnnotationIds, runAnimOverlays, allGhosts, state.previewGhosts ?? [], now, effectiveSteps, state.showStepNumbers);
 
   // Ghost players (semi-transparent copies at run origin, below real players)
   if (allGhosts.length) {
-    ctx.save();
-    ctx.globalAlpha = 0.3;
     for (const ghost of allGhosts) {
+      const opacity = now ? ghostOpacity(0.3, ghost.createdAt, now) : 0.3;
+      if (opacity <= 0.001) continue; // fully faded — skip
+
+      ctx.save();
+      ctx.globalAlpha = opacity;
       const teamColor = ghost.team === 'A' ? state.teamAColor : state.teamBColor;
       const outlineColor = ghost.team === 'A' ? state.teamAOutlineColor : state.teamBOutlineColor;
       const labelAbove = ghost.team === 'A' ? teamAAttacksDown : teamBAttacksDown;
-      const showName = ghost.team === 'A' ? state.showPlayerNamesA : state.showPlayerNamesB;
       drawPlayer(
         ctx,
         transform,
@@ -167,11 +198,11 @@ export function render(
         false,    // isCmdHeld
         outlineColor,
         labelAbove,
-        showName,
+        false,    // showName — ghosts should not display name labels
         accent,
       );
+      ctx.restore();
     }
-    ctx.restore();
   }
 
   // Preview ghosts (semi-transparent at run destination, below real players)
@@ -182,12 +213,11 @@ export function render(
       const teamColor = pg.team === 'A' ? state.teamAColor : state.teamBColor;
       const outlineColor = pg.team === 'A' ? state.teamAOutlineColor : state.teamBOutlineColor;
       const labelAbove = pg.team === 'A' ? teamAAttacksDown : teamBAttacksDown;
-      const showName = pg.team === 'A' ? state.showPlayerNamesA : state.showPlayerNamesB;
       drawPlayer(
         ctx,
         transform,
         {
-          id: `preview-${pg.playerId}`,
+          id: `preview-${pg.sourceAnnotationId}`,
           team: pg.team,
           number: pg.number,
           name: pg.name,
@@ -205,7 +235,7 @@ export function render(
         false,    // isCmdHeld
         outlineColor,
         labelAbove,
-        showName,
+        false,    // showName — preview ghosts should not display name labels
         accent,
       );
     }
@@ -238,10 +268,7 @@ export function render(
       state.activeTool === 'formation-move'
       && state.formationMoveTeam === player.team
       && !player.isGK;
-    const isFormationDimmed =
-      state.activeTool === 'formation-move'
-      && state.formationMoveTeam === player.team
-      && !!player.isGK;
+    const isFormationDimmed = false;
 
     drawPlayer(
       ctx,

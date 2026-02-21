@@ -1,6 +1,7 @@
 import type { Annotation, DrawingInProgress, DrawSubTool, GhostPlayer, PassingLineAnnotation, PlayerMarkingAnnotation, PreviewGhost, RunningLineAnnotation, CurvedRunAnnotation, DribbleLineAnnotation, Player, PitchTransform, RunAnimationOverlay, WorldPoint } from '../types';
 import { THEME } from '../constants/colors';
 import { curvedRunControlPoint, CURVE_BULGE_FACTOR } from '../utils/curveGeometry';
+import { findClosestGhost } from '../utils/ghostUtils';
 
 // ── Constants ──
 
@@ -372,14 +373,29 @@ function resolveLineEndpoints(
   let endSnapped = false;
 
   if (ann.startPlayerId) {
+    // Check if start is from a preview ghost (future position) vs real player
+    const pg = findClosestGhost(previewGhosts, ann.startPlayerId, ann.start);
     const p = players.find(pl => pl.id === ann.startPlayerId);
-    if (p) { start = { x: p.x, y: p.y }; startSnapped = true; }
+    if (pg && p) {
+      const dxReal = ann.start.x - p.x;
+      const dyReal = ann.start.y - p.y;
+      const distReal = dxReal * dxReal + dyReal * dyReal;
+      const dxGhost = ann.start.x - pg.x;
+      const dyGhost = ann.start.y - pg.y;
+      const distGhost = dxGhost * dxGhost + dyGhost * dyGhost;
+      start = distGhost < distReal ? { x: pg.x, y: pg.y } : { x: p.x, y: p.y };
+      startSnapped = true;
+    } else if (pg) {
+      start = { x: pg.x, y: pg.y }; startSnapped = true;
+    } else if (p) {
+      start = { x: p.x, y: p.y }; startSnapped = true;
+    }
   }
   if (ann.endPlayerId) {
     // Check if a preview ghost exists for this player — if the annotation endpoint
     // was drawn to the ghost (future position), use the ghost position instead of
     // the real player's current position.
-    const pg = previewGhosts.find(g => g.playerId === ann.endPlayerId);
+    const pg = findClosestGhost(previewGhosts, ann.endPlayerId, ann.end);
     const p = players.find(pl => pl.id === ann.endPlayerId);
     if (pg && p) {
       // Decide which position the annotation was snapped to:
@@ -478,16 +494,27 @@ function drawStepBadge(
   y: number,
   step: number,
   color: string,
+  focused: boolean = false,
 ) {
   const radius = 8;
   ctx.save();
+  // Focused glow ring
+  if (focused) {
+    ctx.beginPath();
+    ctx.arc(x, y, radius + 3, 0, Math.PI * 2);
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1.5;
+    ctx.globalAlpha = 0.5;
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
   // Background circle
   ctx.beginPath();
   ctx.arc(x, y, radius, 0, Math.PI * 2);
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
+  ctx.fillStyle = focused ? 'rgba(0, 0, 0, 0.9)' : 'rgba(0, 0, 0, 0.75)';
   ctx.fill();
   ctx.strokeStyle = color;
-  ctx.lineWidth = 1.5;
+  ctx.lineWidth = focused ? 2 : 1.5;
   ctx.stroke();
   // Number text
   ctx.font = 'bold 10px Inter, system-ui, sans-serif';
@@ -518,6 +545,10 @@ function hasMultipleSteps(annotations: Annotation[]): boolean {
 /**
  * Render lines and polygons (below players).
  */
+// Ghost fade constants (must match renderPipeline.ts)
+const GHOST_HOLD_MS = 3000;
+const GHOST_FADE_MS = 3000;
+
 export function renderAnnotationsBase(
   ctx: CanvasRenderingContext2D,
   transform: PitchTransform,
@@ -527,11 +558,18 @@ export function renderAnnotationsBase(
   playerRadius: number = 1.6,
   accent: string = THEME.accent,
   ghostAnnotationIds: string[] = [],
-  runAnimOverlay?: RunAnimationOverlay,
+  runAnimOverlays?: RunAnimationOverlay[],
   ghostPlayers: GhostPlayer[] = [],
   previewGhosts: PreviewGhost[] = [],
+  now?: number,
+  effectiveSteps?: Map<string, number>,
+  showStepNumbers: boolean = true,
 ): void {
-  const showStepBadges = hasMultipleSteps(annotations);
+  // Show step badges when enabled and there are line annotations
+  const showStepBadges = showStepNumbers && annotations.some(a =>
+    a.type === 'passing-line' || a.type === 'running-line' ||
+    a.type === 'curved-run' || a.type === 'dribble-line',
+  );
 
   ctx.save();
   ctx.globalAlpha = ANNOTATION_OPACITY;
@@ -539,7 +577,8 @@ export function renderAnnotationsBase(
   for (const ann of annotations) {
     const isSelected = ann.id === selectedAnnotationId;
     const isGhostAnn = ghostAnnotationIds.includes(ann.id);
-    const isAnimating = runAnimOverlay?.annotationId === ann.id;
+    const runAnimOverlay = runAnimOverlays?.find(o => o.annotationId === ann.id);
+    const isAnimating = !!runAnimOverlay;
 
     // For ghost annotations whose startPlayerId has moved away,
     // substitute the player position with the ghost player's original position.
@@ -559,11 +598,25 @@ export function renderAnnotationsBase(
       }
     }
 
-    // Ghost annotations are rendered at very low opacity
+    // Ghost annotations are rendered at very low opacity, fading over time
     // (but skip if this annotation is being actively animated — split rendering handles it)
     if (isGhostAnn && !isAnimating) {
+      let annOpacity = 0.15;
+      // Find the ghost player associated with this annotation to sync fade timing
+      const annWithStart = ann as { startPlayerId?: string };
+      const fadeGhost = annWithStart.startPlayerId
+        ? ghostPlayers.find(g => g.playerId === annWithStart.startPlayerId)
+        : undefined;
+      if (fadeGhost && fadeGhost.createdAt > 0 && now) {
+        const elapsed = now - fadeGhost.createdAt;
+        if (elapsed > GHOST_HOLD_MS) {
+          const fadeProgress = Math.min(1, (elapsed - GHOST_HOLD_MS) / GHOST_FADE_MS);
+          annOpacity = 0.15 * (1 - fadeProgress);
+        }
+      }
+      if (annOpacity <= 0.001) continue; // fully faded — skip rendering
       ctx.save();
-      ctx.globalAlpha = 0.15;
+      ctx.globalAlpha = annOpacity;
     }
 
     switch (ann.type) {
@@ -604,7 +657,7 @@ export function renderAnnotationsBase(
           const midX = (resolved.start.x + resolved.end.x) / 2;
           const midY = (resolved.start.y + resolved.end.y) / 2;
           const badgePos = transform.worldToScreen(midX, midY);
-          drawStepBadge(ctx, badgePos.x, badgePos.y - 12, ann.animStep ?? 1, ann.color);
+          drawStepBadge(ctx, badgePos.x, badgePos.y - 12, effectiveSteps?.get(ann.id) ?? ann.animStep ?? 1, ann.color, ann.id === selectedAnnotationId);
         }
         break;
       }
@@ -647,7 +700,7 @@ export function renderAnnotationsBase(
           const midX = (resolved.start.x + resolved.end.x) / 2;
           const midY = (resolved.start.y + resolved.end.y) / 2;
           const badgePos = transform.worldToScreen(midX, midY);
-          drawStepBadge(ctx, badgePos.x, badgePos.y - 12, ann.animStep ?? 1, ann.color);
+          drawStepBadge(ctx, badgePos.x, badgePos.y - 12, effectiveSteps?.get(ann.id) ?? ann.animStep ?? 1, ann.color, ann.id === selectedAnnotationId);
         }
         break;
       }
@@ -687,7 +740,7 @@ export function renderAnnotationsBase(
           const midX = (resolved.start.x + resolved.end.x) / 2;
           const midY = (resolved.start.y + resolved.end.y) / 2;
           const badgePos = transform.worldToScreen(midX, midY);
-          drawStepBadge(ctx, badgePos.x, badgePos.y - 12, ann.animStep ?? 1, ann.color);
+          drawStepBadge(ctx, badgePos.x, badgePos.y - 12, effectiveSteps?.get(ann.id) ?? ann.animStep ?? 1, ann.color, ann.id === selectedAnnotationId);
         }
         break;
       }
@@ -762,7 +815,7 @@ export function renderAnnotationsBase(
           const midX = (resolved.start.x + resolved.end.x) / 2;
           const midY = (resolved.start.y + resolved.end.y) / 2;
           const badgePos = transform.worldToScreen(midX, midY);
-          drawStepBadge(ctx, badgePos.x, badgePos.y - 12, ann.animStep ?? 1, ann.color);
+          drawStepBadge(ctx, badgePos.x, badgePos.y - 12, effectiveSteps?.get(ann.id) ?? ann.animStep ?? 1, ann.color, ann.id === selectedAnnotationId);
         }
         break;
       }
@@ -1039,11 +1092,19 @@ export function renderDrawingPreview(
     case 'line': {
       if (!mouseWorld) break;
 
-      // Check if start is snapped to a player — draw highlight ring
+      // Check if start is snapped to a player or preview ghost — draw highlight ring
       if (drawing.startPlayerId) {
-        const startPlayer = players.find(p => p.id === drawing.startPlayerId);
-        if (startPlayer) {
-          const sp = transform.worldToScreen(startPlayer.x, startPlayer.y);
+        let startPos: { x: number; y: number } | null = null;
+        if (drawing.startFromGhost) {
+          const ghost = findClosestGhost(previewGhosts, drawing.startPlayerId!, drawing.start);
+          if (ghost) startPos = { x: ghost.x, y: ghost.y };
+        }
+        if (!startPos) {
+          const startPlayer = players.find(p => p.id === drawing.startPlayerId);
+          if (startPlayer) startPos = { x: startPlayer.x, y: startPlayer.y };
+        }
+        if (startPos) {
+          const sp = transform.worldToScreen(startPos.x, startPos.y);
           ctx.save();
           ctx.beginPath();
           ctx.arc(sp.x, sp.y, 6, 0, Math.PI * 2);

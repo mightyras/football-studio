@@ -27,6 +27,14 @@ export function easeInOutCubic(t: number): number {
     : 1 - Math.pow(-2 * t + 2, 3) / 2;
 }
 
+/**
+ * Ease-out cubic — ball launches at full speed and decelerates into the target.
+ * Used for one-touch bounce passes where the ball leaves the player's foot instantly.
+ */
+export function easeOutCubic(t: number): number {
+  return 1 - Math.pow(1 - t, 3);
+}
+
 // ── Keyframe Interpolation ──
 
 /**

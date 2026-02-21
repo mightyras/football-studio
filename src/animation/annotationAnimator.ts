@@ -101,6 +101,37 @@ export function computeStepOrder(annotations: LineAnnotation[]): number[] | null
   return stepAssignment;
 }
 
+/** Duration for one-touch bounce passes (ms). Slightly shorter than normal 1000ms to keep tempo up. */
+export const ONE_TOUCH_DURATION_MS = 600;
+
+/**
+ * Detect which annotations are "one-touch" passes.
+ * A one-touch pass is a passing-line whose startPlayerId matches the endPlayerId
+ * of another passing-line (i.e., the player receives and immediately redirects).
+ *
+ * Returns a Set of annotation indices that are one-touch.
+ */
+export function computeOneTouchIndices(annotations: LineAnnotation[]): Set<number> {
+  const result = new Set<number>();
+  for (let j = 0; j < annotations.length; j++) {
+    const b = annotations[j];
+    if (b.type !== 'passing-line') continue;
+    for (let i = 0; i < annotations.length; i++) {
+      if (i === j) continue;
+      const a = annotations[i];
+      // Rule 4 pattern: pass A ends at player X, pass B starts from player X
+      if (
+        a.type === 'passing-line' &&
+        a.endPlayerId && a.endPlayerId === b.startPlayerId
+      ) {
+        result.add(j);
+        break; // annotation j is one-touch, no need to check more
+      }
+    }
+  }
+  return result;
+}
+
 /**
  * Auto-assign animation steps based on tactical dependency rules.
  * Wrapper around computeStepOrder that returns modified annotations.
@@ -150,9 +181,15 @@ export function buildSequenceFromAnnotations(
   // Auto-assign steps based on tactical dependency rules (only when all share same step)
   const lineAnnotations = autoAssignSteps(rawLineAnnotations);
 
-  // Group by animStep (default 1)
+  // Detect one-touch passes for per-step duration
+  const oneTouchIndices = computeOneTouchIndices(lineAnnotations);
+
+  // Group by animStep (default 1) and build per-step one-touch map
   const stepMap = new Map<number, typeof lineAnnotations>();
-  for (const ann of lineAnnotations) {
+  // A step is "one-touch" only if ALL annotations in it are one-touch passes
+  const stepOneTouchMap = new Map<number, boolean>();
+  for (let i = 0; i < lineAnnotations.length; i++) {
+    const ann = lineAnnotations[i];
     const step = ann.animStep ?? 1;
     const group = stepMap.get(step);
     if (group) {
@@ -160,6 +197,9 @@ export function buildSequenceFromAnnotations(
     } else {
       stepMap.set(step, [ann]);
     }
+    const isOT = oneTouchIndices.has(i);
+    const existing = stepOneTouchMap.get(step);
+    stepOneTouchMap.set(step, existing === undefined ? isOT : (existing && isOT));
   }
 
   // Sort step numbers ascending
@@ -271,12 +311,13 @@ export function buildSequenceFromAnnotations(
     endBall.rotationY = currentBall.rotationY + ballDy / currentBall.radius;
 
     // Create keyframe for this step's end state
+    const isOneTouchStep = stepOneTouchMap.get(stepNum) ?? false;
     keyframes.push({
       id: `kf-anim-${stepNum}`,
       players: structuredClone(endPlayers),
       ball: structuredClone(endBall),
       annotations: [],
-      durationMs: durationMsPerStep,
+      durationMs: isOneTouchStep ? ONE_TOUCH_DURATION_MS : durationMsPerStep,
     });
 
     // Carry forward: next step starts from this step's end state

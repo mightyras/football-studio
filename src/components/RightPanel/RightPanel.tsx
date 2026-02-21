@@ -88,7 +88,7 @@ export function RightPanel({ rotation, activeTab, onTabChange, saveRequested, on
           active={activeTab === 'scenes'}
           onClick={() => onTabChange('scenes')}
         >
-          Scenes
+          Boards
         </TabButton>
       </div>
 
