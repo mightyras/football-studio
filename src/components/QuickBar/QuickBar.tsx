@@ -22,10 +22,10 @@ function ToggleButton({
         padding: '3px 10px',
         fontSize: 11,
         fontFamily: 'inherit',
-        border: active ? `1px solid ${theme.accent}` : '1px solid #374151',
+        border: active ? `1px solid ${theme.highlight}` : `1px solid ${theme.borderSubtle}`,
         borderRadius: 4,
-        background: active ? hexToRgba(theme.accent, 0.15) : 'transparent',
-        color: disabled ? '#4b5563' : active ? theme.accent : '#94a3b8',
+        background: active ? hexToRgba(theme.highlight, 0.15) : 'transparent',
+        color: disabled ? '#4b5563' : active ? theme.highlight : theme.textMuted,
         cursor: disabled ? 'not-allowed' : 'pointer',
         transition: 'all 0.15s',
         opacity: disabled ? 0.5 : 1,
@@ -53,10 +53,10 @@ function PossessionButton({
         padding: '3px 10px',
         fontSize: 11,
         fontFamily: 'inherit',
-        border: active ? `1px solid ${theme.accent}` : '1px solid #374151',
+        border: active ? `1px solid ${theme.highlight}` : `1px solid ${theme.borderSubtle}`,
         borderRadius: 4,
-        background: active ? hexToRgba(theme.accent, 0.1) : 'transparent',
-        color: active ? theme.accent : '#94a3b8',
+        background: active ? hexToRgba(theme.highlight, 0.1) : 'transparent',
+        color: active ? theme.highlight : theme.textMuted,
         cursor: 'pointer',
         transition: 'all 0.15s',
       }}
@@ -114,8 +114,8 @@ export function QuickBar({ onPlayLines, onStepLines, onExportLines }: QuickBarPr
         alignItems: 'center',
         gap: 16,
         padding: '4px 12px',
-        background: '#111827',
-        borderTop: '1px solid #1e293b',
+        background: theme.surface,
+        borderTop: `1px solid ${theme.border}`,
         height: 32,
         fontSize: 11,
       }}
@@ -129,7 +129,7 @@ export function QuickBar({ onPlayLines, onStepLines, onExportLines }: QuickBarPr
           }
         >
           Orientation
-          <span style={{ color: '#64748b', marginLeft: 4, fontSize: 10 }}>O</span>
+          <span style={{ color: theme.textSubtle, marginLeft: 4, fontSize: 10 }}>O</span>
         </ToggleButton>
 
         <ToggleButton
@@ -140,7 +140,7 @@ export function QuickBar({ onPlayLines, onStepLines, onExportLines }: QuickBarPr
           }
         >
           Cover Shadow
-          <span style={{ color: '#64748b', marginLeft: 4, fontSize: 10 }}>C</span>
+          <span style={{ color: theme.textSubtle, marginLeft: 4, fontSize: 10 }}>C</span>
         </ToggleButton>
 
         <ToggleButton
@@ -155,20 +155,20 @@ export function QuickBar({ onPlayLines, onStepLines, onExportLines }: QuickBarPr
           }}
         >
           FOV{state.fovMode !== 'off' && (
-            <span style={{ color: theme.accent, marginLeft: 2, fontSize: 9 }}>
+            <span style={{ color: theme.highlight, marginLeft: 2, fontSize: 9 }}>
               {state.fovMode === 'A' ? 'A' : state.fovMode === 'B' ? 'B' : '✓'}
             </span>
           )}
-          <span style={{ color: '#64748b', marginLeft: 4, fontSize: 10 }}>V</span>
+          <span style={{ color: theme.textSubtle, marginLeft: 4, fontSize: 10 }}>V</span>
         </ToggleButton>
       </div>
 
       {/* Separator */}
-      <div style={{ width: 1, height: 18, background: '#1e293b' }} />
+      <div style={{ width: 1, height: 18, background: theme.border }} />
 
       {/* Possession toggle */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-        <span style={{ fontSize: 10, color: '#64748b', marginRight: 4, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+        <span style={{ fontSize: 10, color: theme.textSubtle, marginRight: 4, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
           Possession
         </span>
         <PossessionButton
@@ -194,7 +194,7 @@ export function QuickBar({ onPlayLines, onStepLines, onExportLines }: QuickBarPr
       {/* Play Lines / Export Lines */}
       {hasLineAnnotations && (
         <>
-          <div style={{ width: 1, height: 18, background: '#1e293b' }} />
+          <div style={{ width: 1, height: 18, background: theme.border }} />
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <ToggleButton
               active={state.showStepNumbers}
@@ -213,10 +213,10 @@ export function QuickBar({ onPlayLines, onStepLines, onExportLines }: QuickBarPr
                 padding: '3px 10px',
                 fontSize: 11,
                 fontFamily: 'inherit',
-                border: '1px solid #374151',
+                border: `1px solid ${theme.borderSubtle}`,
                 borderRadius: 4,
                 background: 'transparent',
-                color: '#94a3b8',
+                color: theme.textMuted,
                 cursor: 'pointer',
                 transition: 'all 0.15s',
               }}
@@ -233,10 +233,10 @@ export function QuickBar({ onPlayLines, onStepLines, onExportLines }: QuickBarPr
                 padding: '3px 10px',
                 fontSize: 11,
                 fontFamily: 'inherit',
-                border: '1px solid #374151',
+                border: `1px solid ${theme.borderSubtle}`,
                 borderRadius: 4,
                 background: 'transparent',
-                color: '#94a3b8',
+                color: theme.textMuted,
                 cursor: 'pointer',
                 transition: 'all 0.15s',
               }}
@@ -253,10 +253,10 @@ export function QuickBar({ onPlayLines, onStepLines, onExportLines }: QuickBarPr
                 padding: '3px 10px',
                 fontSize: 11,
                 fontFamily: 'inherit',
-                border: '1px solid #374151',
+                border: `1px solid ${theme.borderSubtle}`,
                 borderRadius: 4,
                 background: 'transparent',
-                color: '#94a3b8',
+                color: theme.textMuted,
                 cursor: 'pointer',
                 transition: 'all 0.15s',
               }}
@@ -271,7 +271,7 @@ export function QuickBar({ onPlayLines, onStepLines, onExportLines }: QuickBarPr
       {/* Clear All Annotations */}
       {hasAnnotations && (
         <>
-          <div style={{ width: 1, height: 18, background: '#1e293b' }} />
+          <div style={{ width: 1, height: 18, background: theme.border }} />
           <button
             onClick={() => dispatch({ type: 'CLEAR_ALL_ANNOTATIONS' })}
             style={{
@@ -281,7 +281,7 @@ export function QuickBar({ onPlayLines, onStepLines, onExportLines }: QuickBarPr
               padding: '3px 10px',
               fontSize: 11,
               fontFamily: 'inherit',
-              border: '1px solid #374151',
+              border: `1px solid ${theme.borderSubtle}`,
               borderRadius: 4,
               background: 'transparent',
               color: '#ef4444',

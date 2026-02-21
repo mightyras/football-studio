@@ -76,11 +76,11 @@ export function StatusBar() {
         alignItems: 'center',
         justifyContent: 'space-between',
         padding: '0 16px',
-        background: '#111827',
-        borderTop: '1px solid #1e293b',
+        background: theme.surface,
+        borderTop: `1px solid ${theme.border}`,
         height: 28,
         fontSize: 11,
-        color: '#94a3b8',
+        color: theme.textMuted,
         fontFamily: 'monospace',
         position: 'relative',
       }}
@@ -95,7 +95,7 @@ export function StatusBar() {
             position: 'absolute',
             left: '50%',
             transform: 'translateX(-50%)',
-            color: theme.accent,
+            color: theme.highlight,
             whiteSpace: 'nowrap',
           }}
         >

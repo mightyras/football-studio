@@ -13,27 +13,6 @@ interface ZoomControlsProps {
   onRotateCW: () => void;
 }
 
-const btnBase: React.CSSProperties = {
-  border: '1px solid transparent',
-  borderRadius: 4,
-  background: 'transparent',
-  color: '#94a3b8',
-  cursor: 'pointer',
-  padding: '3px 8px',
-  fontSize: 11,
-  fontFamily: 'inherit',
-  transition: 'all 0.15s',
-  lineHeight: '18px',
-};
-
-const separatorStyle: React.CSSProperties = {
-  width: 1,
-  height: 18,
-  background: '#334155',
-  margin: '0 4px',
-  flexShrink: 0,
-};
-
 export function ZoomControls({
   zoomLevel,
   activePreset,
@@ -45,11 +24,33 @@ export function ZoomControls({
   onRotateCW,
 }: ZoomControlsProps) {
   const theme = useThemeColors();
+
+  const btnBase: React.CSSProperties = {
+    border: '1px solid transparent',
+    borderRadius: 4,
+    background: 'transparent',
+    color: theme.textMuted,
+    cursor: 'pointer',
+    padding: '3px 8px',
+    fontSize: 11,
+    fontFamily: 'inherit',
+    transition: 'all 0.15s',
+    lineHeight: '18px',
+  };
+
+  const separatorStyle: React.CSSProperties = {
+    width: 1,
+    height: 18,
+    background: theme.borderSubtle,
+    margin: '0 4px',
+    flexShrink: 0,
+  };
+
   const btnActive: React.CSSProperties = {
     ...btnBase,
-    border: `1px solid ${theme.accent}`,
-    background: hexToRgba(theme.accent, 0.15),
-    color: theme.accent,
+    border: `1px solid ${theme.highlight}`,
+    background: hexToRgba(theme.highlight, 0.15),
+    color: theme.highlight,
   };
   const zoomPct = Math.round(zoomLevel * 100);
   const isZoomed = zoomLevel > 1;
@@ -69,7 +70,7 @@ export function ZoomControls({
         background: 'rgba(15, 23, 42, 0.9)',
         borderRadius: 6,
         padding: '3px 4px',
-        border: '1px solid #1e293b',
+        border: `1px solid ${theme.border}`,
         backdropFilter: 'blur(8px)',
         pointerEvents: 'auto',
         userSelect: 'none',
@@ -82,14 +83,14 @@ export function ZoomControls({
         title={`Zoom to ${firstHalfLabel.toLowerCase()} (2)`}
         onMouseEnter={e => {
           if (activePreset !== 'top-half') {
-            e.currentTarget.style.background = '#1f2937';
-            e.currentTarget.style.color = '#e2e8f0';
+            e.currentTarget.style.background = theme.surfaceHover;
+            e.currentTarget.style.color = theme.secondary;
           }
         }}
         onMouseLeave={e => {
           if (activePreset !== 'top-half') {
             e.currentTarget.style.background = 'transparent';
-            e.currentTarget.style.color = '#94a3b8';
+            e.currentTarget.style.color = theme.textMuted;
           }
         }}
       >
@@ -101,14 +102,14 @@ export function ZoomControls({
         title={`Zoom to ${secondHalfLabel.toLowerCase()} (3)`}
         onMouseEnter={e => {
           if (activePreset !== 'bottom-half') {
-            e.currentTarget.style.background = '#1f2937';
-            e.currentTarget.style.color = '#e2e8f0';
+            e.currentTarget.style.background = theme.surfaceHover;
+            e.currentTarget.style.color = theme.secondary;
           }
         }}
         onMouseLeave={e => {
           if (activePreset !== 'bottom-half') {
             e.currentTarget.style.background = 'transparent';
-            e.currentTarget.style.color = '#94a3b8';
+            e.currentTarget.style.color = theme.textMuted;
           }
         }}
       >
@@ -119,21 +120,21 @@ export function ZoomControls({
 
       <button
         style={rotation !== 0
-          ? { ...btnBase, border: `1px solid ${theme.accent}`, background: hexToRgba(theme.accent, 0.15), color: theme.accent }
+          ? { ...btnBase, border: `1px solid ${theme.highlight}`, background: hexToRgba(theme.highlight, 0.15), color: theme.highlight }
           : btnBase
         }
         onClick={onRotateCW}
         title="Rotate pitch 90° clockwise (Shift+R)"
         onMouseEnter={e => {
           if (rotation === 0) {
-            e.currentTarget.style.background = '#1f2937';
-            e.currentTarget.style.color = '#e2e8f0';
+            e.currentTarget.style.background = theme.surfaceHover;
+            e.currentTarget.style.color = theme.secondary;
           }
         }}
         onMouseLeave={e => {
           if (rotation === 0) {
             e.currentTarget.style.background = 'transparent';
-            e.currentTarget.style.color = '#94a3b8';
+            e.currentTarget.style.color = theme.textMuted;
           }
         }}
       >
@@ -146,15 +147,15 @@ export function ZoomControls({
         style={{ ...btnBase, padding: '3px 6px', fontSize: 13, fontWeight: 600 }}
         onClick={onZoomOut}
         title="Zoom out (Cmd -)"
-        onMouseEnter={e => { e.currentTarget.style.background = '#1f2937'; e.currentTarget.style.color = '#e2e8f0'; }}
-        onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#94a3b8'; }}
+        onMouseEnter={e => { e.currentTarget.style.background = theme.surfaceHover; e.currentTarget.style.color = theme.secondary; }}
+        onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = theme.textMuted; }}
       >
         -
       </button>
 
       <span
         style={{
-          color: '#94a3b8',
+          color: theme.textMuted,
           fontSize: 11,
           minWidth: 36,
           textAlign: 'center',
@@ -168,8 +169,8 @@ export function ZoomControls({
         style={{ ...btnBase, padding: '3px 6px', fontSize: 13, fontWeight: 600 }}
         onClick={onZoomIn}
         title="Zoom in (Cmd +)"
-        onMouseEnter={e => { e.currentTarget.style.background = '#1f2937'; e.currentTarget.style.color = '#e2e8f0'; }}
-        onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#94a3b8'; }}
+        onMouseEnter={e => { e.currentTarget.style.background = theme.surfaceHover; e.currentTarget.style.color = theme.secondary; }}
+        onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = theme.textMuted; }}
       >
         +
       </button>
@@ -181,8 +182,8 @@ export function ZoomControls({
             style={btnBase}
             onClick={onReset}
             title="Reset zoom (0)"
-            onMouseEnter={e => { e.currentTarget.style.background = '#1f2937'; e.currentTarget.style.color = '#e2e8f0'; }}
-            onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#94a3b8'; }}
+            onMouseEnter={e => { e.currentTarget.style.background = theme.surfaceHover; e.currentTarget.style.color = theme.secondary; }}
+            onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = theme.textMuted; }}
           >
             Reset
           </button>

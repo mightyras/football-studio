@@ -15,12 +15,48 @@ html, body, #root {
 
 body {
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
-  color: #e2e8f0;
-  background-color: #0a0e1a;
+  color: var(--theme-secondary, #e2e8f0);
+  background-color: var(--theme-primary, #0a0e1a);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
 button {
   font-family: inherit;
+}
+
+/* ── Range slider track styling ── */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--theme-border-subtle, #1e2a3a);
+  outline: none;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--theme-secondary, #e2e8f0);
+  border: 2px solid var(--theme-surface, #111827);
+  cursor: pointer;
+}
+
+input[type="range"]::-moz-range-track {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--theme-border-subtle, #1e2a3a);
+}
+
+input[type="range"]::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--theme-secondary, #e2e8f0);
+  border: 2px solid var(--theme-surface, #111827);
+  cursor: pointer;
 }

@@ -21,23 +21,23 @@ export function ToolButton({ active, onClick, title, children }: ToolButtonProps
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        border: active ? `1px solid ${theme.accent}` : '1px solid transparent',
+        border: active ? `1px solid ${theme.highlight}` : '1px solid transparent',
         borderRadius: 6,
-        background: active ? hexToRgba(theme.accent, 0.15) : 'transparent',
-        color: active ? theme.accent : '#94a3b8',
+        background: active ? hexToRgba(theme.highlight, 0.15) : 'transparent',
+        color: active ? theme.highlight : theme.textMuted,
         cursor: 'pointer',
         transition: 'all 0.15s',
       }}
       onMouseEnter={e => {
         if (!active) {
-          e.currentTarget.style.background = '#1f2937';
-          e.currentTarget.style.color = '#e2e8f0';
+          e.currentTarget.style.background = theme.surfaceHover;
+          e.currentTarget.style.color = theme.secondary;
         }
       }}
       onMouseLeave={e => {
         if (!active) {
           e.currentTarget.style.background = 'transparent';
-          e.currentTarget.style.color = '#94a3b8';
+          e.currentTarget.style.color = theme.textMuted;
         }
       }}
     >

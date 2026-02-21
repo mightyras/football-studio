@@ -5,9 +5,9 @@ import { hexToRgba } from '../../utils/colorUtils';
 import { computeStepOrder } from '../../animation/annotationAnimator';
 import type { Annotation, PitchTransform, TextAnnotation } from '../../types';
 
-const getColorPresets = (accent: string) => [
+const getColorPresets = (highlight: string) => [
   '#ffffff',
-  accent,
+  highlight,
   '#ef4444',
   '#22d3ee',
   '#10b981',
@@ -82,8 +82,8 @@ function LineAnnotationEditor({
         left: pos.x,
         top: pos.y - 8,
         transform: 'translate(-50%, -100%)',
-        background: '#1e293b',
-        border: `1px solid ${theme.accent}`,
+        background: theme.border,
+        border: `1px solid ${theme.highlight}`,
         borderRadius: 8,
         padding: '10px 12px',
         display: 'flex',
@@ -104,19 +104,19 @@ function LineAnnotationEditor({
           transform: 'translateX(-50%) rotate(45deg)',
           width: 10,
           height: 10,
-          background: '#1e293b',
-          borderRight: `1px solid ${theme.accent}`,
-          borderBottom: `1px solid ${theme.accent}`,
+          background: theme.border,
+          borderRight: `1px solid ${theme.highlight}`,
+          borderBottom: `1px solid ${theme.highlight}`,
         }}
       />
 
       {/* Line type label */}
-      <span style={{ fontSize: 11, color: '#e2e8f0', fontWeight: 600 }}>
+      <span style={{ fontSize: 11, color: theme.secondary, fontWeight: 600 }}>
         {lineTypeLabel} Line
       </span>
 
       {/* Step number */}
-      <label style={{ fontSize: 10, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+      <label style={{ fontSize: 10, color: theme.textMuted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
         Animation Step
       </label>
       <div style={{ display: 'flex', gap: 4 }}>
@@ -130,10 +130,10 @@ function LineAnnotationEditor({
               height: 24,
               fontSize: 11,
               fontWeight: step === s ? 700 : 400,
-              background: step === s ? hexToRgba(theme.accent, 0.2) : '#0f172a',
-              border: step === s ? `1px solid ${theme.accent}` : '1px solid #334155',
+              background: step === s ? hexToRgba(theme.highlight, 0.2) : theme.inputBg,
+              border: step === s ? `1px solid ${theme.highlight}` : `1px solid ${theme.borderSubtle}`,
               borderRadius: 4,
-              color: step === s ? theme.accent : '#94a3b8',
+              color: step === s ? theme.highlight : theme.textMuted,
               cursor: 'pointer',
               padding: 0,
               fontFamily: 'inherit',
@@ -148,11 +148,11 @@ function LineAnnotationEditor({
       </div>
 
       {/* Color swatches */}
-      <label style={{ fontSize: 10, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+      <label style={{ fontSize: 10, color: theme.textMuted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
         Color
       </label>
       <div style={{ display: 'flex', gap: 4 }}>
-        {getColorPresets(theme.accent).map(c => (
+        {getColorPresets(theme.highlight).map(c => (
           <button
             key={c}
             onClick={() => setColor(c)}
@@ -161,7 +161,7 @@ function LineAnnotationEditor({
               height: 22,
               borderRadius: '50%',
               background: c,
-              border: color === c ? `2px solid ${theme.accent}` : '2px solid #374151',
+              border: color === c ? `2px solid ${theme.highlight}` : `2px solid ${theme.borderSubtle}`,
               cursor: 'pointer',
               padding: 0,
               flexShrink: 0,
@@ -175,7 +175,7 @@ function LineAnnotationEditor({
         style={{
           marginTop: 2,
           padding: '4px 0',
-          background: theme.accent,
+          background: theme.highlight,
           color: '#0a0e1a',
           border: 'none',
           borderRadius: 4,
@@ -263,8 +263,8 @@ export function AnnotationEditPopover({ transform }: { transform: PitchTransform
         left: pos.x,
         top: pos.y - 8,
         transform: 'translate(-50%, -100%)',
-        background: '#1e293b',
-        border: `1px solid ${theme.accent}`,
+        background: theme.border,
+        border: `1px solid ${theme.highlight}`,
         borderRadius: 8,
         padding: '10px 12px',
         display: 'flex',
@@ -285,14 +285,14 @@ export function AnnotationEditPopover({ transform }: { transform: PitchTransform
           transform: 'translateX(-50%) rotate(45deg)',
           width: 10,
           height: 10,
-          background: '#1e293b',
-          borderRight: `1px solid ${theme.accent}`,
-          borderBottom: `1px solid ${theme.accent}`,
+          background: theme.border,
+          borderRight: `1px solid ${theme.highlight}`,
+          borderBottom: `1px solid ${theme.highlight}`,
         }}
       />
 
       {/* Text input */}
-      <label style={{ fontSize: 10, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+      <label style={{ fontSize: 10, color: theme.textMuted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
         Text
       </label>
       <input
@@ -305,24 +305,24 @@ export function AnnotationEditPopover({ transform }: { transform: PitchTransform
         style={{
           width: '100%',
           padding: '4px 8px',
-          background: '#0f172a',
-          border: '1px solid #334155',
+          background: theme.inputBg,
+          border: `1px solid ${theme.borderSubtle}`,
           borderRadius: 4,
-          color: '#e2e8f0',
+          color: theme.secondary,
           fontSize: 14,
           fontFamily: 'inherit',
           outline: 'none',
         }}
-        onFocus={e => { e.target.style.borderColor = theme.accent; }}
-        onBlur={e => { e.target.style.borderColor = '#334155'; }}
+        onFocus={e => { e.target.style.borderColor = theme.highlight; }}
+        onBlur={e => { e.target.style.borderColor = theme.borderSubtle; }}
       />
 
       {/* Color swatches */}
-      <label style={{ fontSize: 10, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+      <label style={{ fontSize: 10, color: theme.textMuted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
         Color
       </label>
       <div style={{ display: 'flex', gap: 4 }}>
-        {getColorPresets(theme.accent).map(c => (
+        {getColorPresets(theme.highlight).map(c => (
           <button
             key={c}
             onClick={() => setColor(c)}
@@ -331,7 +331,7 @@ export function AnnotationEditPopover({ transform }: { transform: PitchTransform
               height: 22,
               borderRadius: '50%',
               background: c,
-              border: color === c ? `2px solid ${theme.accent}` : '2px solid #374151',
+              border: color === c ? `2px solid ${theme.highlight}` : `2px solid ${theme.borderSubtle}`,
               cursor: 'pointer',
               padding: 0,
               flexShrink: 0,
@@ -341,7 +341,7 @@ export function AnnotationEditPopover({ transform }: { transform: PitchTransform
       </div>
 
       {/* Font size */}
-      <label style={{ fontSize: 10, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+      <label style={{ fontSize: 10, color: theme.textMuted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
         Size
       </label>
       <div style={{ display: 'flex', gap: 4 }}>
@@ -352,10 +352,10 @@ export function AnnotationEditPopover({ transform }: { transform: PitchTransform
             style={{
               flex: 1,
               padding: '3px 0',
-              background: Math.abs(fontSize - fs.value) < 0.01 ? hexToRgba(theme.accent, 0.2) : '#0f172a',
-              border: Math.abs(fontSize - fs.value) < 0.01 ? `1px solid ${theme.accent}` : '1px solid #334155',
+              background: Math.abs(fontSize - fs.value) < 0.01 ? hexToRgba(theme.highlight, 0.2) : theme.inputBg,
+              border: Math.abs(fontSize - fs.value) < 0.01 ? `1px solid ${theme.highlight}` : `1px solid ${theme.borderSubtle}`,
               borderRadius: 4,
-              color: Math.abs(fontSize - fs.value) < 0.01 ? theme.accent : '#94a3b8',
+              color: Math.abs(fontSize - fs.value) < 0.01 ? theme.highlight : theme.textMuted,
               fontSize: 12,
               fontWeight: 600,
               cursor: 'pointer',
@@ -372,7 +372,7 @@ export function AnnotationEditPopover({ transform }: { transform: PitchTransform
         style={{
           marginTop: 2,
           padding: '4px 0',
-          background: theme.accent,
+          background: theme.highlight,
           color: '#0a0e1a',
           border: 'none',
           borderRadius: 4,

@@ -27,7 +27,7 @@ function getLogoImage(dataUrl: string): HTMLImageElement | null {
   return cachedLogoImg?.complete ? cachedLogoImg : null;
 }
 
-function renderLogoWatermark(
+function renderLogoBadge(
   ctx: CanvasRenderingContext2D,
   transform: PitchTransform,
   logoDataUrl: string,
@@ -35,9 +35,9 @@ function renderLogoWatermark(
   const img = getLogoImage(logoDataUrl);
   if (!img) return;
 
-  // Position in the bottom-right green padding area
+  // Position in the bottom-right green padding area — fully visible
   const pad = PITCH.padding;
-  const logoWorldSize = Math.min(pad * 0.7, 4); // ~4 world units, fits within padding
+  const logoWorldSize = Math.min(pad * 0.75, 5); // slightly larger than before
   const aspect = img.width / img.height;
   const logoW = (aspect >= 1 ? logoWorldSize : logoWorldSize * aspect) * transform.scale;
   const logoH = (aspect >= 1 ? logoWorldSize / aspect : logoWorldSize) * transform.scale;
@@ -48,7 +48,12 @@ function renderLogoWatermark(
   const y = anchor.y - logoH / 2;
 
   ctx.save();
-  ctx.globalAlpha = 0.18;
+  // Drop shadow for the logo
+  ctx.shadowColor = 'rgba(0, 0, 0, 0.4)';
+  ctx.shadowBlur = 6 * (transform.scale / 10);
+  ctx.shadowOffsetX = 0;
+  ctx.shadowOffsetY = 2 * (transform.scale / 10);
+  ctx.globalAlpha = 0.85;
   ctx.drawImage(img, x, y, logoW, logoH);
   ctx.restore();
 }
@@ -78,10 +83,13 @@ export function render(
 ) {
   ctx.clearRect(0, 0, width, height);
 
-  // Resolve accent color: club identity overrides default theme accent
-  const accent = state.clubIdentity.primaryColor || THEME.accent;
+  // Resolve accent color: club identity highlight overrides default theme accent
+  const accent = state.clubIdentity.highlightColor || THEME.accent;
 
-  renderPitch(ctx, transform, width, height, state.pitchSettings);
+  // Resolve board background color
+  const bgColor = state.clubIdentity.backgroundColor || THEME.pitchBackground;
+
+  renderPitch(ctx, transform, width, height, state.pitchSettings, bgColor);
 
   // Goal net ripple effect (during goal celebration)
   if (goalCelebration) {
@@ -101,9 +109,9 @@ export function render(
   // Zone overlay — after pitch/benches, before cover shadows and players
   renderZoneOverlay(ctx, transform, state.pitchSettings, accent);
 
-  // Club logo watermark — in the green padding area, before players
+  // Club logo badge — in the green padding area, before players
   if (state.clubIdentity.logoDataUrl) {
-    renderLogoWatermark(ctx, transform, state.clubIdentity.logoDataUrl);
+    renderLogoBadge(ctx, transform, state.clubIdentity.logoDataUrl);
   }
 
   const possessionTeam = state.resolvedPossession;

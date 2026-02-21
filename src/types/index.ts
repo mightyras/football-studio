@@ -278,7 +278,7 @@ export type DrawingInProgress =
   | { type: 'ellipse'; center: WorldPoint }
   | { type: 'player-marking'; markedPlayerId: string };
 
-export type PanelTab = 'formations' | 'settings' | 'scenes' | 'help';
+export type PanelTab = 'settings' | 'scenes' | 'help';
 
 export type ZoomPreset = 'full' | 'top-half' | 'bottom-half';
 
@@ -328,10 +328,58 @@ export type AnimationSequence = {
 // ── Club identity types ──
 
 export type ClubIdentity = {
-  logoDataUrl: string | null;     // base64 data URL, max 128×128px
-  primaryColor: string | null;    // hex, replaces default accent when set
-  secondaryColor: string | null;  // hex, replaces default accent hover when set
-  clubName: string | null;        // optional, for future use
+  logoDataUrl: string | null;       // base64 data URL, max 128×128px
+  primaryColor: string | null;      // hex, UI background color
+  secondaryColor: string | null;    // hex, text & icon color
+  highlightColor: string | null;    // hex, accent / highlight color
+  backgroundColor: string | null;   // hex, board background color
+  clubName: string | null;          // optional, for future use
+};
+
+// ── Team & invite types ──
+
+export type TeamRole = 'admin' | 'member';
+export type InviteStatus = 'pending' | 'accepted' | 'declined' | 'expired';
+
+export type Team = {
+  id: string;
+  name: string;
+  created_by: string | null;
+  created_at: string;
+  logo_url: string | null;
+  primary_color: string | null;
+  secondary_color: string | null;
+  highlight_color: string | null;
+  background_color: string | null;
+  player_color: string | null;
+  outline_color: string | null;
+};
+
+export type TeamMember = {
+  team_id: string;
+  user_id: string;
+  role: TeamRole;
+  joined_at: string;
+  profile?: {
+    id: string;
+    display_name: string | null;
+    email: string;
+    avatar_url: string | null;
+  };
+};
+
+export type Invite = {
+  id: string;
+  team_id: string | null;
+  board_id: string | null;
+  inviter_id: string;
+  invitee_email: string;
+  invitee_name: string | null;
+  role: TeamRole;
+  permission: 'view' | 'edit';
+  status: InviteStatus;
+  created_at: string;
+  expires_at: string;
 };
 
 // ── Saved scene types ──
@@ -427,4 +475,5 @@ export type AppState = {
   previewGhosts: PreviewGhost[];
   pendingDeletePlayerId: string | null;
   formationMoveTeam: 'A' | 'B' | null;
+  themeMode: 'light' | 'dark';
 };

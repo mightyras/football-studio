@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { GoalCelebration } from '../types';
+import { useThemeColors } from '../hooks/useThemeColors';
 
 interface GoalCelebrationOverlayProps {
   celebration: GoalCelebration;
@@ -7,6 +8,7 @@ interface GoalCelebrationOverlayProps {
 }
 
 export function GoalCelebrationOverlay({ celebration, onDismiss }: GoalCelebrationOverlayProps) {
+  const theme = useThemeColors();
   const [phase, setPhase] = useState<'in' | 'out'>('in');
 
   useEffect(() => {
@@ -56,7 +58,7 @@ export function GoalCelebrationOverlay({ celebration, onDismiss }: GoalCelebrati
         style={{
           fontSize: 18,
           fontWeight: 600,
-          color: '#e2e8f0',
+          color: theme.secondary,
           textShadow: '0 2px 8px rgba(0,0,0,0.8)',
           marginTop: 8,
         }}

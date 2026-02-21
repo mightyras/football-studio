@@ -44,21 +44,21 @@ export function ExportDialog({ onExport, onCancel, exporting, progress }: Export
     >
       <div
         style={{
-          background: '#1e293b',
-          border: '1px solid #334155',
+          background: theme.border,
+          border: `1px solid ${theme.borderSubtle}`,
           borderRadius: 8,
           padding: '20px 24px',
           minWidth: 320,
           boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
         }}
       >
-        <h3 style={{ margin: '0 0 16px', fontSize: 14, fontWeight: 600, color: '#e2e8f0' }}>
+        <h3 style={{ margin: '0 0 16px', fontSize: 14, fontWeight: 600, color: theme.secondary }}>
           Export Animation
         </h3>
 
         {/* Resolution */}
         <div style={{ marginBottom: 12 }}>
-          <label style={{ display: 'block', fontSize: 11, color: '#94a3b8', marginBottom: 4 }}>
+          <label style={{ display: 'block', fontSize: 11, color: theme.textMuted, marginBottom: 4 }}>
             Resolution
           </label>
           <select
@@ -69,10 +69,10 @@ export function ExportDialog({ onExport, onCancel, exporting, progress }: Export
               width: '100%',
               padding: '6px 8px',
               fontSize: 12,
-              background: '#0f172a',
-              border: '1px solid #475569',
+              background: theme.inputBg,
+              border: `1px solid ${theme.textSubtle}`,
               borderRadius: 4,
-              color: '#e2e8f0',
+              color: theme.secondary,
               outline: 'none',
             }}
           >
@@ -84,7 +84,7 @@ export function ExportDialog({ onExport, onCancel, exporting, progress }: Export
 
         {/* FPS */}
         <div style={{ marginBottom: 12 }}>
-          <label style={{ display: 'block', fontSize: 11, color: '#94a3b8', marginBottom: 4 }}>
+          <label style={{ display: 'block', fontSize: 11, color: theme.textMuted, marginBottom: 4 }}>
             Frame Rate
           </label>
           <div style={{ display: 'flex', gap: 6 }}>
@@ -98,10 +98,10 @@ export function ExportDialog({ onExport, onCancel, exporting, progress }: Export
                   padding: '5px 0',
                   fontSize: 12,
                   fontWeight: fps === f ? 600 : 400,
-                  background: fps === f ? hexToRgba(theme.accent, 0.15) : '#0f172a',
-                  border: fps === f ? `1px solid ${theme.accent}` : '1px solid #475569',
+                  background: fps === f ? hexToRgba(theme.highlight, 0.15) : theme.inputBg,
+                  border: fps === f ? `1px solid ${theme.highlight}` : `1px solid ${theme.textSubtle}`,
                   borderRadius: 4,
-                  color: fps === f ? theme.accent : '#94a3b8',
+                  color: fps === f ? theme.highlight : theme.textMuted,
                   cursor: exporting ? 'not-allowed' : 'pointer',
                   transition: 'all 0.15s',
                 }}
@@ -114,29 +114,29 @@ export function ExportDialog({ onExport, onCancel, exporting, progress }: Export
 
         {/* Format */}
         <div style={{ marginBottom: 16 }}>
-          <label style={{ display: 'block', fontSize: 11, color: '#94a3b8', marginBottom: 4 }}>
+          <label style={{ display: 'block', fontSize: 11, color: theme.textMuted, marginBottom: 4 }}>
             Format
           </label>
-          <span style={{ fontSize: 12, color: '#64748b' }}>WebM (VP9)</span>
+          <span style={{ fontSize: 12, color: theme.textSubtle }}>WebM (VP9)</span>
         </div>
 
         {/* Progress bar */}
         {exporting && (
           <div style={{ marginBottom: 16 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-              <span style={{ fontSize: 11, color: '#94a3b8' }}>Exporting...</span>
-              <span style={{ fontSize: 11, color: theme.accent }}>{Math.round(progress * 100)}%</span>
+              <span style={{ fontSize: 11, color: theme.textMuted }}>Exporting...</span>
+              <span style={{ fontSize: 11, color: theme.highlight }}>{Math.round(progress * 100)}%</span>
             </div>
             <div style={{
               height: 4,
-              background: '#334155',
+              background: theme.borderSubtle,
               borderRadius: 2,
               overflow: 'hidden',
             }}>
               <div style={{
                 height: '100%',
                 width: `${progress * 100}%`,
-                background: theme.accent,
+                background: theme.highlight,
                 borderRadius: 2,
                 transition: 'width 0.1s',
               }} />
@@ -152,9 +152,9 @@ export function ExportDialog({ onExport, onCancel, exporting, progress }: Export
               padding: '6px 14px',
               fontSize: 12,
               background: 'transparent',
-              border: '1px solid #475569',
+              border: `1px solid ${theme.textSubtle}`,
               borderRadius: 4,
-              color: '#94a3b8',
+              color: theme.textMuted,
               cursor: 'pointer',
               transition: 'all 0.15s',
             }}
@@ -168,10 +168,10 @@ export function ExportDialog({ onExport, onCancel, exporting, progress }: Export
                 padding: '6px 14px',
                 fontSize: 12,
                 fontWeight: 600,
-                background: theme.accent,
+                background: theme.highlight,
                 border: 'none',
                 borderRadius: 4,
-                color: '#111827',
+                color: theme.surface,
                 cursor: 'pointer',
                 transition: 'all 0.15s',
               }}

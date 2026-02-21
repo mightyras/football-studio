@@ -10,10 +10,10 @@ function Pattern({ name, description, steps }: PatternProps) {
   const theme = useThemeColors();
   return (
     <div style={{ marginBottom: 16 }}>
-      <div style={{ fontWeight: 600, color: '#e2e8f0', fontSize: 12, marginBottom: 4 }}>
+      <div style={{ fontWeight: 600, color: theme.secondary, fontSize: 12, marginBottom: 4 }}>
         {name}
       </div>
-      <div style={{ color: '#94a3b8', fontSize: 11, lineHeight: 1.5, marginBottom: 6 }}>
+      <div style={{ color: theme.textMuted, fontSize: 11, lineHeight: 1.5, marginBottom: 6 }}>
         {description}
       </div>
       <div style={{
@@ -21,11 +21,11 @@ function Pattern({ name, description, steps }: PatternProps) {
         flexDirection: 'column',
         gap: 2,
         paddingLeft: 8,
-        borderLeft: `2px solid ${theme.accent}`,
+        borderLeft: `2px solid ${theme.highlight}`,
       }}>
         {steps.map((step, i) => (
-          <div key={i} style={{ color: '#94a3b8', fontSize: 10, lineHeight: 1.5 }}>
-            <span style={{ color: theme.accent, fontWeight: 600, marginRight: 4 }}>{i + 1}.</span>
+          <div key={i} style={{ color: theme.textMuted, fontSize: 10, lineHeight: 1.5 }}>
+            <span style={{ color: theme.highlight, fontWeight: 600, marginRight: 4 }}>{i + 1}.</span>
             {step}
           </div>
         ))}
@@ -35,13 +35,14 @@ function Pattern({ name, description, steps }: PatternProps) {
 }
 
 function SectionHeader({ children }: { children: React.ReactNode }) {
+  const theme = useThemeColors();
   return (
     <div style={{
       fontSize: 10,
       fontWeight: 700,
       textTransform: 'uppercase',
       letterSpacing: '0.06em',
-      color: '#64748b',
+      color: theme.textSubtle,
       marginBottom: 10,
       marginTop: 16,
     }}>
@@ -51,9 +52,10 @@ function SectionHeader({ children }: { children: React.ReactNode }) {
 }
 
 function Tip({ children }: { children: React.ReactNode }) {
+  const theme = useThemeColors();
   return (
     <div style={{
-      color: '#94a3b8',
+      color: theme.textMuted,
       fontSize: 11,
       lineHeight: 1.5,
       paddingLeft: 12,
@@ -67,6 +69,7 @@ function Tip({ children }: { children: React.ReactNode }) {
 }
 
 export function HelpPanel() {
+  const theme = useThemeColors();
   return (
     <div
       style={{
@@ -134,7 +137,7 @@ export function HelpPanel() {
           ]}
         />
 
-        <div style={{ height: 1, background: '#1e293b', margin: '16px 0' }} />
+        <div style={{ height: 1, background: theme.border, margin: '16px 0' }} />
 
         <SectionHeader>Tips</SectionHeader>
 
@@ -148,10 +151,10 @@ export function HelpPanel() {
           Off-ball runs by different players animate simultaneously when there are no dependencies between them.
         </Tip>
         <Tip>
-          Undo any action with <strong style={{ color: '#e2e8f0' }}>&#8984;Z</strong> / <strong style={{ color: '#e2e8f0' }}>Ctrl+Z</strong>.
+          Undo any action with <strong style={{ color: theme.secondary }}>&#8984;Z</strong> / <strong style={{ color: theme.secondary }}>Ctrl+Z</strong>.
         </Tip>
 
-        <div style={{ height: 1, background: '#1e293b', margin: '16px 0' }} />
+        <div style={{ height: 1, background: theme.border, margin: '16px 0' }} />
 
         <SectionHeader>Keyboard Shortcuts</SectionHeader>
 
@@ -178,10 +181,10 @@ export function HelpPanel() {
           ] as const).map(([key, label]) => (
             <div key={key} style={{ display: 'contents' }}>
               <span style={{
-                color: '#e2e8f0',
+                color: theme.secondary,
                 fontFamily: 'monospace',
                 fontSize: 10,
-                background: '#1e293b',
+                background: theme.border,
                 padding: '1px 6px',
                 borderRadius: 3,
                 textAlign: 'center',
@@ -189,7 +192,7 @@ export function HelpPanel() {
               }}>
                 {key}
               </span>
-              <span style={{ color: '#94a3b8' }}>{label}</span>
+              <span style={{ color: theme.textMuted }}>{label}</span>
             </div>
           ))}
         </div>

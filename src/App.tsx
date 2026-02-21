@@ -11,8 +11,14 @@ import { PlaybackControls } from './components/AnimationPanel/PlaybackControls';
 import { ExportDialog } from './components/AnimationPanel/ExportDialog';
 import { DeletePlayerConfirmDialog } from './components/DeletePlayerConfirmDialog';
 import { GoalCelebrationOverlay } from './components/GoalCelebrationOverlay';
+import { InviteBanner } from './components/TeamPanel/InviteBanner';
+import { AuthModal } from './components/AuthModal/AuthModal';
+import { useAuth } from './state/AuthContext';
+import { useTeam } from './state/TeamContext';
+import { THEME } from './constants/colors';
 import { usePlayback } from './hooks/usePlayback';
 import { useZoom } from './hooks/useZoom';
+import { useThemeColors } from './hooks/useThemeColors';
 import { computeStepOrder, computeOneTouchIndices, ONE_TOUCH_DURATION_MS, type LineAnnotation } from './animation/annotationAnimator';
 import { ExportController, type ExportOptions } from './animation/exportController';
 import { RunAnimExportController } from './animation/runAnimExportController';
@@ -24,9 +30,48 @@ import { findClosestGhost } from './utils/ghostUtils';
 
 function AppContent() {
   const { state, dispatch } = useAppState();
+  const themeColors = useThemeColors();
+
+  // Sync CSS custom properties for body/canvas backgrounds
+  useEffect(() => {
+    const root = document.documentElement;
+    root.style.setProperty('--theme-primary', themeColors.primary);
+    root.style.setProperty('--theme-secondary', themeColors.secondary);
+    root.style.setProperty('--theme-background', themeColors.background);
+    root.style.setProperty('--theme-border-subtle', themeColors.borderSubtle);
+    root.style.setProperty('--theme-surface', themeColors.surface);
+  }, [themeColors.primary, themeColors.secondary, themeColors.background, themeColors.borderSubtle, themeColors.surface]);
 
   // Zoom/pan state (view-layer only, not in app reducer)
   const zoom = useZoom();
+
+  // Auth (for gating save behind sign-in)
+  const { user, loading: authLoading } = useAuth();
+  const { activeTeam } = useTeam();
+  const [showAuthFromSave, setShowAuthFromSave] = useState(false);
+
+  // Reset branding & team colors to defaults when not signed in
+  // (covers both initial page load and sign-out transitions)
+  useEffect(() => {
+    if (!authLoading && !user) {
+      dispatch({ type: 'SET_TEAM_COLOR', team: 'A', color: THEME.teamA });
+      dispatch({ type: 'SET_TEAM_COLOR', team: 'B', color: THEME.teamB });
+      dispatch({ type: 'SET_CLUB_IDENTITY', identity: {
+        primaryColor: null,
+        secondaryColor: null,
+        highlightColor: null,
+        backgroundColor: null,
+        logoDataUrl: null,
+      }});
+    }
+  }, [user, authLoading, dispatch]);
+
+  // Sync team A name from active team (use team name as default instead of "My Team")
+  useEffect(() => {
+    if (activeTeam && state.teamAName === 'My Team') {
+      dispatch({ type: 'RENAME_TEAM', team: 'A', name: activeTeam.name });
+    }
+  }, [activeTeam]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Right panel visibility (hidden by default)
   const [showPanel, setShowPanel] = useState(false);
@@ -848,9 +893,13 @@ function AppContent() {
       // Cmd+S / Ctrl+S — Save Scene
       if (e.key === 's' && (e.metaKey || e.ctrlKey) && !e.shiftKey) {
         e.preventDefault();
-        setShowPanel(true);
-        setPanelTab('scenes');
-        setSaveSceneRequested(true);
+        if (!user) {
+          setShowAuthFromSave(true);
+        } else {
+          setShowPanel(true);
+          setPanelTab('scenes');
+          setSaveSceneRequested(true);
+        }
       }
 
       // Cmd+Shift+E / Ctrl+Shift+E — Export PNG
@@ -932,8 +981,15 @@ function AppContent() {
           onPlayLines={handlePlayLines}
           onStepLines={handleStepLines}
           onExportLines={handleExportLines}
-          showPanel={showPanel}
-          onTogglePanel={() => setShowPanel(p => !p)}
+          showPanel={showPanel && panelTab !== 'help'}
+          onTogglePanel={() => {
+            if (showPanel && panelTab !== 'help') {
+              setShowPanel(false);
+            } else {
+              setPanelTab('settings');
+              setShowPanel(true);
+            }
+          }}
           helpActive={showPanel && panelTab === 'help'}
           onOpenHelp={() => {
             if (showPanel && panelTab === 'help') {
@@ -945,6 +1001,7 @@ function AppContent() {
           }}
         />
       </div>
+      <InviteBanner />
       <div className="toolbar">
         <Toolbar />
       </div>
@@ -982,6 +1039,7 @@ function AppContent() {
           onTabChange={setPanelTab}
           saveRequested={saveSceneRequested}
           onSaveHandled={() => setSaveSceneRequested(false)}
+          onRequestSignIn={() => setShowAuthFromSave(true)}
         />
       </div>
       <div className="statusbar">
@@ -1045,6 +1103,11 @@ function AppContent() {
             }
           `}</style>
         </div>
+      )}
+
+      {/* Auth modal triggered from save hint */}
+      {showAuthFromSave && (
+        <AuthModal onClose={() => setShowAuthFromSave(false)} />
       )}
     </div>
   );

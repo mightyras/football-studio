@@ -3,7 +3,6 @@ import { useAppState } from '../../state/AppStateContext';
 import type { AttackDirection, PitchRotation, ZoneDirection } from '../../types';
 import { ColorSwatchPicker } from './ColorSwatchPicker';
 import { CollapsibleSection, ColorDot, sectionStyle, labelStyle } from './CollapsibleSection';
-import { ClubIdentitySection } from './ClubIdentitySection';
 import { useThemeColors } from '../../hooks/useThemeColors';
 import { hexToRgba } from '../../utils/colorUtils';
 
@@ -15,12 +14,12 @@ const GRASS_PRESETS = [
   { label: 'White', grass: '#d4d4d4', stripe: '#c4c4c4' },
 ];
 
-const smallLabelStyle: React.CSSProperties = {
+const getSmallLabelStyle = (theme: ReturnType<typeof useThemeColors>): React.CSSProperties => ({
   fontSize: 11,
-  color: '#94a3b8',
+  color: theme.textMuted,
   marginBottom: 4,
   display: 'block',
-};
+});
 
 function DirectionButton({
   active,
@@ -40,10 +39,10 @@ function DirectionButton({
         padding: '5px 8px',
         fontSize: 11,
         fontFamily: 'inherit',
-        border: active ? `1px solid ${theme.accent}` : '1px solid #374151',
+        border: active ? `1px solid ${theme.highlight}` : `1px solid ${theme.borderSubtle}`,
         borderRadius: 4,
-        background: active ? hexToRgba(theme.accent, 0.1) : 'transparent',
-        color: active ? theme.accent : '#94a3b8',
+        background: active ? hexToRgba(theme.highlight, 0.1) : 'transparent',
+        color: active ? theme.highlight : theme.textMuted,
         cursor: 'pointer',
         transition: 'all 0.15s',
       }}
@@ -66,47 +65,10 @@ function directionArrow(worldDir: 'up' | 'down', rotation: PitchRotation): strin
   return worldDir === 'up' ? upArrows[rotation] : downArrows[rotation];
 }
 
-function ToggleRow({
-  label,
-  checked,
-  onChange,
-}: {
-  label: string;
-  checked: boolean;
-  onChange: (checked: boolean) => void;
-}) {
-  const theme = useThemeColors();
-  return (
-    <label
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 8,
-        cursor: 'pointer',
-        fontSize: 12,
-        color: '#e2e8f0',
-        marginTop: 8,
-      }}
-    >
-      <input
-        type="checkbox"
-        checked={checked}
-        onChange={e => onChange(e.target.checked)}
-        style={{
-          accentColor: theme.accent,
-          width: 14,
-          height: 14,
-          cursor: 'pointer',
-        }}
-      />
-      {label}
-    </label>
-  );
-}
-
 export function SettingsPanel({ rotation }: { rotation: PitchRotation }) {
   const { state, dispatch } = useAppState();
   const theme = useThemeColors();
+  const smallLabelStyle = getSmallLabelStyle(theme);
 
   return (
     <div
@@ -124,96 +86,28 @@ export function SettingsPanel({ rotation }: { rotation: PitchRotation }) {
           padding: '0 12px',
         }}
       >
-        {/* Club Identity — collapsible */}
-        <ClubIdentitySection />
-
-        {/* Team A Color — collapsible */}
-        <CollapsibleSection
-          label={
-            <>
-              <span
-                style={{
-                  display: 'inline-block',
-                  width: 8,
-                  height: 8,
-                  borderRadius: '50%',
-                  background: state.teamAColor,
-                  marginRight: 6,
-                  verticalAlign: 'middle',
-                }}
-              />
-              {state.teamAName}
-            </>
-          }
-          preview={
-            <>
-              <ColorDot color={state.teamAColor} />
-              <ColorDot color={state.teamAOutlineColor} />
-            </>
-          }
-        >
-          <span style={smallLabelStyle}>Color</span>
-          <ColorSwatchPicker
-            value={state.teamAColor}
-            onChange={color => dispatch({ type: 'SET_TEAM_COLOR', team: 'A', color })}
-          />
-          <span style={{ ...smallLabelStyle, marginTop: 8 }}>Outline</span>
-          <ColorSwatchPicker
-            value={state.teamAOutlineColor}
-            onChange={color => dispatch({ type: 'SET_TEAM_OUTLINE_COLOR', team: 'A', color })}
-          />
-          <ToggleRow
-            label="Show Names"
-            checked={state.showPlayerNamesA}
-            onChange={show => dispatch({ type: 'SET_SHOW_PLAYER_NAMES', team: 'A', show })}
-          />
-        </CollapsibleSection>
-
-        {/* Team B Color — collapsible */}
-        <CollapsibleSection
-          label={
-            <>
-              <span
-                style={{
-                  display: 'inline-block',
-                  width: 8,
-                  height: 8,
-                  borderRadius: '50%',
-                  background: state.teamBColor,
-                  marginRight: 6,
-                  verticalAlign: 'middle',
-                }}
-              />
-              {state.teamBName}
-            </>
-          }
-          preview={
-            <>
-              <ColorDot color={state.teamBColor} />
-              <ColorDot color={state.teamBOutlineColor} />
-            </>
-          }
-        >
-          <span style={smallLabelStyle}>Color</span>
-          <ColorSwatchPicker
-            value={state.teamBColor}
-            onChange={color => dispatch({ type: 'SET_TEAM_COLOR', team: 'B', color })}
-          />
-          <span style={{ ...smallLabelStyle, marginTop: 8 }}>Outline</span>
-          <ColorSwatchPicker
-            value={state.teamBOutlineColor}
-            onChange={color => dispatch({ type: 'SET_TEAM_OUTLINE_COLOR', team: 'B', color })}
-          />
-          <ToggleRow
-            label="Show Names"
-            checked={state.showPlayerNamesB}
-            onChange={show => dispatch({ type: 'SET_SHOW_PLAYER_NAMES', team: 'B', show })}
-          />
-        </CollapsibleSection>
+        {/* Theme Mode */}
+        <div style={sectionStyle(theme)}>
+          <span style={labelStyle(theme)}>Appearance</span>
+          <div style={{ display: 'flex', gap: 4 }}>
+            <DirectionButton
+              active={state.themeMode === 'dark'}
+              onClick={() => dispatch({ type: 'SET_THEME_MODE', mode: 'dark' })}
+            >
+              Dark
+            </DirectionButton>
+            <DirectionButton
+              active={state.themeMode === 'light'}
+              onClick={() => dispatch({ type: 'SET_THEME_MODE', mode: 'light' })}
+            >
+              Light
+            </DirectionButton>
+          </div>
+        </div>
 
         {/* Attacking Direction */}
-        <div style={sectionStyle}>
-          <span style={labelStyle}>Attacking Direction</span>
+        <div style={sectionStyle(theme)}>
+          <span style={labelStyle(theme)}>Attacking Direction</span>
           <div style={{ display: 'flex', gap: 4 }}>
             <DirectionButton
               active={state.teamADirection === 'up'}
@@ -233,7 +127,6 @@ export function SettingsPanel({ rotation }: { rotation: PitchRotation }) {
         {/* Pitch Settings */}
         <CollapsibleSection
           label="Pitch"
-          defaultOpen
           preview={<ColorDot color={state.pitchSettings.grassColor} />}
         >
           {/* Grass color presets */}
@@ -256,8 +149,8 @@ export function SettingsPanel({ rotation }: { rotation: PitchRotation }) {
                     fontFamily: 'inherit',
                     border:
                       state.pitchSettings.grassColor === preset.grass
-                        ? `1px solid ${theme.accent}`
-                        : isLight ? '1px solid #94a3b8' : '1px solid #374151',
+                        ? `1px solid ${theme.highlight}`
+                        : isLight ? `1px solid ${theme.textMuted}` : `1px solid ${theme.borderSubtle}`,
                     borderRadius: 4,
                     background: preset.grass,
                     color: isLight ? '#1a1a1a' : '#ffffff',
@@ -290,13 +183,13 @@ export function SettingsPanel({ rotation }: { rotation: PitchRotation }) {
                 width: 28,
                 height: 22,
                 padding: 0,
-                border: '1px solid #374151',
+                border: `1px solid ${theme.borderSubtle}`,
                 borderRadius: 3,
                 background: 'transparent',
                 cursor: 'pointer',
               }}
             />
-            <span style={{ fontSize: 10, fontFamily: 'monospace', color: '#64748b' }}>
+            <span style={{ fontSize: 10, fontFamily: 'monospace', color: theme.textSubtle }}>
               {state.pitchSettings.grassColor}
             </span>
           </div>
@@ -309,7 +202,7 @@ export function SettingsPanel({ rotation }: { rotation: PitchRotation }) {
               gap: 8,
               cursor: 'pointer',
               fontSize: 12,
-              color: '#e2e8f0',
+              color: theme.secondary,
             }}
           >
             <input
@@ -322,7 +215,7 @@ export function SettingsPanel({ rotation }: { rotation: PitchRotation }) {
                 })
               }
               style={{
-                accentColor: theme.accent,
+                accentColor: theme.highlight,
                 width: 14,
                 height: 14,
                 cursor: 'pointer',
@@ -348,7 +241,7 @@ export function SettingsPanel({ rotation }: { rotation: PitchRotation }) {
                 }
                 style={{
                   width: '100%',
-                  accentColor: theme.accent,
+                  accentColor: theme.highlight,
                   cursor: 'pointer',
                 }}
               />
@@ -358,10 +251,10 @@ export function SettingsPanel({ rotation }: { rotation: PitchRotation }) {
 
         {/* Zone Overlay — collapsible */}
         <CollapsibleSection
-          label="Zones"
+          label="Tactical Zones"
           preview={
             state.pitchSettings.zoneOverlay !== 'none' ? (
-              <span style={{ fontSize: 10, color: theme.accent }}>
+              <span style={{ fontSize: 10, color: theme.highlight }}>
                 {state.pitchSettings.zoneOverlay === 'corridors' ? 'Corridors'
                   : state.pitchSettings.zoneOverlay === 'zones18' ? '18 Zones'
                   : state.pitchSettings.zoneOverlay === 'thirds' ? 'Thirds'
@@ -438,7 +331,7 @@ export function SettingsPanel({ rotation }: { rotation: PitchRotation }) {
                 }
                 style={{
                   width: '100%',
-                  accentColor: theme.accent,
+                  accentColor: theme.highlight,
                   cursor: 'pointer',
                 }}
               />
@@ -469,7 +362,7 @@ export function SettingsPanel({ rotation }: { rotation: PitchRotation }) {
                 }
                 style={{
                   width: '100%',
-                  accentColor: theme.accent,
+                  accentColor: theme.highlight,
                   cursor: 'pointer',
                 }}
               />
@@ -489,7 +382,7 @@ export function SettingsPanel({ rotation }: { rotation: PitchRotation }) {
                 }
                 style={{
                   width: '100%',
-                  accentColor: theme.accent,
+                  accentColor: theme.highlight,
                   cursor: 'pointer',
                 }}
               />
@@ -498,8 +391,8 @@ export function SettingsPanel({ rotation }: { rotation: PitchRotation }) {
         </CollapsibleSection>
 
         {/* Bench Settings */}
-        <div style={sectionStyle}>
-          <span style={labelStyle}>Bench</span>
+        <div style={sectionStyle(theme)}>
+          <span style={labelStyle(theme)}>Bench</span>
           <label
             style={{
               display: 'flex',
@@ -507,7 +400,7 @@ export function SettingsPanel({ rotation }: { rotation: PitchRotation }) {
               gap: 8,
               cursor: 'pointer',
               fontSize: 12,
-              color: '#e2e8f0',
+              color: theme.secondary,
             }}
           >
             <input
@@ -520,7 +413,7 @@ export function SettingsPanel({ rotation }: { rotation: PitchRotation }) {
                 })
               }
               style={{
-                accentColor: theme.accent,
+                accentColor: theme.highlight,
                 width: 14,
                 height: 14,
                 cursor: 'pointer',
@@ -531,8 +424,8 @@ export function SettingsPanel({ rotation }: { rotation: PitchRotation }) {
         </div>
 
         {/* Player Settings */}
-        <div style={sectionStyle}>
-          <span style={labelStyle}>Players</span>
+        <div style={sectionStyle(theme)}>
+          <span style={labelStyle(theme)}>Players</span>
 
           <span style={smallLabelStyle}>Size</span>
           <div style={{ display: 'flex', gap: 4, marginBottom: 8 }}>
@@ -552,14 +445,14 @@ export function SettingsPanel({ rotation }: { rotation: PitchRotation }) {
                   fontFamily: 'inherit',
                   border:
                     state.playerRadius === preset.radius
-                      ? `1px solid ${theme.accent}`
-                      : '1px solid #374151',
+                      ? `1px solid ${theme.highlight}`
+                      : `1px solid ${theme.borderSubtle}`,
                   borderRadius: 4,
                   background:
                     state.playerRadius === preset.radius
-                      ? hexToRgba(theme.accent, 0.1)
+                      ? hexToRgba(theme.highlight, 0.1)
                       : 'transparent',
-                  color: state.playerRadius === preset.radius ? theme.accent : '#94a3b8',
+                  color: state.playerRadius === preset.radius ? theme.highlight : theme.textMuted,
                   cursor: 'pointer',
                 }}
               >
@@ -579,15 +472,15 @@ export function SettingsPanel({ rotation }: { rotation: PitchRotation }) {
             }
             style={{
               width: '100%',
-              accentColor: theme.accent,
+              accentColor: theme.highlight,
               cursor: 'pointer',
             }}
           />
         </div>
 
         {/* Ball Settings */}
-        <div style={sectionStyle}>
-          <span style={labelStyle}>Ball</span>
+        <div style={sectionStyle(theme)}>
+          <span style={labelStyle(theme)}>Ball</span>
 
           <span style={smallLabelStyle}>Size</span>
           <div style={{ display: 'flex', gap: 4, marginBottom: 8 }}>
@@ -607,14 +500,14 @@ export function SettingsPanel({ rotation }: { rotation: PitchRotation }) {
                   fontFamily: 'inherit',
                   border:
                     state.ball.radius === preset.radius
-                      ? `1px solid ${theme.accent}`
-                      : '1px solid #374151',
+                      ? `1px solid ${theme.highlight}`
+                      : `1px solid ${theme.borderSubtle}`,
                   borderRadius: 4,
                   background:
                     state.ball.radius === preset.radius
-                      ? hexToRgba(theme.accent, 0.1)
+                      ? hexToRgba(theme.highlight, 0.1)
                       : 'transparent',
-                  color: state.ball.radius === preset.radius ? theme.accent : '#94a3b8',
+                  color: state.ball.radius === preset.radius ? theme.highlight : theme.textMuted,
                   cursor: 'pointer',
                 }}
               >
@@ -634,7 +527,7 @@ export function SettingsPanel({ rotation }: { rotation: PitchRotation }) {
             }
             style={{
               width: '100%',
-              accentColor: theme.accent,
+              accentColor: theme.highlight,
               cursor: 'pointer',
             }}
           />

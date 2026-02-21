@@ -44,8 +44,8 @@ export function DeletePlayerConfirmDialog({
       <div
         ref={dialogRef}
         style={{
-          background: '#1e293b',
-          border: '1px solid #334155',
+          background: theme.border,
+          border: `1px solid ${theme.borderSubtle}`,
           borderRadius: 8,
           padding: '20px 24px',
           maxWidth: 380,
@@ -53,10 +53,10 @@ export function DeletePlayerConfirmDialog({
           boxShadow: '0 8px 24px rgba(0, 0, 0, 0.5)',
         }}
       >
-        <h3 style={{ margin: '0 0 10px', fontSize: 15, fontWeight: 600, color: '#e2e8f0' }}>
+        <h3 style={{ margin: '0 0 10px', fontSize: 15, fontWeight: 600, color: theme.secondary }}>
           Delete Player?
         </h3>
-        <p style={{ margin: '0 0 18px', fontSize: 12, lineHeight: 1.5, color: '#94a3b8' }}>
+        <p style={{ margin: '0 0 18px', fontSize: 12, lineHeight: 1.5, color: theme.textMuted }}>
           Are you sure you want to delete #{playerNumber} {playerName}? Any connected annotations
           will also be removed.
         </p>
@@ -67,13 +67,13 @@ export function DeletePlayerConfirmDialog({
               padding: '6px 16px',
               fontSize: 12,
               fontFamily: 'inherit',
-              border: '1px solid #334155',
+              border: `1px solid ${theme.borderSubtle}`,
               borderRadius: 4,
               background: 'transparent',
-              color: '#94a3b8',
+              color: theme.textMuted,
               cursor: 'pointer',
             }}
-            onMouseEnter={e => { e.currentTarget.style.background = '#334155'; }}
+            onMouseEnter={e => { e.currentTarget.style.background = theme.borderSubtle; }}
             onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
           >
             Cancel
@@ -84,15 +84,15 @@ export function DeletePlayerConfirmDialog({
               padding: '6px 16px',
               fontSize: 12,
               fontFamily: 'inherit',
-              border: `1px solid ${theme.accent}`,
+              border: `1px solid ${theme.highlight}`,
               borderRadius: 4,
-              background: hexToRgba(theme.accent, 0.15),
-              color: theme.accent,
+              background: hexToRgba(theme.highlight, 0.15),
+              color: theme.highlight,
               cursor: 'pointer',
               fontWeight: 600,
             }}
-            onMouseEnter={e => { e.currentTarget.style.background = hexToRgba(theme.accent, 0.3); }}
-            onMouseLeave={e => { e.currentTarget.style.background = hexToRgba(theme.accent, 0.15); }}
+            onMouseEnter={e => { e.currentTarget.style.background = hexToRgba(theme.highlight, 0.3); }}
+            onMouseLeave={e => { e.currentTarget.style.background = hexToRgba(theme.highlight, 0.15); }}
           >
             Delete
           </button>

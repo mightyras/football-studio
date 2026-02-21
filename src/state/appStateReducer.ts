@@ -88,6 +88,7 @@ export type AppAction =
   | { type: 'LOAD_SCENE'; data: SceneData }
   | { type: 'SET_CLUB_IDENTITY'; identity: Partial<ClubIdentity> }
   | { type: 'CLEAR_CLUB_IDENTITY' }
+  | { type: 'SET_THEME_MODE'; mode: 'light' | 'dark' }
   | { type: 'EXECUTE_RUN'; playerId: string; x: number; y: number; facing: number; ghost: GhostPlayer; annotationId: string; ballX?: number; ballY?: number; animationType?: 'run' | 'pass' | 'dribble' }
   | { type: 'CLEAR_PLAYER_GHOSTS'; playerId: string }
   | { type: 'RESET_RUN'; playerId: string }
@@ -306,6 +307,8 @@ export const initialState: AppState = {
     logoDataUrl: null,
     primaryColor: null,
     secondaryColor: null,
+    highlightColor: null,
+    backgroundColor: null,
     clubName: null,
   },
   ghostPlayers: [],
@@ -313,6 +316,7 @@ export const initialState: AppState = {
   previewGhosts: [],
   pendingDeletePlayerId: null,
   formationMoveTeam: null,
+  themeMode: 'dark' as const,
 };
 
 export function appStateReducer(state: AppState, action: AppAction): AppState {
@@ -867,6 +871,7 @@ export function appStateReducer(state: AppState, action: AppAction): AppState {
         teamAOutlineColor: state.teamAOutlineColor,
         teamBOutlineColor: state.teamBOutlineColor,
         clubIdentity: state.clubIdentity,
+        themeMode: state.themeMode,
         players: createDefaultPlayers(initialState.teamADirection),
         ball: { ...defaultBall },
         annotations: [],
@@ -1368,6 +1373,9 @@ export function appStateReducer(state: AppState, action: AppAction): AppState {
         ...state,
         clubIdentity: initialState.clubIdentity,
       };
+
+    case 'SET_THEME_MODE':
+      return { ...state, themeMode: action.mode };
 
     // --- Per-player run animation (ghost) actions ---
 

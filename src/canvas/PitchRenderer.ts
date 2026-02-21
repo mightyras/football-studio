@@ -27,8 +27,9 @@ function drawBackground(
   ctx: CanvasRenderingContext2D,
   width: number,
   height: number,
+  bgColor?: string,
 ) {
-  ctx.fillStyle = THEME.pitchBackground;
+  ctx.fillStyle = bgColor || THEME.pitchBackground;
   ctx.fillRect(0, 0, width, height);
 }
 
@@ -380,9 +381,10 @@ export function renderPitch(
   width: number,
   height: number,
   pitchSettings: PitchSettings,
+  bgColor?: string,
 ) {
   const gc = pitchSettings.grassColor;
-  drawBackground(ctx, width, height);
+  drawBackground(ctx, width, height, bgColor);
   drawGrass(ctx, transform, pitchSettings);
   drawOuterLines(ctx, transform, gc);
   drawHalfwayLine(ctx, transform, gc);

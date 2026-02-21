@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useAppState } from '../../state/AppStateContext';
+import { useThemeColors } from '../../hooks/useThemeColors';
 import { FORMATIONS } from '../../constants/formations';
 import { FormationCard } from './FormationCard';
 import type { Formation } from '../../types';
@@ -35,6 +36,7 @@ const FORMATION_GROUPS = groupFormations();
 
 export function FormationPanel() {
   const { state, dispatch } = useAppState();
+  const theme = useThemeColors();
   const activeFormation =
     state.activeTeam === 'A' ? state.teamAFormation : state.teamBFormation;
 
@@ -58,7 +60,7 @@ export function FormationPanel() {
       <div
         style={{
           padding: '8px 12px',
-          borderBottom: '1px solid #1e293b',
+          borderBottom: `1px solid ${theme.border}`,
           display: 'flex',
           alignItems: 'center',
           gap: 6,
@@ -109,7 +111,7 @@ export function FormationPanel() {
                   border: 'none',
                   borderRadius: 4,
                   background: 'transparent',
-                  color: hasActive ? '#e2e8f0' : '#94a3b8',
+                  color: hasActive ? theme.secondary : theme.textMuted,
                   cursor: 'pointer',
                   fontSize: 11,
                   fontWeight: 600,
@@ -118,8 +120,8 @@ export function FormationPanel() {
                   letterSpacing: '0.05em',
                   transition: 'color 0.15s',
                 }}
-                onMouseEnter={e => { e.currentTarget.style.color = '#e2e8f0'; }}
-                onMouseLeave={e => { if (!hasActive) e.currentTarget.style.color = '#94a3b8'; }}
+                onMouseEnter={e => { e.currentTarget.style.color = theme.secondary; }}
+                onMouseLeave={e => { if (!hasActive) e.currentTarget.style.color = theme.textMuted; }}
               >
                 <span
                   style={{
@@ -134,7 +136,7 @@ export function FormationPanel() {
                   ▾
                 </span>
                 {group.label}
-                <span style={{ fontSize: 10, fontWeight: 400, color: '#64748b', marginLeft: 'auto' }}>
+                <span style={{ fontSize: 10, fontWeight: 400, color: theme.textSubtle, marginLeft: 'auto' }}>
                   {group.formations.length}
                 </span>
               </button>
@@ -185,6 +187,7 @@ function TeamToggle({
   active: boolean;
   onClick: () => void;
 }) {
+  const theme = useThemeColors();
   return (
     <button
       onClick={onClick}
@@ -196,10 +199,10 @@ function TeamToggle({
         fontSize: 11,
         fontFamily: 'inherit',
         fontWeight: active ? 600 : 400,
-        border: active ? `1px solid ${color}` : '1px solid #334155',
+        border: active ? `1px solid ${color}` : `1px solid ${theme.borderSubtle}`,
         borderRadius: 4,
         background: active ? `${color}22` : 'transparent',
-        color: active ? '#e2e8f0' : '#64748b',
+        color: active ? theme.secondary : theme.textSubtle,
         cursor: 'pointer',
         outline: 'none',
         transition: 'all 0.15s',

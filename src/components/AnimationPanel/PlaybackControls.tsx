@@ -24,11 +24,13 @@ function ControlButton({
   title,
   disabled,
   children,
+  theme,
 }: {
   onClick: () => void;
   title: string;
   disabled?: boolean;
   children: React.ReactNode;
+  theme: { textSubtle: string; secondary: string; surfaceHover: string };
 }) {
   return (
     <button
@@ -44,14 +46,14 @@ function ControlButton({
         border: 'none',
         borderRadius: 4,
         background: 'transparent',
-        color: disabled ? '#475569' : '#e2e8f0',
+        color: disabled ? theme.textSubtle : theme.secondary,
         cursor: disabled ? 'not-allowed' : 'pointer',
         transition: 'all 0.15s',
         padding: 0,
       }}
       onMouseEnter={e => {
         if (!disabled) {
-          e.currentTarget.style.background = '#1f2937';
+          e.currentTarget.style.background = theme.surfaceHover;
         }
       }}
       onMouseLeave={e => {
@@ -101,20 +103,20 @@ export function PlaybackControls({
         alignItems: 'center',
         gap: 4,
         padding: '4px 12px',
-        background: '#111827',
-        borderTop: '1px solid #1e293b',
+        background: theme.surface,
+        borderTop: `1px solid ${theme.border}`,
         minHeight: 36,
       }}
     >
       {/* Transport controls */}
-      <ControlButton onClick={onSeekStart} title="Jump to start" disabled={!hasFrames}>
+      <ControlButton onClick={onSeekStart} title="Jump to start" disabled={!hasFrames} theme={theme}>
         <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
           <rect x="4" y="5" width="3" height="14" />
           <polygon points="20,5 20,19 9,12" />
         </svg>
       </ControlButton>
 
-      <ControlButton onClick={onPrev} title="Previous keyframe (Left arrow)" disabled={!hasFrames}>
+      <ControlButton onClick={onPrev} title="Previous keyframe (Left arrow)" disabled={!hasFrames} theme={theme}>
         <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
           <polygon points="18,5 18,19 6,12" />
         </svg>
@@ -133,8 +135,8 @@ export function PlaybackControls({
           justifyContent: 'center',
           border: 'none',
           borderRadius: '50%',
-          background: hasFrames ? theme.accent : '#374151',
-          color: hasFrames ? '#111827' : '#6b7280',
+          background: hasFrames ? theme.highlight : theme.borderSubtle,
+          color: hasFrames ? theme.surface : '#6b7280',
           cursor: hasFrames ? 'pointer' : 'not-allowed',
           transition: 'all 0.15s',
           padding: 0,
@@ -152,20 +154,20 @@ export function PlaybackControls({
         )}
       </button>
 
-      <ControlButton onClick={onNext} title="Next keyframe (Right arrow)" disabled={!hasFrames}>
+      <ControlButton onClick={onNext} title="Next keyframe (Right arrow)" disabled={!hasFrames} theme={theme}>
         <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
           <polygon points="6,5 6,19 18,12" />
         </svg>
       </ControlButton>
 
-      <ControlButton onClick={onSeekEnd} title="Jump to end" disabled={!hasFrames}>
+      <ControlButton onClick={onSeekEnd} title="Jump to end" disabled={!hasFrames} theme={theme}>
         <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
           <polygon points="4,5 4,19 15,12" />
           <rect x="17" y="5" width="3" height="14" />
         </svg>
       </ControlButton>
 
-      <ControlButton onClick={onStop} title="Stop" disabled={status === 'idle'}>
+      <ControlButton onClick={onStop} title="Stop" disabled={status === 'idle'} theme={theme}>
         <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
           <rect x="4" y="4" width="16" height="16" rx="2" />
         </svg>
@@ -177,7 +179,7 @@ export function PlaybackControls({
           style={{
             flex: 1,
             height: 4,
-            background: '#334155',
+            background: theme.borderSubtle,
             borderRadius: 2,
             position: 'relative',
             overflow: 'hidden',
@@ -190,7 +192,7 @@ export function PlaybackControls({
               top: 0,
               height: '100%',
               width: `${overallProgress * 100}%`,
-              background: theme.accent,
+              background: theme.highlight,
               borderRadius: 2,
               transition: isPlaying ? 'none' : 'width 0.15s',
             }}
@@ -205,9 +207,9 @@ export function PlaybackControls({
         style={{
           fontSize: 11,
           fontWeight: 600,
-          color: speedMultiplier === 1 ? '#94a3b8' : theme.accent,
+          color: speedMultiplier === 1 ? theme.textMuted : theme.highlight,
           background: 'transparent',
-          border: '1px solid #334155',
+          border: `1px solid ${theme.borderSubtle}`,
           borderRadius: 4,
           padding: '2px 6px',
           cursor: 'pointer',
@@ -220,7 +222,7 @@ export function PlaybackControls({
       </button>
 
       {/* Frame indicator */}
-      <span style={{ fontSize: 10, color: '#64748b', minWidth: 40, textAlign: 'right' }}>
+      <span style={{ fontSize: 10, color: theme.textSubtle, minWidth: 40, textAlign: 'right' }}>
         {currentIndex + 1}/{totalKeyframes}
       </span>
     </div>

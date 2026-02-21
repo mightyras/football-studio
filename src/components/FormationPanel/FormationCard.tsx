@@ -20,10 +20,10 @@ export function FormationCard({ formation, active, onClick }: FormationCardProps
         gap: 4,
         width: '100%',
         padding: '6px 4px',
-        border: active ? `1px solid ${theme.accent}` : '1px solid transparent',
+        border: active ? `1px solid ${theme.highlight}` : '1px solid transparent',
         borderRadius: 6,
-        background: active ? hexToRgba(theme.accent, 0.1) : 'transparent',
-        color: active ? theme.accent : '#e2e8f0',
+        background: active ? hexToRgba(theme.highlight, 0.1) : 'transparent',
+        color: active ? theme.highlight : theme.secondary,
         cursor: 'pointer',
         textAlign: 'center',
         fontSize: 11.5,
@@ -31,7 +31,7 @@ export function FormationCard({ formation, active, onClick }: FormationCardProps
         transition: 'all 0.15s',
       }}
       onMouseEnter={e => {
-        if (!active) e.currentTarget.style.background = '#1f2937';
+        if (!active) e.currentTarget.style.background = theme.surfaceHover;
       }}
       onMouseLeave={e => {
         if (!active) e.currentTarget.style.background = 'transparent';
@@ -42,7 +42,7 @@ export function FormationCard({ formation, active, onClick }: FormationCardProps
         <rect x="0" y="0" width="44" height="28" rx="2" fill="#1a5c2a" />
         <line x1="22" y1="0" x2="22" y2="28" stroke="rgba(255,255,255,0.25)" strokeWidth="0.5" />
         {/* GK */}
-        <circle cx={3} cy={14} r={1.8} fill={active ? theme.accent : '#94a3b8'} />
+        <circle cx={3} cy={14} r={1.8} fill={active ? theme.highlight : theme.textMuted} />
         {/* Outfield */}
         {formation.positions.map((pos, i) => (
           <circle
@@ -50,7 +50,7 @@ export function FormationCard({ formation, active, onClick }: FormationCardProps
             cx={3 + pos.x * 38}
             cy={pos.y * 26 + 1}
             r={1.8}
-            fill={active ? theme.accent : '#94a3b8'}
+            fill={active ? theme.highlight : theme.textMuted}
           />
         ))}
       </svg>

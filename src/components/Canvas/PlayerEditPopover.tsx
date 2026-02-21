@@ -50,8 +50,8 @@ export function PlayerEditPopover({ transform }: { transform: PitchTransform }) 
         left: pos.x,
         top: pos.y - 8,
         transform: 'translate(-50%, -100%)',
-        background: '#1e293b',
-        border: `1px solid ${theme.accent}`,
+        background: theme.border,
+        border: `1px solid ${theme.highlight}`,
         borderRadius: 8,
         padding: '10px 12px',
         display: 'flex',
@@ -72,13 +72,13 @@ export function PlayerEditPopover({ transform }: { transform: PitchTransform }) 
           transform: 'translateX(-50%) rotate(45deg)',
           width: 10,
           height: 10,
-          background: '#1e293b',
-          borderRight: `1px solid ${theme.accent}`,
-          borderBottom: `1px solid ${theme.accent}`,
+          background: theme.border,
+          borderRight: `1px solid ${theme.highlight}`,
+          borderBottom: `1px solid ${theme.highlight}`,
         }}
       />
 
-      <label style={{ fontSize: 10, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+      <label style={{ fontSize: 10, color: theme.textMuted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
         Number
       </label>
       <input
@@ -92,19 +92,19 @@ export function PlayerEditPopover({ transform }: { transform: PitchTransform }) 
         style={{
           width: '100%',
           padding: '4px 8px',
-          background: '#0f172a',
-          border: '1px solid #334155',
+          background: theme.inputBg,
+          border: `1px solid ${theme.borderSubtle}`,
           borderRadius: 4,
-          color: '#e2e8f0',
+          color: theme.secondary,
           fontSize: 14,
           fontFamily: 'inherit',
           outline: 'none',
         }}
-        onFocus={e => { e.target.style.borderColor = theme.accent; }}
-        onBlur={e => { e.target.style.borderColor = '#334155'; }}
+        onFocus={e => { e.target.style.borderColor = theme.highlight; }}
+        onBlur={e => { e.target.style.borderColor = theme.borderSubtle; }}
       />
 
-      <label style={{ fontSize: 10, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+      <label style={{ fontSize: 10, color: theme.textMuted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
         Name
       </label>
       <input
@@ -116,16 +116,16 @@ export function PlayerEditPopover({ transform }: { transform: PitchTransform }) 
         style={{
           width: '100%',
           padding: '4px 8px',
-          background: '#0f172a',
-          border: '1px solid #334155',
+          background: theme.inputBg,
+          border: `1px solid ${theme.borderSubtle}`,
           borderRadius: 4,
-          color: '#e2e8f0',
+          color: theme.secondary,
           fontSize: 14,
           fontFamily: 'inherit',
           outline: 'none',
         }}
-        onFocus={e => { e.target.style.borderColor = theme.accent; }}
-        onBlur={e => { e.target.style.borderColor = '#334155'; }}
+        onFocus={e => { e.target.style.borderColor = theme.highlight; }}
+        onBlur={e => { e.target.style.borderColor = theme.borderSubtle; }}
       />
 
       <button
@@ -133,7 +133,7 @@ export function PlayerEditPopover({ transform }: { transform: PitchTransform }) 
         style={{
           marginTop: 2,
           padding: '4px 0',
-          background: theme.accent,
+          background: theme.highlight,
           color: '#0a0e1a',
           border: 'none',
           borderRadius: 4,

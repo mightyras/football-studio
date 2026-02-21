@@ -35,7 +35,7 @@
 
 .canvas-area {
   grid-area: canvas;
-  background: #0d1117;
+  background: var(--theme-background, #0d1117);
   overflow: hidden;
 }
 

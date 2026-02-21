@@ -1,20 +1,56 @@
 import { useMemo } from 'react';
 import { useAppState } from '../state/AppStateContext';
-import { THEME } from '../constants/colors';
+import { useAuth } from '../state/AuthContext';
+import { useTeam } from '../state/TeamContext';
+import { THEME_DEFAULTS, THEME_DEFAULTS_LIGHT } from '../constants/colors';
+import { deriveTheme, type DerivedTheme } from '../utils/colorDerivation';
 
-export type ThemeColors = {
-  accent: string;
-  accentHover: string;
+export type ThemeColors = DerivedTheme;
+
+const EMPTY_IDENTITY = {
+  primaryColor: null,
+  secondaryColor: null,
+  highlightColor: null,
+  backgroundColor: null,
 };
 
 /**
- * Returns the resolved accent colors — either from club identity or default theme.
- * Use this hook in any component that currently hardcodes #f59e0b.
+ * Returns the fully resolved theme palette.
+ * Cascade: board-level ClubIdentity → team-level branding → global THEME_DEFAULTS.
+ * ClubIdentity colors are only applied when the user is signed in.
  */
 export function useThemeColors(): ThemeColors {
   const { state } = useAppState();
-  return useMemo(() => ({
-    accent: state.clubIdentity.primaryColor || THEME.accent,
-    accentHover: state.clubIdentity.secondaryColor || THEME.accentHover,
-  }), [state.clubIdentity.primaryColor, state.clubIdentity.secondaryColor]);
+  const { user } = useAuth();
+  const { activeTeam } = useTeam();
+
+  return useMemo(() => {
+    // Only apply board-level ClubIdentity colors when signed in
+    const ci = user ? state.clubIdentity : EMPTY_IDENTITY;
+
+    // Choose defaults based on theme mode
+    const defaults = state.themeMode === 'light' ? THEME_DEFAULTS_LIGHT : THEME_DEFAULTS;
+
+    const primary =
+      ci.primaryColor || activeTeam?.primary_color || defaults.primary;
+    const secondary =
+      ci.secondaryColor || activeTeam?.secondary_color || defaults.secondary;
+    const highlight =
+      ci.highlightColor || activeTeam?.highlight_color || defaults.highlight;
+    const background =
+      ci.backgroundColor || activeTeam?.background_color || defaults.background;
+
+    return deriveTheme(primary, secondary, highlight, background);
+  }, [
+    user,
+    state.themeMode,
+    state.clubIdentity.primaryColor,
+    state.clubIdentity.secondaryColor,
+    state.clubIdentity.highlightColor,
+    state.clubIdentity.backgroundColor,
+    activeTeam?.primary_color,
+    activeTeam?.secondary_color,
+    activeTeam?.highlight_color,
+    activeTeam?.background_color,
+  ]);
 }

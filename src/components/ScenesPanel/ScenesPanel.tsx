@@ -1,10 +1,12 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useAppState } from '../../state/AppStateContext';
 import { extractSceneData } from '../../state/AppStateContext';
 import { loadScenes, addScene, deleteScene, renameScene } from '../../utils/sceneStorage';
 import { generateThumbnail, renderSceneToBlob } from '../../utils/sceneRenderer';
 import { useThemeColors } from '../../hooks/useThemeColors';
 import { hexToRgba } from '../../utils/colorUtils';
+import { useAuth } from '../../state/AuthContext';
+import * as boardService from '../../services/boardService';
 import type { SavedScene } from '../../types';
 
 // ── Icons ──
@@ -74,6 +76,7 @@ function IconButton({
   children: React.ReactNode;
   danger?: boolean;
 }) {
+  const theme = useThemeColors();
   return (
     <button
       onClick={onClick}
@@ -87,17 +90,17 @@ function IconButton({
         border: 'none',
         borderRadius: 3,
         background: 'transparent',
-        color: danger ? '#ef4444' : '#64748b',
+        color: danger ? '#ef4444' : theme.textSubtle,
         cursor: 'pointer',
         transition: 'all 0.15s',
       }}
       onMouseEnter={e => {
-        e.currentTarget.style.background = danger ? 'rgba(239, 68, 68, 0.15)' : '#1f2937';
-        e.currentTarget.style.color = danger ? '#ef4444' : '#e2e8f0';
+        e.currentTarget.style.background = danger ? 'rgba(239, 68, 68, 0.15)' : theme.surfaceHover;
+        e.currentTarget.style.color = danger ? '#ef4444' : theme.secondary;
       }}
       onMouseLeave={e => {
         e.currentTarget.style.background = 'transparent';
-        e.currentTarget.style.color = danger ? '#ef4444' : '#64748b';
+        e.currentTarget.style.color = danger ? '#ef4444' : theme.textSubtle;
       }}
     >
       {children}
@@ -146,11 +149,11 @@ function SceneCard({
         display: 'flex',
         gap: 8,
         padding: '8px 10px',
-        borderBottom: '1px solid #1e293b',
+        borderBottom: `1px solid ${theme.border}`,
         cursor: editing || confirmDelete ? 'default' : 'pointer',
         transition: 'background 0.15s',
       }}
-      onMouseEnter={e => { if (!editing) e.currentTarget.style.background = '#1f2937'; }}
+      onMouseEnter={e => { if (!editing) e.currentTarget.style.background = theme.surfaceHover; }}
       onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; setConfirmDelete(false); }}
     >
       {/* Thumbnail */}
@@ -161,7 +164,7 @@ function SceneCard({
           width: 60,
           height: 38,
           borderRadius: 3,
-          border: '1px solid #1e293b',
+          border: `1px solid ${theme.border}`,
           objectFit: 'cover',
           flexShrink: 0,
         }}
@@ -185,9 +188,9 @@ function SceneCard({
               fontSize: 11,
               fontFamily: 'inherit',
               fontWeight: 600,
-              color: '#e2e8f0',
-              background: '#0f172a',
-              border: `1px solid ${theme.accent}`,
+              color: theme.secondary,
+              background: theme.inputBg,
+              border: `1px solid ${theme.highlight}`,
               borderRadius: 3,
               padding: '1px 4px',
               outline: 'none',
@@ -200,7 +203,7 @@ function SceneCard({
             style={{
               fontSize: 11,
               fontWeight: 600,
-              color: '#e2e8f0',
+              color: theme.secondary,
               overflow: 'hidden',
               textOverflow: 'ellipsis',
               whiteSpace: 'nowrap',
@@ -209,7 +212,7 @@ function SceneCard({
             {scene.name}
           </div>
         )}
-        <div style={{ fontSize: 9, color: '#64748b' }}>
+        <div style={{ fontSize: 9, color: theme.textSubtle }}>
           {timeAgo(scene.savedAt)}
         </div>
       </div>
@@ -251,16 +254,61 @@ function SceneCard({
 interface ScenesPanelProps {
   saveRequested?: boolean;
   onSaveHandled?: () => void;
+  onRequestSignIn?: () => void;
 }
 
-export function ScenesPanel({ saveRequested, onSaveHandled }: ScenesPanelProps) {
+/** Convert a Supabase BoardRow to a SavedScene for the UI. */
+function boardRowToScene(row: boardService.BoardRow): SavedScene {
+  return {
+    id: row.id,
+    name: row.name,
+    savedAt: new Date(row.updated_at).getTime(),
+    thumbnail: row.thumbnail_url ?? '',
+    data: row.data,
+  };
+}
+
+export function ScenesPanel({ saveRequested, onSaveHandled, onRequestSignIn }: ScenesPanelProps) {
   const { state, dispatch } = useAppState();
   const theme = useThemeColors();
-  const [scenes, setScenes] = useState<SavedScene[]>(() => loadScenes());
+  const { user } = useAuth();
+  const isCloud = !!user;
+
+  const [scenes, setScenes] = useState<SavedScene[]>(() => (isCloud ? [] : loadScenes()));
+  const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveName, setSaveName] = useState('');
   const [feedback, setFeedback] = useState<string | null>(null);
+  const [migrationPrompt, setMigrationPrompt] = useState(false);
+  const [migrating, setMigrating] = useState(false);
   const nameInputRef = useRef<HTMLInputElement>(null);
+
+  const showFeedback = useCallback((msg: string) => {
+    setFeedback(msg);
+    setTimeout(() => setFeedback(null), 2000);
+  }, []);
+
+  // Fetch boards from Supabase when user is authenticated
+  useEffect(() => {
+    if (!isCloud) {
+      setScenes(loadScenes());
+      return;
+    }
+    setLoading(true);
+    boardService.fetchBoards()
+      .then(rows => setScenes(rows.map(boardRowToScene)))
+      .catch(() => showFeedback('Failed to load boards'))
+      .finally(() => setLoading(false));
+  }, [isCloud, showFeedback]);
+
+  // Check for localStorage boards to migrate on first cloud login
+  useEffect(() => {
+    if (!user) return;
+    const migrationKey = `football-studio-migrated-${user.id}`;
+    if (localStorage.getItem(migrationKey)) return;
+    const local = loadScenes();
+    if (local.length > 0) setMigrationPrompt(true);
+  }, [user]);
 
   // Respond to external save trigger (Cmd+S)
   useEffect(() => {
@@ -278,25 +326,41 @@ export function ScenesPanel({ saveRequested, onSaveHandled }: ScenesPanelProps) 
   }, [saving]);
 
   const startSaving = () => {
+    if (!user) {
+      onRequestSignIn?.();
+      return;
+    }
     setSaveName(`${state.teamAName} vs ${state.teamBName}`);
     setSaving(true);
   };
 
-  const confirmSave = () => {
+  const confirmSave = async () => {
     const name = saveName.trim() || `${state.teamAName} vs ${state.teamBName}`;
     const thumbnail = generateThumbnail(state);
     const data = extractSceneData(state);
-    const scene: SavedScene = {
-      id: `scene-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-      name,
-      savedAt: Date.now(),
-      thumbnail,
-      data,
-    };
-    const updated = addScene(scene);
-    setScenes(updated);
-    setSaving(false);
-    showFeedback('Saved!');
+
+    if (isCloud) {
+      setSaving(false);
+      const row = await boardService.createBoard(name, data, thumbnail);
+      if (row) {
+        setScenes(prev => [boardRowToScene(row), ...prev]);
+        showFeedback('Saved!');
+      } else {
+        showFeedback('Save failed');
+      }
+    } else {
+      const scene: SavedScene = {
+        id: `scene-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        name,
+        savedAt: Date.now(),
+        thumbnail,
+        data,
+      };
+      const updated = addScene(scene);
+      setScenes(updated);
+      setSaving(false);
+      showFeedback('Saved!');
+    }
   };
 
   const handleExportPNG = async () => {
@@ -322,53 +386,110 @@ export function ScenesPanel({ saveRequested, onSaveHandled }: ScenesPanelProps) 
     }
   };
 
-  const showFeedback = (msg: string) => {
-    setFeedback(msg);
-    setTimeout(() => setFeedback(null), 2000);
-  };
-
   const handleLoad = (scene: SavedScene) => {
     dispatch({ type: 'LOAD_SCENE', data: scene.data });
   };
 
-  const handleDelete = (id: string) => {
-    setScenes(deleteScene(id));
+  const handleDelete = async (id: string) => {
+    if (isCloud) {
+      setScenes(prev => prev.filter(s => s.id !== id));
+      const ok = await boardService.deleteBoard(id);
+      if (!ok) showFeedback('Delete failed');
+    } else {
+      setScenes(deleteScene(id));
+    }
   };
 
-  const handleRename = (id: string, name: string) => {
-    setScenes(renameScene(id, name));
+  const handleRename = async (id: string, name: string) => {
+    if (isCloud) {
+      setScenes(prev => prev.map(s => s.id === id ? { ...s, name } : s));
+      const ok = await boardService.renameBoard(id, name);
+      if (!ok) showFeedback('Rename failed');
+    } else {
+      setScenes(renameScene(id, name));
+    }
+  };
+
+  const handleMigrate = async () => {
+    if (!user) return;
+    setMigrating(true);
+    const local = loadScenes();
+    let ok = true;
+    for (const scene of local) {
+      const row = await boardService.createBoard(scene.name, scene.data, scene.thumbnail);
+      if (!row) { ok = false; break; }
+    }
+    if (ok) {
+      localStorage.setItem(`football-studio-migrated-${user.id}`, 'true');
+      setMigrationPrompt(false);
+      // Refresh from cloud
+      const rows = await boardService.fetchBoards();
+      setScenes(rows.map(boardRowToScene));
+      showFeedback(`Imported ${local.length} boards!`);
+    } else {
+      showFeedback('Migration failed — some boards were not imported');
+    }
+    setMigrating(false);
   };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       {/* Action bar */}
-      <div style={{ padding: '10px 10px 8px', borderBottom: '1px solid #1e293b', flexShrink: 0 }}>
+      <div style={{ padding: '10px 10px 8px', borderBottom: `1px solid ${theme.border}`, flexShrink: 0 }}>
         {/* Save button */}
-        <button
-          onClick={startSaving}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 6,
-            width: '100%',
-            padding: '6px 0',
-            fontSize: 11,
-            fontWeight: 600,
-            fontFamily: 'inherit',
-            border: `1px solid ${theme.accent}`,
-            borderRadius: 4,
-            background: hexToRgba(theme.accent, 0.1),
-            color: theme.accent,
-            cursor: 'pointer',
-            transition: 'all 0.15s',
-          }}
-          onMouseEnter={e => { e.currentTarget.style.background = hexToRgba(theme.accent, 0.2); }}
-          onMouseLeave={e => { e.currentTarget.style.background = hexToRgba(theme.accent, 0.1); }}
-        >
-          <SaveIcon />
-          Save Board
-        </button>
+        {user ? (
+          <button
+            onClick={startSaving}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 6,
+              width: '100%',
+              padding: '6px 0',
+              fontSize: 11,
+              fontWeight: 600,
+              fontFamily: 'inherit',
+              border: `1px solid ${theme.highlight}`,
+              borderRadius: 4,
+              background: hexToRgba(theme.highlight, 0.1),
+              color: theme.highlight,
+              cursor: 'pointer',
+              transition: 'all 0.15s',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.background = hexToRgba(theme.highlight, 0.2); }}
+            onMouseLeave={e => { e.currentTarget.style.background = hexToRgba(theme.highlight, 0.1); }}
+          >
+            <SaveIcon />
+            Save Board
+          </button>
+        ) : (
+          <button
+            onClick={() => onRequestSignIn?.()}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 6,
+              width: '100%',
+              padding: '6px 0',
+              fontSize: 11,
+              fontWeight: 500,
+              fontFamily: 'inherit',
+              border: `1px solid ${theme.borderSubtle}`,
+              borderRadius: 4,
+              background: 'transparent',
+              color: theme.textSubtle,
+              cursor: 'pointer',
+              transition: 'all 0.15s',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = theme.textSubtle; e.currentTarget.style.color = theme.textMuted; }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = theme.borderSubtle; e.currentTarget.style.color = theme.textSubtle; }}
+          >
+            <SaveIcon />
+            Sign in to save boards
+          </button>
+        )}
 
         {/* Inline name input (shown when saving) */}
         {saving && (
@@ -388,14 +509,14 @@ export function ScenesPanel({ saveRequested, onSaveHandled }: ScenesPanelProps) 
                 fontSize: 11,
                 fontFamily: 'inherit',
                 padding: '4px 6px',
-                border: '1px solid #374151',
+                border: `1px solid ${theme.borderSubtle}`,
                 borderRadius: 3,
-                background: '#0f172a',
-                color: '#e2e8f0',
+                background: theme.inputBg,
+                color: theme.secondary,
                 outline: 'none',
               }}
-              onFocus={e => { e.currentTarget.style.borderColor = theme.accent; }}
-              onBlur={e => { e.currentTarget.style.borderColor = '#374151'; }}
+              onFocus={e => { e.currentTarget.style.borderColor = theme.highlight; }}
+              onBlur={e => { e.currentTarget.style.borderColor = theme.borderSubtle; }}
             />
             <button
               onClick={confirmSave}
@@ -405,10 +526,10 @@ export function ScenesPanel({ saveRequested, onSaveHandled }: ScenesPanelProps) 
                 padding: '4px 8px',
                 fontSize: 10,
                 fontFamily: 'inherit',
-                border: `1px solid ${theme.accent}`,
+                border: `1px solid ${theme.highlight}`,
                 borderRadius: 3,
-                background: hexToRgba(theme.accent, 0.15),
-                color: theme.accent,
+                background: hexToRgba(theme.highlight, 0.15),
+                color: theme.highlight,
                 cursor: 'pointer',
               }}
             >
@@ -430,15 +551,15 @@ export function ScenesPanel({ saveRequested, onSaveHandled }: ScenesPanelProps) 
               padding: '5px 0',
               fontSize: 10,
               fontFamily: 'inherit',
-              border: '1px solid #374151',
+              border: `1px solid ${theme.borderSubtle}`,
               borderRadius: 3,
               background: 'transparent',
-              color: '#94a3b8',
+              color: theme.textMuted,
               cursor: 'pointer',
               transition: 'all 0.15s',
             }}
-            onMouseEnter={e => { e.currentTarget.style.borderColor = theme.accent; e.currentTarget.style.color = theme.accent; }}
-            onMouseLeave={e => { e.currentTarget.style.borderColor = '#374151'; e.currentTarget.style.color = '#94a3b8'; }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = theme.highlight; e.currentTarget.style.color = theme.highlight; }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = theme.borderSubtle; e.currentTarget.style.color = theme.textMuted; }}
           >
             <CopyIcon />
             Copy
@@ -454,15 +575,15 @@ export function ScenesPanel({ saveRequested, onSaveHandled }: ScenesPanelProps) 
               padding: '5px 0',
               fontSize: 10,
               fontFamily: 'inherit',
-              border: '1px solid #374151',
+              border: `1px solid ${theme.borderSubtle}`,
               borderRadius: 3,
               background: 'transparent',
-              color: '#94a3b8',
+              color: theme.textMuted,
               cursor: 'pointer',
               transition: 'all 0.15s',
             }}
-            onMouseEnter={e => { e.currentTarget.style.borderColor = theme.accent; e.currentTarget.style.color = theme.accent; }}
-            onMouseLeave={e => { e.currentTarget.style.borderColor = '#374151'; e.currentTarget.style.color = '#94a3b8'; }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = theme.highlight; e.currentTarget.style.color = theme.highlight; }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = theme.borderSubtle; e.currentTarget.style.color = theme.textMuted; }}
           >
             <DownloadIcon />
             Export PNG
@@ -485,13 +606,73 @@ export function ScenesPanel({ saveRequested, onSaveHandled }: ScenesPanelProps) 
         )}
       </div>
 
+      {/* Migration prompt */}
+      {migrationPrompt && (
+        <div style={{
+          padding: '8px 10px',
+          borderBottom: `1px solid ${theme.border}`,
+          background: hexToRgba(theme.highlight, 0.05),
+          flexShrink: 0,
+        }}>
+          <div style={{ fontSize: 11, color: theme.secondary, marginBottom: 6 }}>
+            You have {loadScenes().length} locally saved board(s). Import them to your account?
+          </div>
+          <div style={{ display: 'flex', gap: 6 }}>
+            <button
+              onClick={handleMigrate}
+              disabled={migrating}
+              style={{
+                padding: '4px 12px',
+                fontSize: 10,
+                fontFamily: 'inherit',
+                fontWeight: 600,
+                border: `1px solid ${theme.highlight}`,
+                borderRadius: 3,
+                background: hexToRgba(theme.highlight, 0.15),
+                color: theme.highlight,
+                cursor: migrating ? 'wait' : 'pointer',
+              }}
+            >
+              {migrating ? 'Importing...' : 'Import'}
+            </button>
+            <button
+              onClick={() => {
+                if (user) localStorage.setItem(`football-studio-migrated-${user.id}`, 'true');
+                setMigrationPrompt(false);
+              }}
+              style={{
+                padding: '4px 12px',
+                fontSize: 10,
+                fontFamily: 'inherit',
+                border: `1px solid ${theme.borderSubtle}`,
+                borderRadius: 3,
+                background: 'transparent',
+                color: theme.textMuted,
+                cursor: 'pointer',
+              }}
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Scene list */}
       <div style={{ flex: 1, overflowY: 'auto' }}>
-        {scenes.length === 0 ? (
+        {loading ? (
           <div style={{
             padding: '24px 16px',
             textAlign: 'center',
-            color: '#64748b',
+            color: theme.textSubtle,
+            fontSize: 11,
+          }}>
+            Loading boards...
+          </div>
+        ) : scenes.length === 0 ? (
+          <div style={{
+            padding: '24px 16px',
+            textAlign: 'center',
+            color: theme.textSubtle,
             fontSize: 11,
             lineHeight: 1.5,
           }}>

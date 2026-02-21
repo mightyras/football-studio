@@ -68,7 +68,7 @@ export function BenchPanel() {
         top: '50%',
         transform: 'translateY(-50%)',
         width: 220,
-        background: '#111827',
+        background: theme.surface,
         border: `1px solid ${teamColor}40`,
         borderRadius: 8,
         boxShadow: `0 4px 24px rgba(0, 0, 0, 0.5), 0 0 0 1px ${teamColor}20`,
@@ -80,7 +80,7 @@ export function BenchPanel() {
       <div
         style={{
           padding: '10px 12px',
-          borderBottom: '1px solid #1e293b',
+          borderBottom: `1px solid ${theme.border}`,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
@@ -95,7 +95,7 @@ export function BenchPanel() {
               background: teamColor,
             }}
           />
-          <span style={{ fontSize: 13, fontWeight: 600, color: '#e2e8f0' }}>
+          <span style={{ fontSize: 13, fontWeight: 600, color: theme.secondary }}>
             {teamName} — Bench
           </span>
         </div>
@@ -104,7 +104,7 @@ export function BenchPanel() {
           style={{
             background: 'none',
             border: 'none',
-            color: '#64748b',
+            color: theme.textSubtle,
             cursor: 'pointer',
             fontSize: 16,
             padding: '0 4px',
@@ -122,7 +122,7 @@ export function BenchPanel() {
             style={{
               padding: '12px 16px',
               fontSize: 11,
-              color: '#64748b',
+              color: theme.textSubtle,
               textAlign: 'center',
             }}
           >
@@ -164,14 +164,14 @@ export function BenchPanel() {
         <div
           style={{
             padding: '8px 12px',
-            borderTop: '1px solid #1e293b',
-            background: hexToRgba(theme.accent, 0.08),
+            borderTop: `1px solid ${theme.border}`,
+            background: hexToRgba(theme.highlight, 0.08),
           }}
         >
           <div
             style={{
               fontSize: 10,
-              color: theme.accent,
+              color: theme.highlight,
               textTransform: 'uppercase',
               letterSpacing: '0.05em',
               marginBottom: 6,
@@ -191,7 +191,7 @@ export function BenchPanel() {
                   border: `1px solid ${teamColor}60`,
                   borderRadius: 4,
                   background: `${teamColor}15`,
-                  color: '#e2e8f0',
+                  color: theme.secondary,
                   cursor: 'pointer',
                   transition: 'all 0.15s',
                 }}
@@ -210,7 +210,7 @@ export function BenchPanel() {
       )}
 
       {/* Add substitute button */}
-      <div style={{ padding: '8px 12px', borderTop: '1px solid #1e293b' }}>
+      <div style={{ padding: '8px 12px', borderTop: `1px solid ${theme.border}` }}>
         <button
           onClick={handleAddSub}
           style={{
@@ -218,20 +218,20 @@ export function BenchPanel() {
             padding: '6px 0',
             fontSize: 11,
             fontFamily: 'inherit',
-            border: '1px solid #374151',
+            border: `1px solid ${theme.borderSubtle}`,
             borderRadius: 4,
             background: 'transparent',
-            color: '#94a3b8',
+            color: theme.textMuted,
             cursor: 'pointer',
             transition: 'all 0.15s',
           }}
           onMouseEnter={e => {
-            e.currentTarget.style.borderColor = theme.accent;
-            e.currentTarget.style.color = theme.accent;
+            e.currentTarget.style.borderColor = theme.highlight;
+            e.currentTarget.style.color = theme.highlight;
           }}
           onMouseLeave={e => {
-            e.currentTarget.style.borderColor = '#374151';
-            e.currentTarget.style.color = '#94a3b8';
+            e.currentTarget.style.borderColor = theme.borderSubtle;
+            e.currentTarget.style.color = theme.textMuted;
           }}
         >
           + Add Substitute
@@ -268,8 +268,8 @@ function SubstituteRow({
         alignItems: 'center',
         gap: 6,
         padding: '4px 12px',
-        background: isPending ? hexToRgba(theme.accent, 0.1) : 'transparent',
-        borderLeft: isPending ? `2px solid ${theme.accent}` : '2px solid transparent',
+        background: isPending ? hexToRgba(theme.highlight, 0.1) : 'transparent',
+        borderLeft: isPending ? `2px solid ${theme.highlight}` : '2px solid transparent',
       }}
     >
       {/* Token */}
@@ -346,9 +346,9 @@ function SubstituteRow({
             style={{
               width: '100%',
               background: 'rgba(255,255,255,0.05)',
-              border: '1px solid #374151',
+              border: `1px solid ${theme.borderSubtle}`,
               borderRadius: 3,
-              color: '#e2e8f0',
+              color: theme.secondary,
               fontSize: 11,
               padding: '1px 4px',
               outline: 'none',
@@ -360,7 +360,7 @@ function SubstituteRow({
             onClick={() => setEditing('name')}
             style={{
               fontSize: 11,
-              color: sub.name ? '#e2e8f0' : '#4b5563',
+              color: sub.name ? theme.secondary : '#4b5563',
               cursor: 'pointer',
               overflow: 'hidden',
               textOverflow: 'ellipsis',
@@ -381,10 +381,10 @@ function SubstituteRow({
           padding: '2px 6px',
           fontSize: 9,
           fontFamily: 'inherit',
-          border: isPending ? `1px solid ${theme.accent}` : '1px solid #374151',
+          border: isPending ? `1px solid ${theme.highlight}` : `1px solid ${theme.borderSubtle}`,
           borderRadius: 3,
-          background: isPending ? hexToRgba(theme.accent, 0.2) : 'transparent',
-          color: isPending ? theme.accent : '#64748b',
+          background: isPending ? hexToRgba(theme.highlight, 0.2) : 'transparent',
+          color: isPending ? theme.highlight : theme.textSubtle,
           cursor: 'pointer',
           flexShrink: 0,
         }}

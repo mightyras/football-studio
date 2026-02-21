@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useReducer, useRef, type ReactNode } from 'react';
-import type { AppState, SceneData } from '../types';
+import type { AppState, ClubIdentity, SceneData } from '../types';
 import { appStateReducer, computePossession, defaultFacing, initialState, type AppAction } from './appStateReducer';
+import { relativeLuminance } from '../utils/colorDerivation';
 
 const STORAGE_KEY = 'football-studio-state';
 
@@ -36,6 +37,7 @@ function saveable(state: AppState): Partial<AppState> {
     animationMode: state.animationMode,
     animationSequence: state.animationSequence,
     clubIdentity: state.clubIdentity,
+    themeMode: state.themeMode,
   };
 }
 
@@ -69,6 +71,36 @@ export function extractSceneData(state: AppState): SceneData {
     animationMode: state.animationMode,
     animationSequence: state.animationSequence,
   });
+}
+
+/**
+ * Migrate old ClubIdentity format where primaryColor was the accent/highlight
+ * color (bright) into the new format where primaryColor is the UI background (dark).
+ */
+function migrateClubIdentity(ci: any): ClubIdentity {
+  const result: ClubIdentity = {
+    logoDataUrl: ci.logoDataUrl ?? null,
+    primaryColor: ci.primaryColor ?? null,
+    secondaryColor: ci.secondaryColor ?? null,
+    highlightColor: ci.highlightColor ?? null,
+    backgroundColor: ci.backgroundColor ?? null,
+    clubName: ci.clubName ?? null,
+  };
+
+  // Old format: primaryColor was a bright accent color, highlightColor didn't exist.
+  // Detect by checking if primaryColor is bright (lum > 0.1) and highlightColor is null.
+  if (result.primaryColor && !result.highlightColor) {
+    const lum = relativeLuminance(result.primaryColor);
+    if (lum > 0.1) {
+      // Bright color → this was the old accent, move it to highlight
+      result.highlightColor = result.primaryColor;
+      result.primaryColor = null;
+      // Old secondaryColor was accentHover, no longer meaningful
+      result.secondaryColor = null;
+    }
+  }
+
+  return result;
 }
 
 function loadState(): AppState {
@@ -115,13 +147,16 @@ function loadState(): AppState {
 
     // Migrate club identity: ensure object exists with all fields
     if (!merged.clubIdentity) {
-      merged.clubIdentity = { logoDataUrl: null, primaryColor: null, secondaryColor: null, clubName: null };
+      merged.clubIdentity = { logoDataUrl: null, primaryColor: null, secondaryColor: null, highlightColor: null, backgroundColor: null, clubName: null };
+    } else {
+      merged.clubIdentity = migrateClubIdentity(merged.clubIdentity);
     }
 
     // Migrate animation fields
     if (merged.animationMode === undefined) merged.animationMode = false;
     if (merged.animationSequence === undefined) merged.animationSequence = null;
     if (merged.activeKeyframeIndex === undefined) merged.activeKeyframeIndex = null;
+    if (merged.themeMode === undefined) merged.themeMode = 'dark';
     // Recompute resolved possession from loaded state
     merged.resolvedPossession = computePossession(merged.players, merged.ball, merged.possession, 'A');
 

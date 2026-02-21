@@ -164,24 +164,24 @@ function SubToolButton({
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        border: active ? `1px solid ${theme.accent}` : '1px solid transparent',
+        border: active ? `1px solid ${theme.highlight}` : '1px solid transparent',
         borderRadius: 4,
-        background: active ? hexToRgba(theme.accent, 0.15) : 'transparent',
-        color: active ? theme.accent : '#94a3b8',
+        background: active ? hexToRgba(theme.highlight, 0.15) : 'transparent',
+        color: active ? theme.highlight : theme.textMuted,
         cursor: 'pointer',
         transition: 'all 0.15s',
         padding: 0,
       }}
       onMouseEnter={e => {
         if (!active) {
-          e.currentTarget.style.background = '#1f2937';
-          e.currentTarget.style.color = '#e2e8f0';
+          e.currentTarget.style.background = theme.surfaceHover;
+          e.currentTarget.style.color = theme.secondary;
         }
       }}
       onMouseLeave={e => {
         if (!active) {
           e.currentTarget.style.background = 'transparent';
-          e.currentTarget.style.color = '#94a3b8';
+          e.currentTarget.style.color = theme.textMuted;
         }
       }}
     >
@@ -214,6 +214,7 @@ const SUB_TOOLS: SubToolEntry[] = [
 
 export function Toolbar() {
   const { state, dispatch } = useAppState();
+  const theme = useThemeColors();
 
   const isDrawActive = state.activeTool === 'draw';
 
@@ -225,8 +226,8 @@ export function Toolbar() {
         alignItems: 'center',
         gap: 4,
         padding: '12px 0',
-        background: '#111827',
-        borderRight: '1px solid #1e293b',
+        background: theme.surface,
+        borderRight: `1px solid ${theme.border}`,
         overflowY: 'auto',
       }}
     >
@@ -268,7 +269,7 @@ export function Toolbar() {
         <DeleteIcon />
       </ToolButton>
 
-      <div style={{ height: 1, width: 28, background: '#1e293b', margin: '8px 0' }} />
+      <div style={{ height: 1, width: 28, background: theme.border, margin: '8px 0' }} />
 
       {/* Draw tool */}
       <ToolButton
@@ -298,7 +299,7 @@ export function Toolbar() {
         >
           {SUB_TOOLS.map((entry, i) =>
             entry.type === 'separator' ? (
-              <div key={`sep-${i}`} style={{ height: 1, width: 20, background: '#334155', margin: '2px 0' }} />
+              <div key={`sep-${i}`} style={{ height: 1, width: 20, background: theme.borderSubtle, margin: '2px 0' }} />
             ) : (
               <SubToolButton
                 key={entry.subTool}
@@ -312,7 +313,7 @@ export function Toolbar() {
           )}
           {state.annotations.length > 0 && (
             <>
-              <div style={{ height: 1, width: 20, background: '#334155', margin: '2px 0' }} />
+              <div style={{ height: 1, width: 20, background: theme.borderSubtle, margin: '2px 0' }} />
               <button
                 onClick={() => dispatch({ type: 'CLEAR_ALL_ANNOTATIONS' })}
                 title="Clear all annotations (⌘Z to undo)"
@@ -346,7 +347,7 @@ export function Toolbar() {
         </div>
       )}
 
-      <div style={{ height: 1, width: 28, background: '#1e293b', margin: '8px 0' }} />
+      <div style={{ height: 1, width: 28, background: theme.border, margin: '8px 0' }} />
 
       {/* Animation mode toggle */}
       <ToolButton

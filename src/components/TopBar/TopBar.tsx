@@ -2,110 +2,63 @@ import { useState, useRef, useEffect } from 'react';
 import { useAppState } from '../../state/AppStateContext';
 import { useThemeColors } from '../../hooks/useThemeColors';
 import { hexToRgba } from '../../utils/colorUtils';
+import { useAuth } from '../../state/AuthContext';
+import { useTeam } from '../../state/TeamContext';
+import { AuthModal } from '../AuthModal/AuthModal';
+import { UserMenu } from '../AuthModal/UserMenu';
+import { TeamOverlay, FormationDropdown, getFormationName } from './TeamOverlay';
 
-/* ── Editable team name (existing) ── */
+/* ── Team name trigger (opens overlay) ── */
 
-function EditableTeamName({
+function TeamNameTrigger({
   name,
   color,
-  onRename,
+  outlineColor,
+  active,
+  onClick,
 }: {
   name: string;
   color: string;
-  onRename: (name: string) => void;
+  outlineColor: string;
+  active: boolean;
+  onClick: () => void;
 }) {
   const theme = useThemeColors();
-  const [editing, setEditing] = useState(false);
-  const [value, setValue] = useState(name);
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    setValue(name);
-  }, [name]);
-
-  useEffect(() => {
-    if (editing && inputRef.current) {
-      inputRef.current.focus();
-      inputRef.current.select();
-    }
-  }, [editing]);
-
-  function commit() {
-    const trimmed = value.trim();
-    if (trimmed && trimmed !== name) {
-      onRename(trimmed);
-    } else {
-      setValue(name);
-    }
-    setEditing(false);
-  }
-
-  if (editing) {
-    return (
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-        <div
-          style={{
-            width: 10,
-            height: 10,
-            borderRadius: '50%',
-            background: color,
-            flexShrink: 0,
-          }}
-        />
-        <input
-          ref={inputRef}
-          value={value}
-          onChange={e => setValue(e.target.value)}
-          onBlur={commit}
-          onKeyDown={e => {
-            if (e.key === 'Enter') commit();
-            if (e.key === 'Escape') {
-              setValue(name);
-              setEditing(false);
-            }
-          }}
-          maxLength={20}
-          style={{
-            fontSize: 13,
-            color: '#e2e8f0',
-            background: '#0f172a',
-            border: `1px solid ${theme.accent}`,
-            borderRadius: 3,
-            padding: '1px 6px',
-            fontFamily: 'inherit',
-            width: 120,
-            outline: 'none',
-          }}
-        />
-      </div>
-    );
-  }
-
   return (
-    <div
-      style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}
-      onClick={() => setEditing(true)}
-      title="Click to rename"
+    <button
+      onClick={onClick}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 6,
+        cursor: 'pointer',
+        background: active ? theme.surfaceHover : 'transparent',
+        border: active ? `1px solid ${theme.borderSubtle}` : '1px solid transparent',
+        borderRadius: 4,
+        padding: '3px 8px',
+        fontFamily: 'inherit',
+        transition: 'all 0.15s',
+      }}
     >
       <div
         style={{
-          width: 10,
-          height: 10,
+          width: 16,
+          height: 16,
           borderRadius: '50%',
           background: color,
+          border: `2px solid ${outlineColor}`,
+          flexShrink: 0,
         }}
       />
       <span
         style={{
           fontSize: 13,
-          color: '#e2e8f0',
-          borderBottom: '1px dashed #374151',
-          paddingBottom: 1,
+          color: theme.secondary,
         }}
       >
         {name}
       </span>
-    </div>
+    </button>
   );
 }
 
@@ -195,27 +148,27 @@ function DisplayDropdown() {
           padding: '4px 8px',
           fontSize: 11,
           fontFamily: 'inherit',
-          border: open ? `1px solid ${theme.accent}` : '1px solid transparent',
+          border: open ? `1px solid ${theme.highlight}` : '1px solid transparent',
           borderRadius: 4,
-          background: open ? hexToRgba(theme.accent, 0.15) : 'transparent',
-          color: open ? theme.accent : hasActiveOverlay ? '#e2e8f0' : '#94a3b8',
+          background: open ? hexToRgba(theme.highlight, 0.15) : 'transparent',
+          color: open ? theme.highlight : hasActiveOverlay ? theme.secondary : theme.textMuted,
           cursor: 'pointer',
           transition: 'all 0.15s',
         }}
         onMouseEnter={e => {
           if (!open) {
-            e.currentTarget.style.background = '#1f2937';
-            e.currentTarget.style.color = '#e2e8f0';
+            e.currentTarget.style.background = theme.surfaceHover;
+            e.currentTarget.style.color = theme.secondary;
           }
         }}
         onMouseLeave={e => {
           if (!open) {
             e.currentTarget.style.background = 'transparent';
-            e.currentTarget.style.color = hasActiveOverlay ? '#e2e8f0' : '#94a3b8';
+            e.currentTarget.style.color = hasActiveOverlay ? theme.secondary : theme.textMuted;
           }
         }}
       >
-        <EyeIcon active={open} accentColor={theme.accent} />
+        <EyeIcon active={open} accentColor={theme.highlight} />
         <span style={{ fontSize: 9, lineHeight: 1 }}>▾</span>
       </button>
 
@@ -226,8 +179,8 @@ function DisplayDropdown() {
             top: '100%',
             right: 0,
             marginTop: 4,
-            background: '#1e293b',
-            border: '1px solid #334155',
+            background: theme.border,
+            border: `1px solid ${theme.borderSubtle}`,
             borderRadius: 6,
             padding: '6px 0',
             minWidth: 180,
@@ -243,20 +196,20 @@ function DisplayDropdown() {
               padding: '6px 12px',
               cursor: 'pointer',
               fontSize: 12,
-              color: '#e2e8f0',
+              color: theme.secondary,
               transition: 'background 0.1s',
             }}
-            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = '#334155'; }}
+            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = theme.borderSubtle; }}
             onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
           >
             <input
               type="checkbox"
               checked={state.showOrientation}
               onChange={() => dispatch({ type: 'SET_SHOW_ORIENTATION', show: !state.showOrientation })}
-              style={{ accentColor: theme.accent }}
+              style={{ accentColor: theme.highlight }}
             />
             Orientation
-            <span style={{ color: '#64748b', fontSize: 10, marginLeft: 'auto' }}>O</span>
+            <span style={{ color: theme.textSubtle, fontSize: 10, marginLeft: 'auto' }}>O</span>
           </label>
           {/* Orientation mode sub-items */}
           <label
@@ -267,12 +220,12 @@ function DisplayDropdown() {
               padding: '4px 12px 4px 24px',
               cursor: state.showOrientation ? 'pointer' : 'not-allowed',
               fontSize: 11,
-              color: state.showOrientation ? '#cbd5e1' : '#4b5563',
+              color: state.showOrientation ? theme.secondary : theme.textSubtle,
               opacity: state.showOrientation ? 1 : 0.5,
               transition: 'background 0.1s',
             }}
             onMouseEnter={e => {
-              if (state.showOrientation) (e.currentTarget as HTMLElement).style.background = '#334155';
+              if (state.showOrientation) (e.currentTarget as HTMLElement).style.background = theme.borderSubtle;
             }}
             onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
           >
@@ -282,7 +235,7 @@ function DisplayDropdown() {
               checked={!state.autoOrientToBall}
               disabled={!state.showOrientation}
               onChange={() => dispatch({ type: 'SET_AUTO_ORIENT_TO_BALL', enabled: false })}
-              style={{ accentColor: theme.accent }}
+              style={{ accentColor: theme.highlight }}
             />
             Manual
           </label>
@@ -294,12 +247,12 @@ function DisplayDropdown() {
               padding: '4px 12px 4px 24px',
               cursor: state.showOrientation ? 'pointer' : 'not-allowed',
               fontSize: 11,
-              color: state.showOrientation ? '#cbd5e1' : '#4b5563',
+              color: state.showOrientation ? theme.secondary : theme.textSubtle,
               opacity: state.showOrientation ? 1 : 0.5,
               transition: 'background 0.1s',
             }}
             onMouseEnter={e => {
-              if (state.showOrientation) (e.currentTarget as HTMLElement).style.background = '#334155';
+              if (state.showOrientation) (e.currentTarget as HTMLElement).style.background = theme.borderSubtle;
             }}
             onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
           >
@@ -309,7 +262,7 @@ function DisplayDropdown() {
               checked={state.autoOrientToBall}
               disabled={!state.showOrientation}
               onChange={() => dispatch({ type: 'SET_AUTO_ORIENT_TO_BALL', enabled: true })}
-              style={{ accentColor: theme.accent }}
+              style={{ accentColor: theme.highlight }}
             />
             Auto (eyes on ball)
           </label>
@@ -321,12 +274,12 @@ function DisplayDropdown() {
               padding: '6px 12px',
               cursor: state.showOrientation ? 'pointer' : 'not-allowed',
               fontSize: 12,
-              color: state.showOrientation ? '#e2e8f0' : '#4b5563',
+              color: state.showOrientation ? theme.secondary : theme.textSubtle,
               opacity: state.showOrientation ? 1 : 0.5,
               transition: 'background 0.1s',
             }}
             onMouseEnter={e => {
-              if (state.showOrientation) (e.currentTarget as HTMLElement).style.background = '#334155';
+              if (state.showOrientation) (e.currentTarget as HTMLElement).style.background = theme.borderSubtle;
             }}
             onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
           >
@@ -335,13 +288,13 @@ function DisplayDropdown() {
               checked={state.showCoverShadow}
               disabled={!state.showOrientation}
               onChange={() => dispatch({ type: 'SET_SHOW_COVER_SHADOW', show: !state.showCoverShadow })}
-              style={{ accentColor: theme.accent }}
+              style={{ accentColor: theme.highlight }}
             />
             Cover Shadow
-            <span style={{ color: '#64748b', fontSize: 10, marginLeft: 'auto' }}>C</span>
+            <span style={{ color: theme.textSubtle, fontSize: 10, marginLeft: 'auto' }}>C</span>
           </label>
           {/* FOV mode divider */}
-          <div style={{ height: 1, background: '#334155', margin: '4px 0' }} />
+          <div style={{ height: 1, background: theme.borderSubtle, margin: '4px 0' }} />
           <div
             style={{
               display: 'flex',
@@ -350,12 +303,12 @@ function DisplayDropdown() {
               padding: '6px 12px',
               cursor: state.showOrientation ? 'pointer' : 'not-allowed',
               fontSize: 12,
-              color: state.showOrientation ? '#e2e8f0' : '#4b5563',
+              color: state.showOrientation ? theme.secondary : theme.textSubtle,
               opacity: state.showOrientation ? 1 : 0.5,
               transition: 'background 0.1s',
             }}
             onMouseEnter={e => {
-              if (state.showOrientation) (e.currentTarget as HTMLElement).style.background = '#334155';
+              if (state.showOrientation) (e.currentTarget as HTMLElement).style.background = theme.borderSubtle;
             }}
             onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
             onClick={() => {
@@ -370,12 +323,12 @@ function DisplayDropdown() {
             <span style={{
               marginLeft: 'auto',
               fontSize: 10,
-              color: state.fovMode === 'off' ? '#64748b' : theme.accent,
+              color: state.fovMode === 'off' ? theme.textSubtle : theme.highlight,
               fontWeight: state.fovMode === 'off' ? 400 : 600,
             }}>
               {state.fovMode === 'off' ? 'Off' : state.fovMode === 'A' ? 'My Team' : state.fovMode === 'B' ? 'Opposition' : 'Both'}
             </span>
-            <span style={{ color: '#64748b', fontSize: 10 }}>V</span>
+            <span style={{ color: theme.textSubtle, fontSize: 10 }}>V</span>
           </div>
           <label
             style={{
@@ -385,12 +338,12 @@ function DisplayDropdown() {
               padding: '4px 12px 4px 24px',
               cursor: state.fovMode !== 'off' ? 'pointer' : 'not-allowed',
               fontSize: 11,
-              color: state.fovMode !== 'off' ? '#cbd5e1' : '#4b5563',
+              color: state.fovMode !== 'off' ? theme.secondary : theme.textSubtle,
               opacity: state.fovMode !== 'off' ? 1 : 0.5,
               transition: 'background 0.1s',
             }}
             onMouseEnter={e => {
-              if (state.fovMode !== 'off') (e.currentTarget as HTMLElement).style.background = '#334155';
+              if (state.fovMode !== 'off') (e.currentTarget as HTMLElement).style.background = theme.borderSubtle;
             }}
             onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
           >
@@ -399,10 +352,10 @@ function DisplayDropdown() {
               checked={state.fovExpanded}
               disabled={state.fovMode === 'off'}
               onChange={() => dispatch({ type: 'SET_FOV_EXPANDED', expanded: !state.fovExpanded })}
-              style={{ accentColor: theme.accent }}
+              style={{ accentColor: theme.highlight }}
             />
             Peripheral Vision
-            <span style={{ color: '#64748b', fontSize: 10, marginLeft: 'auto' }}>⇧V</span>
+            <span style={{ color: theme.textSubtle, fontSize: 10, marginLeft: 'auto' }}>⇧V</span>
           </label>
         </div>
       )}
@@ -444,8 +397,8 @@ function ResetConfirmDialog({ onConfirm, onCancel }: { onConfirm: () => void; on
       <div
         ref={dialogRef}
         style={{
-          background: '#1e293b',
-          border: '1px solid #334155',
+          background: theme.border,
+          border: `1px solid ${theme.borderSubtle}`,
           borderRadius: 8,
           padding: '20px 24px',
           maxWidth: 380,
@@ -453,10 +406,10 @@ function ResetConfirmDialog({ onConfirm, onCancel }: { onConfirm: () => void; on
           boxShadow: '0 8px 24px rgba(0, 0, 0, 0.5)',
         }}
       >
-        <h3 style={{ margin: '0 0 10px', fontSize: 15, fontWeight: 600, color: '#e2e8f0' }}>
+        <h3 style={{ margin: '0 0 10px', fontSize: 15, fontWeight: 600, color: theme.secondary }}>
           Reset Board?
         </h3>
-        <p style={{ margin: '0 0 18px', fontSize: 12, lineHeight: 1.5, color: '#94a3b8' }}>
+        <p style={{ margin: '0 0 18px', fontSize: 12, lineHeight: 1.5, color: theme.textMuted }}>
           This will reset all player names, numbers, and positions to defaults, remove all
           annotations and animations, and reset team names. Team colors will be kept.
         </p>
@@ -467,13 +420,13 @@ function ResetConfirmDialog({ onConfirm, onCancel }: { onConfirm: () => void; on
               padding: '6px 16px',
               fontSize: 12,
               fontFamily: 'inherit',
-              border: '1px solid #334155',
+              border: `1px solid ${theme.borderSubtle}`,
               borderRadius: 4,
               background: 'transparent',
-              color: '#94a3b8',
+              color: theme.textMuted,
               cursor: 'pointer',
             }}
-            onMouseEnter={e => { e.currentTarget.style.background = '#334155'; }}
+            onMouseEnter={e => { e.currentTarget.style.background = theme.borderSubtle; }}
             onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
           >
             Cancel
@@ -484,15 +437,15 @@ function ResetConfirmDialog({ onConfirm, onCancel }: { onConfirm: () => void; on
               padding: '6px 16px',
               fontSize: 12,
               fontFamily: 'inherit',
-              border: `1px solid ${theme.accent}`,
+              border: `1px solid ${theme.highlight}`,
               borderRadius: 4,
-              background: hexToRgba(theme.accent, 0.15),
-              color: theme.accent,
+              background: hexToRgba(theme.highlight, 0.15),
+              color: theme.highlight,
               cursor: 'pointer',
               fontWeight: 600,
             }}
-            onMouseEnter={e => { e.currentTarget.style.background = hexToRgba(theme.accent, 0.3); }}
-            onMouseLeave={e => { e.currentTarget.style.background = hexToRgba(theme.accent, 0.15); }}
+            onMouseEnter={e => { e.currentTarget.style.background = hexToRgba(theme.highlight, 0.3); }}
+            onMouseLeave={e => { e.currentTarget.style.background = hexToRgba(theme.highlight, 0.15); }}
           >
             Reset
           </button>
@@ -517,7 +470,14 @@ interface TopBarProps {
 export function TopBar({ onPlayLines, onStepLines, onExportLines, showPanel, onTogglePanel, onOpenHelp, helpActive }: TopBarProps) {
   const { state, dispatch } = useAppState();
   const theme = useThemeColors();
+  const { user, loading: authLoading } = useAuth();
+  const { activeTeam } = useTeam();
   const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [openTeamOverlay, setOpenTeamOverlay] = useState<'A' | 'B' | null>(null);
+  const [openFormationDropdown, setOpenFormationDropdown] = useState<'A' | 'B' | null>(null);
+
+  const logoSrc = user ? (state.clubIdentity.logoDataUrl || activeTeam?.logo_url) : null;
 
   const hasLineAnnotations = state.annotations.some(
     a => a.type === 'passing-line' || a.type === 'running-line' || a.type === 'curved-run' || a.type === 'dribble-line',
@@ -530,31 +490,44 @@ export function TopBar({ onPlayLines, onStepLines, onExportLines, showPanel, onT
         alignItems: 'center',
         justifyContent: 'space-between',
         padding: '0 16px',
-        background: '#111827',
-        borderBottom: '1px solid #1e293b',
+        background: theme.surface,
+        borderBottom: `1px solid ${theme.border}`,
         height: 48,
       }}
     >
       {/* Left: Brand */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-        {state.clubIdentity.logoDataUrl && (
+        {logoSrc && (
           <img
-            src={state.clubIdentity.logoDataUrl}
+            src={logoSrc}
             alt="Club logo"
             style={{
-              width: 28,
-              height: 28,
+              width: 36,
+              height: 36,
               objectFit: 'contain',
-              borderRadius: 4,
+              borderRadius: 5,
               flexShrink: 0,
+              filter: 'drop-shadow(0 2px 6px rgba(0,0,0,0.5))',
             }}
           />
+        )}
+        {activeTeam && (
+          <span
+            style={{
+              fontSize: 16,
+              fontWeight: 700,
+              color: theme.secondary,
+              letterSpacing: '-0.02em',
+            }}
+          >
+            {activeTeam.name}
+          </span>
         )}
         <span
           style={{
             fontSize: 16,
             fontWeight: 700,
-            color: theme.accent,
+            color: theme.highlight,
             letterSpacing: '-0.02em',
           }}
         >
@@ -562,39 +535,133 @@ export function TopBar({ onPlayLines, onStepLines, onExportLines, showPanel, onT
         </span>
       </div>
 
-      {/* Center: Team names */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-        <EditableTeamName
-          name={state.teamAName}
-          color={state.teamAColor}
-          onRename={name => dispatch({ type: 'RENAME_TEAM', team: 'A', name })}
-        />
-        <span style={{ color: '#374151', fontSize: 13 }}>vs</span>
-        <EditableTeamName
-          name={state.teamBName}
-          color={state.teamBColor}
-          onRename={name => dispatch({ type: 'RENAME_TEAM', team: 'B', name })}
-        />
+      {/* Center: Team names + formations */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        {/* Team A: name trigger + formation trigger */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
+          <div style={{ position: 'relative' }}>
+            <TeamNameTrigger
+              name={state.teamAName}
+              color={state.teamAColor}
+              outlineColor={state.teamAOutlineColor}
+              active={openTeamOverlay === 'A'}
+              onClick={() => {
+                dispatch({ type: 'SET_ACTIVE_TEAM', team: 'A' });
+                setOpenFormationDropdown(null);
+                setOpenTeamOverlay(prev => (prev === 'A' ? null : 'A'));
+              }}
+            />
+            {openTeamOverlay === 'A' && (
+              <TeamOverlay team="A" onClose={() => setOpenTeamOverlay(null)} />
+            )}
+          </div>
+          <div style={{ position: 'relative' }}>
+            <button
+              onClick={() => {
+                dispatch({ type: 'SET_ACTIVE_TEAM', team: 'A' });
+                setOpenTeamOverlay(null);
+                setOpenFormationDropdown(prev => (prev === 'A' ? null : 'A'));
+              }}
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+                padding: '2px 6px',
+                borderRadius: 4,
+                background: openFormationDropdown === 'A' ? theme.surfaceHover : 'transparent',
+                border: openFormationDropdown === 'A' ? `1px solid ${theme.borderSubtle}` : '1px solid transparent',
+                transition: 'all 0.15s',
+              }}
+              title="Change formation"
+            >
+              <span style={{ fontSize: 8, color: theme.textSubtle, textTransform: 'uppercase', letterSpacing: '0.05em', lineHeight: 1 }}>
+                Formation
+              </span>
+              <span style={{ fontSize: 11, color: openFormationDropdown === 'A' ? theme.highlight : theme.textMuted, lineHeight: 1.3 }}>
+                {getFormationName(state.teamAFormation)}
+              </span>
+            </button>
+            {openFormationDropdown === 'A' && (
+              <FormationDropdown team="A" onClose={() => setOpenFormationDropdown(null)} />
+            )}
+          </div>
+        </div>
+
+        <span style={{ color: theme.borderSubtle, fontSize: 13 }}>vs</span>
+
+        {/* Team B: name trigger + formation trigger */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
+          <div style={{ position: 'relative' }}>
+            <TeamNameTrigger
+              name={state.teamBName}
+              color={state.teamBColor}
+              outlineColor={state.teamBOutlineColor}
+              active={openTeamOverlay === 'B'}
+              onClick={() => {
+                dispatch({ type: 'SET_ACTIVE_TEAM', team: 'B' });
+                setOpenFormationDropdown(null);
+                setOpenTeamOverlay(prev => (prev === 'B' ? null : 'B'));
+              }}
+            />
+            {openTeamOverlay === 'B' && (
+              <TeamOverlay team="B" onClose={() => setOpenTeamOverlay(null)} />
+            )}
+          </div>
+          <div style={{ position: 'relative' }}>
+            <button
+              onClick={() => {
+                dispatch({ type: 'SET_ACTIVE_TEAM', team: 'B' });
+                setOpenTeamOverlay(null);
+                setOpenFormationDropdown(prev => (prev === 'B' ? null : 'B'));
+              }}
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+                padding: '2px 6px',
+                borderRadius: 4,
+                background: openFormationDropdown === 'B' ? theme.surfaceHover : 'transparent',
+                border: openFormationDropdown === 'B' ? `1px solid ${theme.borderSubtle}` : '1px solid transparent',
+                transition: 'all 0.15s',
+              }}
+              title="Change formation"
+            >
+              <span style={{ fontSize: 8, color: theme.textSubtle, textTransform: 'uppercase', letterSpacing: '0.05em', lineHeight: 1 }}>
+                Formation
+              </span>
+              <span style={{ fontSize: 11, color: openFormationDropdown === 'B' ? theme.highlight : theme.textMuted, lineHeight: 1.3 }}>
+                {getFormationName(state.teamBFormation)}
+              </span>
+            </button>
+            {openFormationDropdown === 'B' && (
+              <FormationDropdown team="B" onClose={() => setOpenFormationDropdown(null)} />
+            )}
+          </div>
+        </div>
 
         <button
           onClick={() => setShowResetConfirm(true)}
           style={{
             padding: '4px 12px',
             fontSize: 12,
-            border: '1px solid #1e293b',
+            border: `1px solid ${theme.border}`,
             borderRadius: 4,
             background: 'transparent',
-            color: '#94a3b8',
+            color: theme.textMuted,
             cursor: 'pointer',
             fontFamily: 'inherit',
           }}
           onMouseEnter={e => {
-            e.currentTarget.style.borderColor = theme.accent;
-            e.currentTarget.style.color = theme.accent;
+            e.currentTarget.style.borderColor = theme.highlight;
+            e.currentTarget.style.color = theme.highlight;
           }}
           onMouseLeave={e => {
-            e.currentTarget.style.borderColor = '#1e293b';
-            e.currentTarget.style.color = '#94a3b8';
+            e.currentTarget.style.borderColor = theme.border;
+            e.currentTarget.style.color = theme.textMuted;
           }}
         >
           Reset
@@ -609,7 +676,7 @@ export function TopBar({ onPlayLines, onStepLines, onExportLines, showPanel, onT
         {/* Play Lines / Export (conditional) */}
         {hasLineAnnotations && (
           <>
-            <div style={{ width: 1, height: 18, background: '#334155', flexShrink: 0 }} />
+            <div style={{ width: 1, height: 18, background: theme.borderSubtle, flexShrink: 0 }} />
             <button
               onClick={() =>
                 dispatch({ type: 'SET_SHOW_STEP_NUMBERS', show: !state.showStepNumbers })
@@ -619,10 +686,10 @@ export function TopBar({ onPlayLines, onStepLines, onExportLines, showPanel, onT
                 padding: '4px 10px',
                 fontSize: 11,
                 fontFamily: 'inherit',
-                border: state.showStepNumbers ? `1px solid ${theme.accent}` : '1px solid #374151',
+                border: state.showStepNumbers ? `1px solid ${theme.highlight}` : `1px solid ${theme.borderSubtle}`,
                 borderRadius: 4,
-                background: state.showStepNumbers ? hexToRgba(theme.accent, 0.15) : 'transparent',
-                color: state.showStepNumbers ? theme.accent : '#94a3b8',
+                background: state.showStepNumbers ? hexToRgba(theme.highlight, 0.15) : 'transparent',
+                color: state.showStepNumbers ? theme.highlight : theme.textMuted,
                 cursor: 'pointer',
                 transition: 'all 0.15s',
               }}
@@ -639,10 +706,10 @@ export function TopBar({ onPlayLines, onStepLines, onExportLines, showPanel, onT
                 padding: '4px 10px',
                 fontSize: 11,
                 fontFamily: 'inherit',
-                border: '1px solid #374151',
+                border: `1px solid ${theme.borderSubtle}`,
                 borderRadius: 4,
                 background: 'transparent',
-                color: '#94a3b8',
+                color: theme.textMuted,
                 cursor: 'pointer',
                 transition: 'all 0.15s',
               }}
@@ -660,10 +727,10 @@ export function TopBar({ onPlayLines, onStepLines, onExportLines, showPanel, onT
                 padding: '4px 10px',
                 fontSize: 11,
                 fontFamily: 'inherit',
-                border: '1px solid #374151',
+                border: `1px solid ${theme.borderSubtle}`,
                 borderRadius: 4,
                 background: 'transparent',
-                color: '#94a3b8',
+                color: theme.textMuted,
                 cursor: 'pointer',
                 transition: 'all 0.15s',
               }}
@@ -681,10 +748,10 @@ export function TopBar({ onPlayLines, onStepLines, onExportLines, showPanel, onT
                 padding: '4px 10px',
                 fontSize: 11,
                 fontFamily: 'inherit',
-                border: '1px solid #374151',
+                border: `1px solid ${theme.borderSubtle}`,
                 borderRadius: 4,
                 background: 'transparent',
-                color: '#94a3b8',
+                color: theme.textMuted,
                 cursor: 'pointer',
                 transition: 'all 0.15s',
               }}
@@ -696,7 +763,7 @@ export function TopBar({ onPlayLines, onStepLines, onExportLines, showPanel, onT
         )}
 
         {/* Separator */}
-        <div style={{ width: 1, height: 18, background: '#334155', flexShrink: 0 }} />
+        <div style={{ width: 1, height: 18, background: theme.borderSubtle, flexShrink: 0 }} />
 
         {/* Help button */}
         <button
@@ -708,61 +775,96 @@ export function TopBar({ onPlayLines, onStepLines, onExportLines, showPanel, onT
             padding: '4px 8px',
             fontSize: 11,
             fontFamily: 'inherit',
-            border: helpActive ? `1px solid ${theme.accent}` : '1px solid transparent',
+            border: helpActive ? `1px solid ${theme.highlight}` : '1px solid transparent',
             borderRadius: 4,
-            background: helpActive ? hexToRgba(theme.accent, 0.15) : 'transparent',
-            color: helpActive ? theme.accent : '#94a3b8',
+            background: helpActive ? hexToRgba(theme.highlight, 0.15) : 'transparent',
+            color: helpActive ? theme.highlight : theme.textMuted,
             cursor: 'pointer',
             transition: 'all 0.15s',
           }}
           onMouseEnter={e => {
             if (!helpActive) {
-              e.currentTarget.style.background = '#1f2937';
-              e.currentTarget.style.color = '#e2e8f0';
+              e.currentTarget.style.background = theme.surfaceHover;
+              e.currentTarget.style.color = theme.secondary;
             }
           }}
           onMouseLeave={e => {
             if (!helpActive) {
               e.currentTarget.style.background = 'transparent';
-              e.currentTarget.style.color = '#94a3b8';
+              e.currentTarget.style.color = theme.textMuted;
             }
           }}
         >
-          <HelpIcon active={helpActive} accentColor={theme.accent} />
+          <HelpIcon active={helpActive} accentColor={theme.highlight} />
         </button>
 
         {/* Panel toggle */}
         <button
           onClick={onTogglePanel}
-          title={showPanel ? 'Hide panel' : 'Show formations & settings'}
+          title={showPanel ? 'Hide panel' : 'Show settings'}
           style={{
             display: 'flex',
             alignItems: 'center',
             padding: '4px 8px',
             fontSize: 11,
             fontFamily: 'inherit',
-            border: showPanel ? `1px solid ${theme.accent}` : '1px solid transparent',
+            border: showPanel ? `1px solid ${theme.highlight}` : '1px solid transparent',
             borderRadius: 4,
-            background: showPanel ? hexToRgba(theme.accent, 0.15) : 'transparent',
-            color: showPanel ? theme.accent : '#94a3b8',
+            background: showPanel ? hexToRgba(theme.highlight, 0.15) : 'transparent',
+            color: showPanel ? theme.highlight : theme.textMuted,
             cursor: 'pointer',
             transition: 'all 0.15s',
           }}
           onMouseEnter={e => {
             if (!showPanel) {
-              e.currentTarget.style.background = '#1f2937';
-              e.currentTarget.style.color = '#e2e8f0';
+              e.currentTarget.style.background = theme.surfaceHover;
+              e.currentTarget.style.color = theme.secondary;
             }
           }}
           onMouseLeave={e => {
             if (!showPanel) {
               e.currentTarget.style.background = 'transparent';
-              e.currentTarget.style.color = '#94a3b8';
+              e.currentTarget.style.color = theme.textMuted;
             }
           }}
         >
-          <GearIcon active={showPanel} accentColor={theme.accent} />
+          <GearIcon active={showPanel} accentColor={theme.highlight} />
         </button>
+
+        {/* Auth: Sign In / User menu */}
+        {!authLoading && (
+          <>
+            <div style={{ width: 1, height: 18, background: theme.borderSubtle, flexShrink: 0 }} />
+            {user ? (
+              <UserMenu />
+            ) : (
+              <button
+                onClick={() => setShowAuthModal(true)}
+                style={{
+                  padding: '4px 12px',
+                  fontSize: 11,
+                  fontFamily: 'inherit',
+                  border: `1px solid ${theme.borderSubtle}`,
+                  borderRadius: 4,
+                  background: 'transparent',
+                  color: theme.textMuted,
+                  cursor: 'pointer',
+                  transition: 'all 0.15s',
+                }}
+                onMouseEnter={e => {
+                  e.currentTarget.style.borderColor = theme.highlight;
+                  e.currentTarget.style.color = theme.highlight;
+                }}
+                onMouseLeave={e => {
+                  e.currentTarget.style.borderColor = theme.borderSubtle;
+                  e.currentTarget.style.color = theme.textMuted;
+                }}
+              >
+                Sign In
+              </button>
+            )}
+          </>
+        )}
       </div>
 
       {/* Reset confirmation dialog */}
@@ -774,6 +876,11 @@ export function TopBar({ onPlayLines, onStepLines, onExportLines, showPanel, onT
           }}
           onCancel={() => setShowResetConfirm(false)}
         />
+      )}
+
+      {/* Auth modal */}
+      {showAuthModal && (
+        <AuthModal onClose={() => setShowAuthModal(false)} />
       )}
     </div>
   );

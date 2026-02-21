@@ -1,4 +1,3 @@
-import { FormationPanel } from '../FormationPanel/FormationPanel';
 import { SettingsPanel } from '../SettingsPanel/SettingsPanel';
 import { ScenesPanel } from '../ScenesPanel/ScenesPanel';
 import { HelpPanel } from '../HelpPanel/HelpPanel';
@@ -28,9 +27,9 @@ function TabButton({
         letterSpacing: '0.03em',
         textTransform: 'uppercase',
         border: 'none',
-        borderBottom: active ? `2px solid ${theme.accent}` : '2px solid transparent',
+        borderBottom: active ? `2px solid ${theme.highlight}` : '2px solid transparent',
         background: 'transparent',
-        color: active ? theme.accent : '#94a3b8',
+        color: active ? theme.highlight : theme.textMuted,
         cursor: 'pointer',
         transition: 'all 0.15s',
         overflow: 'hidden',
@@ -49,17 +48,19 @@ interface RightPanelProps {
   onTabChange: (tab: PanelTab) => void;
   saveRequested?: boolean;
   onSaveHandled?: () => void;
+  onRequestSignIn?: () => void;
 }
 
-export function RightPanel({ rotation, activeTab, onTabChange, saveRequested, onSaveHandled }: RightPanelProps) {
+export function RightPanel({ rotation, activeTab, onTabChange, saveRequested, onSaveHandled, onRequestSignIn }: RightPanelProps) {
+  const theme = useThemeColors();
 
   return (
     <div
       style={{
         display: 'flex',
         flexDirection: 'column',
-        background: '#111827',
-        borderLeft: '1px solid #1e293b',
+        background: theme.surface,
+        borderLeft: `1px solid ${theme.border}`,
         overflow: 'hidden',
         height: '100%',
       }}
@@ -68,16 +69,10 @@ export function RightPanel({ rotation, activeTab, onTabChange, saveRequested, on
       <div
         style={{
           display: 'flex',
-          borderBottom: '1px solid #1e293b',
+          borderBottom: `1px solid ${theme.border}`,
           flexShrink: 0,
         }}
       >
-        <TabButton
-          active={activeTab === 'formations'}
-          onClick={() => onTabChange('formations')}
-        >
-          Formations
-        </TabButton>
         <TabButton
           active={activeTab === 'settings'}
           onClick={() => onTabChange('settings')}
@@ -94,12 +89,10 @@ export function RightPanel({ rotation, activeTab, onTabChange, saveRequested, on
 
       {/* Tab content */}
       <div style={{ flex: 1, overflow: 'hidden' }}>
-        {activeTab === 'formations' ? (
-          <FormationPanel />
-        ) : activeTab === 'settings' ? (
+        {activeTab === 'settings' ? (
           <SettingsPanel rotation={rotation} />
         ) : activeTab === 'scenes' ? (
-          <ScenesPanel saveRequested={saveRequested} onSaveHandled={onSaveHandled} />
+          <ScenesPanel saveRequested={saveRequested} onSaveHandled={onSaveHandled} onRequestSignIn={onRequestSignIn} />
         ) : (
           <HelpPanel />
         )}

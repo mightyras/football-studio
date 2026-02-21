@@ -50,6 +50,7 @@ function MiniPitchPreview({ keyframe, teamAColor, teamBColor }: {
 // ── Duration editor ──
 
 function DurationEditor({ value, onChange }: { value: number; onChange: (ms: number) => void }) {
+  const theme = useThemeColors();
   const [editing, setEditing] = useState(false);
   const [text, setText] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
@@ -67,7 +68,7 @@ function DurationEditor({ value, onChange }: { value: number; onChange: (ms: num
         style={{
           cursor: 'pointer',
           fontSize: 10,
-          color: '#94a3b8',
+          color: theme.textMuted,
           padding: '1px 4px',
           borderRadius: 2,
         }}
@@ -102,10 +103,10 @@ function DurationEditor({ value, onChange }: { value: number; onChange: (ms: num
       style={{
         width: 32,
         fontSize: 10,
-        background: '#1e293b',
-        border: '1px solid #475569',
+        background: theme.border,
+        border: `1px solid ${theme.textSubtle}`,
         borderRadius: 2,
-        color: '#e2e8f0',
+        color: theme.secondary,
         textAlign: 'center',
         outline: 'none',
         padding: '1px 2px',
@@ -196,8 +197,8 @@ export function KeyframeStrip({ onExport }: KeyframeStripProps = {}) {
         alignItems: 'center',
         gap: 8,
         padding: '6px 12px',
-        background: '#0f172a',
-        borderTop: '1px solid #1e293b',
+        background: theme.inputBg,
+        borderTop: `1px solid ${theme.border}`,
         overflowX: 'auto',
         minHeight: 80,
       }}
@@ -217,8 +218,8 @@ export function KeyframeStrip({ onExport }: KeyframeStripProps = {}) {
               gap: 2,
               padding: 3,
               borderRadius: 4,
-              border: isActive ? `2px solid ${theme.accent}` : '2px solid #334155',
-              background: isActive ? hexToRgba(theme.accent, 0.08) : '#1e293b',
+              border: isActive ? `2px solid ${theme.highlight}` : `2px solid ${theme.borderSubtle}`,
+              background: isActive ? hexToRgba(theme.highlight, 0.08) : theme.border,
               cursor: 'pointer',
               transition: 'border-color 0.15s',
               position: 'relative',
@@ -233,7 +234,7 @@ export function KeyframeStrip({ onExport }: KeyframeStripProps = {}) {
 
             {/* Duration and label row */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-              <span style={{ fontSize: 9, color: '#64748b', fontWeight: 500 }}>
+              <span style={{ fontSize: 9, color: theme.textSubtle, fontWeight: 500 }}>
                 {i + 1}
               </span>
               <DurationEditor
@@ -246,7 +247,7 @@ export function KeyframeStrip({ onExport }: KeyframeStripProps = {}) {
             {kf.label && (
               <span style={{
                 fontSize: 9,
-                color: '#94a3b8',
+                color: theme.textMuted,
                 maxWidth: 72,
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
@@ -333,21 +334,21 @@ export function KeyframeStrip({ onExport }: KeyframeStripProps = {}) {
           alignItems: 'center',
           justifyContent: 'center',
           gap: 4,
-          border: '2px dashed #475569',
+          border: `2px dashed ${theme.textSubtle}`,
           borderRadius: 4,
           background: 'transparent',
-          color: '#64748b',
+          color: theme.textSubtle,
           cursor: 'pointer',
           transition: 'all 0.15s',
           fontSize: 11,
         }}
         onMouseEnter={e => {
-          e.currentTarget.style.borderColor = theme.accent;
-          e.currentTarget.style.color = theme.accent;
+          e.currentTarget.style.borderColor = theme.highlight;
+          e.currentTarget.style.color = theme.highlight;
         }}
         onMouseLeave={e => {
-          e.currentTarget.style.borderColor = '#475569';
-          e.currentTarget.style.color = '#64748b';
+          e.currentTarget.style.borderColor = theme.textSubtle;
+          e.currentTarget.style.color = theme.textSubtle;
         }}
       >
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -375,22 +376,22 @@ export function KeyframeStrip({ onExport }: KeyframeStripProps = {}) {
             fontSize: 11,
             fontWeight: 500,
             background: 'transparent',
-            border: '1px solid #334155',
+            border: `1px solid ${theme.borderSubtle}`,
             borderRadius: 4,
-            color: seq && keyframes.length > 0 ? '#94a3b8' : '#475569',
+            color: seq && keyframes.length > 0 ? theme.textMuted : theme.textSubtle,
             cursor: seq && keyframes.length > 0 ? 'pointer' : 'not-allowed',
             transition: 'all 0.15s',
             whiteSpace: 'nowrap',
           }}
           onMouseEnter={e => {
             if (seq && keyframes.length > 0) {
-              e.currentTarget.style.borderColor = theme.accent;
-              e.currentTarget.style.color = theme.accent;
+              e.currentTarget.style.borderColor = theme.highlight;
+              e.currentTarget.style.color = theme.highlight;
             }
           }}
           onMouseLeave={e => {
-            e.currentTarget.style.borderColor = '#334155';
-            e.currentTarget.style.color = seq && keyframes.length > 0 ? '#94a3b8' : '#475569';
+            e.currentTarget.style.borderColor = theme.borderSubtle;
+            e.currentTarget.style.color = seq && keyframes.length > 0 ? theme.textMuted : theme.textSubtle;
           }}
         >
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -413,20 +414,20 @@ export function KeyframeStrip({ onExport }: KeyframeStripProps = {}) {
             fontSize: 11,
             fontWeight: 500,
             background: 'transparent',
-            border: '1px solid #334155',
+            border: `1px solid ${theme.borderSubtle}`,
             borderRadius: 4,
-            color: '#94a3b8',
+            color: theme.textMuted,
             cursor: 'pointer',
             transition: 'all 0.15s',
             whiteSpace: 'nowrap',
           }}
           onMouseEnter={e => {
-            e.currentTarget.style.borderColor = theme.accent;
-            e.currentTarget.style.color = theme.accent;
+            e.currentTarget.style.borderColor = theme.highlight;
+            e.currentTarget.style.color = theme.highlight;
           }}
           onMouseLeave={e => {
-            e.currentTarget.style.borderColor = '#334155';
-            e.currentTarget.style.color = '#94a3b8';
+            e.currentTarget.style.borderColor = theme.borderSubtle;
+            e.currentTarget.style.color = theme.textMuted;
           }}
         >
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -448,20 +449,20 @@ export function KeyframeStrip({ onExport }: KeyframeStripProps = {}) {
               fontSize: 11,
               fontWeight: 500,
               background: 'transparent',
-              border: '1px solid #334155',
+              border: `1px solid ${theme.borderSubtle}`,
               borderRadius: 4,
-              color: '#94a3b8',
+              color: theme.textMuted,
               cursor: 'pointer',
               transition: 'all 0.15s',
               whiteSpace: 'nowrap',
             }}
             onMouseEnter={e => {
-              e.currentTarget.style.borderColor = theme.accent;
-              e.currentTarget.style.color = theme.accent;
+              e.currentTarget.style.borderColor = theme.highlight;
+              e.currentTarget.style.color = theme.highlight;
             }}
             onMouseLeave={e => {
-              e.currentTarget.style.borderColor = '#334155';
-              e.currentTarget.style.color = '#94a3b8';
+              e.currentTarget.style.borderColor = theme.borderSubtle;
+              e.currentTarget.style.color = theme.textMuted;
             }}
           >
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -486,7 +487,7 @@ export function KeyframeStrip({ onExport }: KeyframeStripProps = {}) {
               fontSize: 11,
               fontWeight: 500,
               background: 'transparent',
-              border: '1px solid #334155',
+              border: `1px solid ${theme.borderSubtle}`,
               borderRadius: 4,
               color: '#ef4444',
               cursor: 'pointer',
@@ -498,7 +499,7 @@ export function KeyframeStrip({ onExport }: KeyframeStripProps = {}) {
               e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)';
             }}
             onMouseLeave={e => {
-              e.currentTarget.style.borderColor = '#334155';
+              e.currentTarget.style.borderColor = theme.borderSubtle;
               e.currentTarget.style.background = 'transparent';
             }}
           >
