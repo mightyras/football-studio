@@ -5,6 +5,7 @@ import { useAppState } from '../../state/AppStateContext';
 import { useThemeColors } from '../../hooks/useThemeColors';
 import * as teamService from '../../services/teamService';
 import * as inviteService from '../../services/inviteService';
+import { generateInviteLink } from '../../services/sendInviteEmail';
 import type { TeamMember, TeamRole, Invite } from '../../types';
 
 type Props = {
@@ -144,11 +145,25 @@ function MemberRow({
 function PendingInviteRow({
   invite,
   onCancel,
+  onCopyLink,
 }: {
   invite: Invite;
   onCancel: () => void;
+  onCopyLink: () => void;
 }) {
   const theme = useThemeColors();
+  const [copying, setCopying] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  async function handleCopy() {
+    setCopying(true);
+    setCopied(false);
+    await onCopyLink();
+    setCopying(false);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
   return (
     <div
       style={{
@@ -174,6 +189,24 @@ function PendingInviteRow({
       <div style={{ fontSize: 10, color: theme.textSubtle }}>
         {invite.invitee_name ? invite.invitee_email : invite.role}
       </div>
+      <button
+        onClick={handleCopy}
+        disabled={copying}
+        title="Copy invite link"
+        style={{
+          background: 'transparent',
+          border: 'none',
+          color: copied ? '#22c55e' : theme.highlight,
+          cursor: copying ? 'wait' : 'pointer',
+          fontSize: 10,
+          fontFamily: 'inherit',
+          fontWeight: 600,
+          padding: '2px 6px',
+          whiteSpace: 'nowrap',
+        }}
+      >
+        {copying ? '...' : copied ? 'Copied!' : 'Copy Link'}
+      </button>
       <button
         onClick={onCancel}
         title="Cancel invite"
@@ -205,6 +238,7 @@ export function TeamPanel({ onClose }: Props) {
   const { activeTeam, members, teams, setActiveTeamId, refresh } = useTeam();
   const { state } = useAppState();
   const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteName, setInviteName] = useState('');
   const [inviteRole, setInviteRole] = useState<TeamRole>('member');
   const [inviting, setInviting] = useState(false);
   const [inviteError, setInviteError] = useState<string | null>(null);
@@ -237,12 +271,14 @@ export function TeamPanel({ onClose }: Props) {
       activeTeam.id,
       email,
       inviteRole,
+      inviteName.trim() || undefined,
     );
     setInviting(false);
 
     if (result) {
-      setInviteSuccess(`Invite sent to ${email}`);
+      setInviteSuccess(`Invite sent to ${inviteName.trim() || email}`);
       setInviteEmail('');
+      setInviteName('');
       // Refresh pending invites
       inviteService.fetchTeamInvites(activeTeam.id).then(setPendingInvites);
     } else {
@@ -250,10 +286,60 @@ export function TeamPanel({ onClose }: Props) {
     }
   }
 
+  async function handleCopyLink() {
+    const email = inviteEmail.trim().toLowerCase();
+    if (!email || !activeTeam) return;
+
+    setInviting(true);
+    setInviteError(null);
+    setInviteSuccess(null);
+
+    const result = await inviteService.createTeamInviteWithLink(
+      activeTeam.id,
+      email,
+      inviteRole,
+      inviteName.trim() || undefined,
+    );
+    setInviting(false);
+
+    if (result.invite && result.inviteLink) {
+      try {
+        await navigator.clipboard.writeText(result.inviteLink);
+        setInviteSuccess(`Link copied! Share it with ${inviteName.trim() || email}`);
+      } catch {
+        // Fallback: show the link if clipboard fails
+        setInviteSuccess(`Invite link: ${result.inviteLink}`);
+      }
+      setInviteEmail('');
+      setInviteName('');
+      inviteService.fetchTeamInvites(activeTeam.id).then(setPendingInvites);
+    } else {
+      setInviteError('Failed to generate invite link');
+    }
+  }
+
   async function handleCancelInvite(inviteId: string) {
     await inviteService.cancelInvite(inviteId);
     if (activeTeam) {
       inviteService.fetchTeamInvites(activeTeam.id).then(setPendingInvites);
+    }
+  }
+
+  async function handleRegenerateLink(email: string, name?: string) {
+    setInviteError(null);
+    setInviteSuccess(null);
+    const result = await generateInviteLink(email, name);
+    console.log('generateInviteLink result:', result);
+    if (result.inviteLink) {
+      try {
+        await navigator.clipboard.writeText(result.inviteLink);
+        setInviteSuccess(`Link copied for ${name || email}!`);
+      } catch {
+        // Fallback: show the link as text
+        setInviteSuccess(`Invite link: ${result.inviteLink}`);
+      }
+    } else {
+      setInviteError(`Failed to generate link: ${result.message || 'unknown error'}`);
     }
   }
 
@@ -503,6 +589,7 @@ export function TeamPanel({ onClose }: Props) {
                 key={inv.id}
                 invite={inv}
                 onCancel={() => handleCancelInvite(inv.id)}
+                onCopyLink={() => handleRegenerateLink(inv.invitee_email, inv.invitee_name ?? undefined)}
               />
             ))}
           </div>
@@ -530,69 +617,118 @@ export function TeamPanel({ onClose }: Props) {
             </div>
             <form
               onSubmit={handleInvite}
-              style={{ display: 'flex', gap: 6, alignItems: 'center' }}
+              style={{ display: 'flex', flexDirection: 'column', gap: 6 }}
             >
-              <input
-                type="email"
-                placeholder="Email address"
-                value={inviteEmail}
-                onChange={(e) => setInviteEmail(e.target.value)}
-                style={{
-                  flex: 1,
-                  padding: '6px 8px',
-                  fontSize: 12,
-                  fontFamily: 'inherit',
-                  background: theme.inputBg,
-                  border: `1px solid ${theme.borderSubtle}`,
-                  borderRadius: 4,
-                  color: theme.secondary,
-                  outline: 'none',
-                }}
-                onFocus={(e) => {
-                  e.currentTarget.style.borderColor = theme.highlight;
-                }}
-                onBlur={(e) => {
-                  e.currentTarget.style.borderColor = theme.borderSubtle;
-                }}
-              />
-              <select
-                value={inviteRole}
-                onChange={(e) => setInviteRole(e.target.value as TeamRole)}
-                style={{
-                  padding: '6px 4px',
-                  fontSize: 11,
-                  fontFamily: 'inherit',
-                  background: theme.inputBg,
-                  border: `1px solid ${theme.borderSubtle}`,
-                  borderRadius: 4,
-                  color: theme.textMuted,
-                  cursor: 'pointer',
-                }}
-              >
-                <option value="member">Member</option>
-                <option value="admin">Admin</option>
-              </select>
-              <button
-                type="submit"
-                disabled={inviting || !inviteEmail.trim()}
-                style={{
-                  padding: '6px 12px',
-                  fontSize: 11,
-                  fontFamily: 'inherit',
-                  border: 'none',
-                  borderRadius: 4,
-                  background:
-                    inviting || !inviteEmail.trim() ? theme.textSubtle : theme.highlight,
-                  color:
-                    inviting || !inviteEmail.trim() ? theme.textMuted : theme.inputBg,
-                  fontWeight: 600,
-                  cursor:
-                    inviting || !inviteEmail.trim() ? 'default' : 'pointer',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                {inviting ? '...' : 'Invite'}
-              </button>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <input
+                  type="text"
+                  placeholder="Name (optional)"
+                  value={inviteName}
+                  onChange={(e) => setInviteName(e.target.value)}
+                  style={{
+                    width: '40%',
+                    padding: '6px 8px',
+                    fontSize: 12,
+                    fontFamily: 'inherit',
+                    background: theme.inputBg,
+                    border: `1px solid ${theme.borderSubtle}`,
+                    borderRadius: 4,
+                    color: theme.secondary,
+                    outline: 'none',
+                  }}
+                  onFocus={(e) => {
+                    e.currentTarget.style.borderColor = theme.highlight;
+                  }}
+                  onBlur={(e) => {
+                    e.currentTarget.style.borderColor = theme.borderSubtle;
+                  }}
+                />
+                <input
+                  type="email"
+                  placeholder="Email address"
+                  value={inviteEmail}
+                  onChange={(e) => setInviteEmail(e.target.value)}
+                  style={{
+                    flex: 1,
+                    padding: '6px 8px',
+                    fontSize: 12,
+                    fontFamily: 'inherit',
+                    background: theme.inputBg,
+                    border: `1px solid ${theme.borderSubtle}`,
+                    borderRadius: 4,
+                    color: theme.secondary,
+                    outline: 'none',
+                  }}
+                  onFocus={(e) => {
+                    e.currentTarget.style.borderColor = theme.highlight;
+                  }}
+                  onBlur={(e) => {
+                    e.currentTarget.style.borderColor = theme.borderSubtle;
+                  }}
+                />
+              </div>
+              <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                <select
+                  value={inviteRole}
+                  onChange={(e) => setInviteRole(e.target.value as TeamRole)}
+                  style={{
+                    padding: '6px 4px',
+                    fontSize: 11,
+                    fontFamily: 'inherit',
+                    background: theme.inputBg,
+                    border: `1px solid ${theme.borderSubtle}`,
+                    borderRadius: 4,
+                    color: theme.textMuted,
+                    cursor: 'pointer',
+                  }}
+                >
+                  <option value="member">Member</option>
+                  <option value="admin">Admin</option>
+                </select>
+                <button
+                  type="submit"
+                  disabled={inviting || !inviteEmail.trim()}
+                  style={{
+                    padding: '6px 12px',
+                    fontSize: 11,
+                    fontFamily: 'inherit',
+                    border: 'none',
+                    borderRadius: 4,
+                    background:
+                      inviting || !inviteEmail.trim() ? theme.textSubtle : theme.highlight,
+                    color:
+                      inviting || !inviteEmail.trim() ? theme.textMuted : theme.inputBg,
+                    fontWeight: 600,
+                    cursor:
+                      inviting || !inviteEmail.trim() ? 'default' : 'pointer',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {inviting ? '...' : 'Invite'}
+                </button>
+                <button
+                  type="button"
+                  disabled={inviting || !inviteEmail.trim()}
+                  onClick={handleCopyLink}
+                  style={{
+                    padding: '6px 12px',
+                    fontSize: 11,
+                    fontFamily: 'inherit',
+                    border: `1px solid ${theme.highlight}`,
+                    borderRadius: 4,
+                    background: 'transparent',
+                    color:
+                      inviting || !inviteEmail.trim() ? theme.textMuted : theme.highlight,
+                    fontWeight: 600,
+                    cursor:
+                      inviting || !inviteEmail.trim() ? 'default' : 'pointer',
+                    whiteSpace: 'nowrap',
+                    opacity: inviting || !inviteEmail.trim() ? 0.5 : 1,
+                  }}
+                >
+                  Copy Link
+                </button>
+              </div>
             </form>
             {inviteError && (
               <div style={{ color: '#ef4444', fontSize: 11, marginTop: 6 }}>

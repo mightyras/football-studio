@@ -20,6 +20,8 @@ type AuthContextValue = {
   user: User | null;
   profile: Profile | null;
   loading: boolean;
+  needsPasswordSetup: boolean;
+  clearPasswordSetup: () => void;
   signInWithEmail: (email: string, password: string) => Promise<{ error: string | null }>;
   signUpWithEmail: (email: string, password: string, firstName?: string, lastName?: string) => Promise<{ error: string | null }>;
   signInWithMagicLink: (email: string) => Promise<{ error: string | null }>;
@@ -46,12 +48,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [needsPasswordSetup, setNeedsPasswordSetup] = useState(false);
+
+  const clearPasswordSetup = useCallback(() => {
+    setNeedsPasswordSetup(false);
+  }, []);
 
   useEffect(() => {
     if (!supabase) {
       setLoading(false);
       return;
     }
+
+    // Detect invite/recovery callback in URL hash (e.g. #type=invite&access_token=...)
+    const hash = window.location.hash;
+    const isInviteCallback = hash.includes('type=invite') || hash.includes('type=recovery');
 
     // Check existing session
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -60,18 +71,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (u) {
         fetchProfile(u.id).then(setProfile);
       }
+      // If arriving via invite link, show password setup
+      if (isInviteCallback && u) {
+        setNeedsPasswordSetup(true);
+      }
       setLoading(false);
     });
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
+      (event, session) => {
         const u = session?.user ?? null;
         setUser(u);
         if (u) {
           fetchProfile(u.id).then(setProfile);
         } else {
           setProfile(null);
+        }
+        // Also detect invite via auth event
+        if (event === 'PASSWORD_RECOVERY' && u) {
+          setNeedsPasswordSetup(true);
         }
       },
     );
@@ -153,6 +172,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         user,
         profile,
         loading,
+        needsPasswordSetup,
+        clearPasswordSetup,
         signInWithEmail,
         signUpWithEmail,
         signInWithMagicLink,

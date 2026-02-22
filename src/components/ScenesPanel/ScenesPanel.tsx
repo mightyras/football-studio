@@ -8,6 +8,8 @@ import { hexToRgba } from '../../utils/colorUtils';
 import { useAuth } from '../../state/AuthContext';
 import { useTeam } from '../../state/TeamContext';
 import * as boardService from '../../services/boardService';
+import { fetchCollaborativeBoards } from '../../services/collaborationService';
+import { CollaborateModal } from '../CollaborationPanel/CollaborateModal';
 import type { SavedScene, BoardsTab } from '../../types';
 
 // ── Icons ──
@@ -47,6 +49,15 @@ const TrashIcon = () => (
 const CheckIcon = () => (
   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
     <polyline points="20 6 9 17 4 12" />
+  </svg>
+);
+
+const CollabIcon = () => (
+  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+    <circle cx="9" cy="7" r="4" />
+    <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+    <path d="M16 3.13a4 4 0 0 1 0 7.75" />
   </svg>
 );
 
@@ -123,15 +134,19 @@ function SceneCard({
   onLoad,
   onDelete,
   onRename,
+  onCollaborate,
   isOwner,
   showOwner,
+  isCollabBoard,
 }: {
   scene: BoardScene;
   onLoad: () => void;
   onDelete: () => void;
   onRename: (name: string) => void;
+  onCollaborate?: () => void;
   isOwner: boolean;
   showOwner?: boolean;
+  isCollabBoard?: boolean;
 }) {
   const theme = useThemeColors();
   const [editing, setEditing] = useState(false);
@@ -241,36 +256,48 @@ function SceneCard({
         </div>
       </div>
 
-      {/* Actions — only for board owner */}
-      {isOwner && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 2, flexShrink: 0 }}>
-          {confirmDelete ? (
-            <button
-              onClick={e => { e.stopPropagation(); onDelete(); }}
-              style={{
-                fontSize: 9,
-                fontFamily: 'inherit',
-                padding: '2px 6px',
-                border: '1px solid #ef4444',
-                borderRadius: 3,
-                background: 'rgba(239, 68, 68, 0.15)',
-                color: '#ef4444',
-                cursor: 'pointer',
-              }}
-            >
-              Delete?
-            </button>
-          ) : (
-            <IconButton
-              onClick={e => { e.stopPropagation(); setConfirmDelete(true); }}
-              title="Delete board"
-              danger
-            >
-              <TrashIcon />
-            </IconButton>
-          )}
-        </div>
-      )}
+      {/* Actions */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 2, flexShrink: 0 }}>
+        {/* Collaborate / Join button */}
+        {onCollaborate && (
+          <IconButton
+            onClick={e => { e.stopPropagation(); onCollaborate(); }}
+            title={isCollabBoard ? 'Join collaboration' : 'Collaborate'}
+          >
+            <CollabIcon />
+          </IconButton>
+        )}
+        {/* Delete button — only for board owner */}
+        {isOwner && (
+          <>
+            {confirmDelete ? (
+              <button
+                onClick={e => { e.stopPropagation(); onDelete(); }}
+                style={{
+                  fontSize: 9,
+                  fontFamily: 'inherit',
+                  padding: '2px 6px',
+                  border: '1px solid #ef4444',
+                  borderRadius: 3,
+                  background: 'rgba(239, 68, 68, 0.15)',
+                  color: '#ef4444',
+                  cursor: 'pointer',
+                }}
+              >
+                Delete?
+              </button>
+            ) : (
+              <IconButton
+                onClick={e => { e.stopPropagation(); setConfirmDelete(true); }}
+                title="Delete board"
+                danger
+              >
+                <TrashIcon />
+              </IconButton>
+            )}
+          </>
+        )}
+      </div>
     </div>
   );
 }
@@ -281,6 +308,7 @@ interface ScenesPanelProps {
   saveRequested?: boolean;
   onSaveHandled?: () => void;
   onRequestSignIn?: () => void;
+  onStartCollaboration?: (boardId: string, isOwner: boolean, permission: 'view' | 'edit' | 'owner') => void;
 }
 
 /** Convert a Supabase BoardRow to a BoardScene for the UI. */
@@ -296,7 +324,7 @@ function boardRowToScene(row: boardService.BoardRow): BoardScene {
   };
 }
 
-export function ScenesPanel({ saveRequested, onSaveHandled, onRequestSignIn }: ScenesPanelProps) {
+export function ScenesPanel({ saveRequested, onSaveHandled, onRequestSignIn, onStartCollaboration }: ScenesPanelProps) {
   const { state, dispatch } = useAppState();
   const theme = useThemeColors();
   const { user } = useAuth();
@@ -307,12 +335,15 @@ export function ScenesPanel({ saveRequested, onSaveHandled, onRequestSignIn }: S
   const [boardsTab, setBoardsTab] = useState<BoardsTab>('my');
   const [myScenes, setMyScenes] = useState<BoardScene[]>(() => (isCloud ? [] : loadScenes()));
   const [teamScenes, setTeamScenes] = useState<BoardScene[]>([]);
+  const [sharedScenes, setSharedScenes] = useState<Array<BoardScene & { permission: 'view' | 'edit' }>>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveName, setSaveName] = useState('');
   const [feedback, setFeedback] = useState<string | null>(null);
   const [migrationPrompt, setMigrationPrompt] = useState(false);
   const [migrating, setMigrating] = useState(false);
+  const [collabModalBoardId, setCollabModalBoardId] = useState<string | null>(null);
+  const [collabModalBoardName, setCollabModalBoardName] = useState('');
   const nameInputRef = useRef<HTMLInputElement>(null);
 
   const showFeedback = useCallback((msg: string) => {
@@ -345,6 +376,28 @@ export function ScenesPanel({ saveRequested, onSaveHandled, onRequestSignIn }: S
       .catch(() => showFeedback('Failed to load team boards'))
       .finally(() => setLoading(false));
   }, [isCloud, activeTeam?.id, showFeedback]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Fetch shared/collaborative boards
+  useEffect(() => {
+    if (!isCloud) {
+      setSharedScenes([]);
+      return;
+    }
+    fetchCollaborativeBoards()
+      .then(rows => setSharedScenes(rows.map(row => ({
+        id: row.id,
+        name: row.name,
+        savedAt: new Date(row.updated_at).getTime(),
+        thumbnail: row.thumbnail_path
+          ? `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/thumbnails/${row.thumbnail_path}`
+          : '',
+        data: row.data as any,
+        ownerId: row.owner_id,
+        ownerName: row.owner_name,
+        permission: row.permission,
+      }))))
+      .catch(() => {});
+  }, [isCloud]);
 
   // Switch to "my" tab if user loses their team
   useEffect(() => {
@@ -499,54 +552,55 @@ export function ScenesPanel({ saveRequested, onSaveHandled, onRequestSignIn }: S
     setMigrating(false);
   };
 
-  const displayedScenes = boardsTab === 'my' ? myScenes : teamScenes;
+  const displayedScenes = boardsTab === 'my' ? myScenes
+    : boardsTab === 'team' ? teamScenes
+    : sharedScenes;
+
+  const tabStyle = (active: boolean) => ({
+    flex: 1,
+    minWidth: 0,
+    padding: '8px 4px',
+    fontSize: 11,
+    fontWeight: 600,
+    fontFamily: 'inherit',
+    letterSpacing: '0.03em',
+    textTransform: 'uppercase' as const,
+    border: 'none',
+    borderBottom: active ? `2px solid ${theme.highlight}` : '2px solid transparent',
+    background: 'transparent',
+    color: active ? theme.highlight : theme.textMuted,
+    cursor: 'pointer',
+    transition: 'all 0.15s',
+    overflow: 'hidden' as const,
+    textOverflow: 'ellipsis' as const,
+    whiteSpace: 'nowrap' as const,
+  });
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      {/* Sub-tab bar: My Boards / Team Boards */}
+      {/* Collaborate modal */}
+      {collabModalBoardId && (
+        <CollaborateModal
+          boardId={collabModalBoardId}
+          boardName={collabModalBoardName}
+          isOwner
+          onClose={() => setCollabModalBoardId(null)}
+        />
+      )}
+
+      {/* Sub-tab bar: My Boards / Team Boards / Shared */}
       <div style={{ display: 'flex', borderBottom: `1px solid ${theme.border}`, flexShrink: 0 }}>
-        <button
-          onClick={() => setBoardsTab('my')}
-          style={{
-            flex: 1,
-            minWidth: 0,
-            padding: '8px 4px',
-            fontSize: 11,
-            fontWeight: 600,
-            fontFamily: 'inherit',
-            letterSpacing: '0.03em',
-            textTransform: 'uppercase' as const,
-            border: 'none',
-            borderBottom: boardsTab === 'my' ? `2px solid ${theme.highlight}` : '2px solid transparent',
-            background: 'transparent',
-            color: boardsTab === 'my' ? theme.highlight : theme.textMuted,
-            cursor: 'pointer',
-            transition: 'all 0.15s',
-          }}
-        >
+        <button onClick={() => setBoardsTab('my')} style={tabStyle(boardsTab === 'my')}>
           My Boards
         </button>
         {hasTeam && (
-          <button
-            onClick={() => setBoardsTab('team')}
-            style={{
-              flex: 1,
-              minWidth: 0,
-              padding: '8px 4px',
-              fontSize: 11,
-              fontWeight: 600,
-              fontFamily: 'inherit',
-              letterSpacing: '0.03em',
-              textTransform: 'uppercase' as const,
-              border: 'none',
-              borderBottom: boardsTab === 'team' ? `2px solid ${theme.highlight}` : '2px solid transparent',
-              background: 'transparent',
-              color: boardsTab === 'team' ? theme.highlight : theme.textMuted,
-              cursor: 'pointer',
-              transition: 'all 0.15s',
-            }}
-          >
-            Team Boards
+          <button onClick={() => setBoardsTab('team')} style={tabStyle(boardsTab === 'team')}>
+            Team
+          </button>
+        )}
+        {isCloud && (
+          <button onClick={() => setBoardsTab('shared')} style={tabStyle(boardsTab === ('shared'))}>
+            Shared{sharedScenes.length > 0 ? ` (${sharedScenes.length})` : ''}
           </button>
         )}
       </div>
@@ -795,26 +849,48 @@ export function ScenesPanel({ saveRequested, onSaveHandled, onRequestSignIn }: S
           }}>
             {boardsTab === 'team'
               ? 'No team boards yet.'
+              : boardsTab === 'shared'
+              ? 'No shared boards yet.'
               : 'No saved boards yet.'}
             <br />
             <span style={{ fontSize: 10, color: '#4b5563' }}>
               {boardsTab === 'team'
                 ? 'Save your current board to the team to get started.'
+                : boardsTab === 'shared'
+                ? 'When someone shares a board with you, it will appear here.'
                 : 'Save your current board to get started.'}
             </span>
           </div>
         ) : (
-          displayedScenes.map(scene => (
-            <SceneCard
-              key={scene.id}
-              scene={scene}
-              onLoad={() => handleLoad(scene)}
-              onDelete={() => handleDelete(scene.id)}
-              onRename={name => handleRename(scene.id, name)}
-              isOwner={!scene.ownerId || scene.ownerId === user?.id}
-              showOwner={boardsTab === 'team'}
-            />
-          ))
+          displayedScenes.map(scene => {
+            const sceneIsOwner = !scene.ownerId || scene.ownerId === user?.id;
+            const isSharedTab = boardsTab === ('shared');
+            const sharedScene = isSharedTab ? (scene as BoardScene & { permission?: 'view' | 'edit' }) : null;
+            return (
+              <SceneCard
+                key={scene.id}
+                scene={scene}
+                onLoad={() => handleLoad(scene)}
+                onDelete={() => handleDelete(scene.id)}
+                onRename={name => handleRename(scene.id, name)}
+                onCollaborate={isCloud ? () => {
+                  // Load the board and start collaboration
+                  dispatch({ type: 'LOAD_SCENE', data: scene.data });
+                  const perm = sceneIsOwner ? 'owner' : (sharedScene?.permission ?? 'view');
+                  onStartCollaboration?.(scene.id, sceneIsOwner, perm);
+
+                  // For owned boards, also open the Collaborate modal (invite management)
+                  if (sceneIsOwner && !isSharedTab) {
+                    setCollabModalBoardId(scene.id);
+                    setCollabModalBoardName(scene.name);
+                  }
+                } : undefined}
+                isOwner={sceneIsOwner}
+                showOwner={boardsTab === 'team' || isSharedTab}
+                isCollabBoard={isSharedTab}
+              />
+            );
+          })
         )}
       </div>
     </div>

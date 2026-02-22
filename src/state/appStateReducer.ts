@@ -3,6 +3,7 @@ import { PITCH } from '../constants/pitch';
 import { THEME } from '../constants/colors';
 import { FORMATIONS } from '../constants/formations';
 import { defendsHighX, matchPlayersToPositions } from '../utils/formationMapping';
+import { remoteActionFlag } from './remoteActionFlag';
 
 /** Clamp a world coordinate to the playable area (pitch + green buffer) */
 const clampX = (x: number) => Math.max(-PITCH.padding, Math.min(PITCH.length + PITCH.padding, x));
@@ -205,8 +206,13 @@ export function computePossession(
   }
 }
 
-/** Push current players+ball+annotations+ghosts onto undoStack and clear redoStack */
+/** Push current players+ball+annotations+ghosts onto undoStack and clear redoStack.
+ *  Skips the push when the action is from a remote collaborator (undo isolation). */
 function withUndo(state: AppState): Pick<AppState, 'undoStack' | 'redoStack'> {
+  // Remote actions skip the undo stack so each user only undoes their own actions
+  if (remoteActionFlag.current) {
+    return { undoStack: state.undoStack, redoStack: state.redoStack };
+  }
   const snapshot = { players: state.players, ball: state.ball, annotations: state.annotations, ghostPlayers: state.ghostPlayers, ghostAnnotationIds: state.ghostAnnotationIds, previewGhosts: state.previewGhosts };
   return {
     undoStack: [...state.undoStack, snapshot].slice(-50),

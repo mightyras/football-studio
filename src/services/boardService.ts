@@ -149,13 +149,10 @@ export async function updateBoard(
   return !error;
 }
 
-/** Soft-delete a board (set deleted_at). */
+/** Soft-delete a board (set deleted_at) via RPC to bypass SELECT policy check. */
 export async function deleteBoard(id: string): Promise<boolean> {
   if (!supabase) return false;
-  const { error } = await supabase
-    .from('boards')
-    .update({ deleted_at: new Date().toISOString() })
-    .eq('id', id);
+  const { error } = await supabase.rpc('soft_delete_board', { p_board_id: id });
   return !error;
 }
 
