@@ -478,6 +478,7 @@ export function SettingsPanel({ rotation }: { rotation: PitchRotation }) {
               cursor: 'pointer',
             }}
           />
+
         </div>
 
         {/* Ball Settings */}

@@ -69,6 +69,7 @@ export function drawPlayer(
   isNotchHovered: boolean = false,
   isFormationHighlighted: boolean = false,
   isFormationDimmed: boolean = false,
+  logoImage?: HTMLImageElement,
 ) {
   const pos = transform.worldToScreen(player.x, player.y);
   let radius = playerRadius * transform.scale;
@@ -129,6 +130,31 @@ export function drawPlayer(
   ctx.arc(pos.x, pos.y, radius, 0, Math.PI * 2);
   ctx.fillStyle = bodyGrad;
   ctx.fill();
+
+  // ── Team logo (under lacquer) ──
+  if (logoImage) {
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(pos.x, pos.y, radius, 0, Math.PI * 2);
+    ctx.clip();
+
+    // Draw logo zoomed in to fill the marker (clipped to circle)
+    const logoSize = radius * 2.5;
+    const aspect = logoImage.width / logoImage.height;
+    const lw = aspect >= 1 ? logoSize : logoSize * aspect;
+    const lh = aspect >= 1 ? logoSize / aspect : logoSize;
+    ctx.globalAlpha = 0.55;
+    ctx.drawImage(logoImage, pos.x - lw / 2, pos.y - lh / 2, lw, lh);
+
+    // Team color tint overlay — blend logo with team color for lacquer effect
+    ctx.globalAlpha = 0.35;
+    ctx.fillStyle = baseColor;
+    ctx.beginPath();
+    ctx.arc(pos.x, pos.y, radius, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.restore();
+  }
 
   // ── GK horizontal band (with gradient blend) ──
   if (isGK) {

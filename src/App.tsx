@@ -173,6 +173,9 @@ function AppContent() {
     if (activeTeam.outline_color) {
       dispatch({ type: 'SET_TEAM_OUTLINE_COLOR', team: 'A', color: activeTeam.outline_color });
     }
+
+    // Sync team logo URL for marker overlay
+    dispatch({ type: 'SET_TEAM_LOGO_URL', url: activeTeam.logo_url ?? null });
   }, [activeTeam]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Right panel visibility (hidden by default)

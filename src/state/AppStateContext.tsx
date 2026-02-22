@@ -39,6 +39,8 @@ function saveable(state: AppState): Partial<AppState> {
     animationSequence: state.animationSequence,
     clubIdentity: state.clubIdentity,
     themeMode: state.themeMode,
+    showLogoOnMarkers: state.showLogoOnMarkers,
+    teamALogoUrl: state.teamALogoUrl,
   };
 }
 

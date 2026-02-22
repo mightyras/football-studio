@@ -505,4 +505,6 @@ export type AppState = {
   pendingDeletePlayerId: string | null;
   formationMoveTeam: 'A' | 'B' | null;
   themeMode: 'light' | 'dark';
+  showLogoOnMarkers: boolean;
+  teamALogoUrl: string | null;
 };

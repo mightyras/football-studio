@@ -276,32 +276,63 @@ export function TeamOverlay({ team, onClose }: TeamOverlayProps) {
         )}
       </div>
 
-      {/* Show Names Toggle */}
-      <label
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 8,
-          cursor: 'pointer',
-          fontSize: 12,
-          color: theme.secondary,
-        }}
-      >
-        <input
-          type="checkbox"
-          checked={showNames}
-          onChange={e =>
-            dispatch({ type: 'SET_SHOW_PLAYER_NAMES', team, show: e.target.checked })
-          }
+      {/* Toggle switches */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 4 }}>
+        <label
           style={{
-            accentColor: theme.highlight,
-            width: 14,
-            height: 14,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
             cursor: 'pointer',
+            fontSize: 12,
+            color: theme.secondary,
           }}
-        />
-        Show Player Names
-      </label>
+        >
+          <input
+            type="checkbox"
+            checked={showNames}
+            onChange={e =>
+              dispatch({ type: 'SET_SHOW_PLAYER_NAMES', team, show: e.target.checked })
+            }
+            style={{
+              accentColor: theme.highlight,
+              width: 14,
+              height: 14,
+              cursor: 'pointer',
+            }}
+          />
+          Show Player Names
+        </label>
+
+        {/* Show Logo on Markers — only for My Team when a logo exists */}
+        {isMyTeam && (state.teamALogoUrl || state.clubIdentity.logoDataUrl) && (
+          <label
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              cursor: 'pointer',
+              fontSize: 12,
+              color: theme.secondary,
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={state.showLogoOnMarkers}
+              onChange={e =>
+                dispatch({ type: 'SET_SHOW_LOGO_ON_MARKERS', show: e.target.checked })
+              }
+              style={{
+                accentColor: theme.highlight,
+                width: 14,
+                height: 14,
+                cursor: 'pointer',
+              }}
+            />
+            Show Logo on Markers
+          </label>
+        )}
+      </div>
     </div>
   );
 }

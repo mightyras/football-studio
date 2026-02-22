@@ -90,6 +90,8 @@ export type AppAction =
   | { type: 'SET_CLUB_IDENTITY'; identity: Partial<ClubIdentity> }
   | { type: 'CLEAR_CLUB_IDENTITY' }
   | { type: 'SET_THEME_MODE'; mode: 'light' | 'dark' }
+  | { type: 'SET_SHOW_LOGO_ON_MARKERS'; show: boolean }
+  | { type: 'SET_TEAM_LOGO_URL'; url: string | null }
   | { type: 'EXECUTE_RUN'; playerId: string; x: number; y: number; facing: number; ghost: GhostPlayer; annotationId: string; ballX?: number; ballY?: number; animationType?: 'run' | 'pass' | 'dribble' }
   | { type: 'CLEAR_PLAYER_GHOSTS'; playerId: string }
   | { type: 'RESET_RUN'; playerId: string }
@@ -323,6 +325,8 @@ export const initialState: AppState = {
   pendingDeletePlayerId: null,
   formationMoveTeam: null,
   themeMode: 'dark' as const,
+  showLogoOnMarkers: false,
+  teamALogoUrl: null,
 };
 
 export function appStateReducer(state: AppState, action: AppAction): AppState {
@@ -1382,6 +1386,12 @@ export function appStateReducer(state: AppState, action: AppAction): AppState {
 
     case 'SET_THEME_MODE':
       return { ...state, themeMode: action.mode };
+
+    case 'SET_SHOW_LOGO_ON_MARKERS':
+      return { ...state, showLogoOnMarkers: action.show };
+
+    case 'SET_TEAM_LOGO_URL':
+      return { ...state, teamALogoUrl: action.url };
 
     // --- Per-player run animation (ghost) actions ---
 

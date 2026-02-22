@@ -27,6 +27,24 @@ function getLogoImage(dataUrl: string): HTMLImageElement | null {
   return cachedLogoImg?.complete ? cachedLogoImg : null;
 }
 
+// ── Team logo on markers (cached Image for performance) ──
+
+let cachedTeamLogoUrl: string | null = null;
+let cachedTeamLogoImg: HTMLImageElement | null = null;
+
+function getTeamLogoImage(url: string): HTMLImageElement | null {
+  if (url === cachedTeamLogoUrl && cachedTeamLogoImg?.complete) {
+    return cachedTeamLogoImg;
+  }
+  if (url !== cachedTeamLogoUrl) {
+    cachedTeamLogoUrl = url;
+    cachedTeamLogoImg = new Image();
+    cachedTeamLogoImg.crossOrigin = 'anonymous';
+    cachedTeamLogoImg.src = url;
+  }
+  return cachedTeamLogoImg?.complete ? cachedTeamLogoImg : null;
+}
+
 function renderLogoBadge(
   ctx: CanvasRenderingContext2D,
   transform: PitchTransform,
@@ -257,6 +275,14 @@ export function render(
     return 0;
   });
 
+  // Resolve team logo image for marker overlay (Team A only)
+  const markerLogoSrc = state.showLogoOnMarkers
+    ? (state.teamALogoUrl || state.clubIdentity.logoDataUrl || '')
+    : '';
+  const markerLogoImg = markerLogoSrc
+    ? getTeamLogoImage(markerLogoSrc)
+    : null;
+
   for (const player of sorted) {
     const teamColor = player.team === 'A' ? state.teamAColor : state.teamBColor;
     const outlineColor = player.team === 'A' ? state.teamAOutlineColor : state.teamBOutlineColor;
@@ -296,6 +322,7 @@ export function render(
       player.id === state.hoveredNotchPlayerId,
       isFormationHighlighted,
       isFormationDimmed,
+      player.team === 'A' ? markerLogoImg ?? undefined : undefined,
     );
   }
 
