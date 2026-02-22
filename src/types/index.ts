@@ -280,6 +280,8 @@ export type DrawingInProgress =
 
 export type PanelTab = 'settings' | 'scenes' | 'help';
 
+export type BoardsTab = 'my' | 'team';
+
 export type ZoomPreset = 'full' | 'top-half' | 'bottom-half';
 
 export type ZoomState = {

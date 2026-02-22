@@ -148,7 +148,11 @@ export function TeamOverlay({ team, onClose }: TeamOverlayProps) {
 
   function commitName() {
     const trimmed = nameValue.trim();
-    if (trimmed && trimmed !== name) {
+    if (!trimmed) {
+      const fallback = team === 'A' ? 'My Team' : 'Opposition';
+      dispatch({ type: 'RENAME_TEAM', team, name: fallback });
+      setNameValue(fallback);
+    } else if (trimmed !== name) {
       dispatch({ type: 'RENAME_TEAM', team, name: trimmed });
     } else {
       setNameValue(name);

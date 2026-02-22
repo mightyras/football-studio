@@ -6,8 +6,9 @@ import { generateThumbnail, renderSceneToBlob } from '../../utils/sceneRenderer'
 import { useThemeColors } from '../../hooks/useThemeColors';
 import { hexToRgba } from '../../utils/colorUtils';
 import { useAuth } from '../../state/AuthContext';
+import { useTeam } from '../../state/TeamContext';
 import * as boardService from '../../services/boardService';
-import type { SavedScene } from '../../types';
+import type { SavedScene, BoardsTab } from '../../types';
 
 // ── Icons ──
 
@@ -108,6 +109,13 @@ function IconButton({
   );
 }
 
+// ── Extended scene type with owner info ──
+
+type BoardScene = SavedScene & {
+  ownerId?: string;
+  ownerName?: string | null;
+};
+
 // ── Scene card ──
 
 function SceneCard({
@@ -115,11 +123,15 @@ function SceneCard({
   onLoad,
   onDelete,
   onRename,
+  isOwner,
+  showOwner,
 }: {
-  scene: SavedScene;
+  scene: BoardScene;
   onLoad: () => void;
   onDelete: () => void;
   onRename: (name: string) => void;
+  isOwner: boolean;
+  showOwner?: boolean;
 }) {
   const theme = useThemeColors();
   const [editing, setEditing] = useState(false);
@@ -157,18 +169,20 @@ function SceneCard({
       onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; setConfirmDelete(false); }}
     >
       {/* Thumbnail */}
-      <img
-        src={scene.thumbnail}
-        alt={scene.name}
-        style={{
-          width: 60,
-          height: 38,
-          borderRadius: 3,
-          border: `1px solid ${theme.border}`,
-          objectFit: 'cover',
-          flexShrink: 0,
-        }}
-      />
+      {scene.thumbnail && (
+        <img
+          src={scene.thumbnail}
+          alt={scene.name}
+          style={{
+            width: 60,
+            height: 38,
+            borderRadius: 3,
+            border: `1px solid ${theme.border}`,
+            objectFit: 'cover',
+            flexShrink: 0,
+          }}
+        />
+      )}
 
       {/* Info */}
       <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 2 }}>
@@ -199,7 +213,12 @@ function SceneCard({
           />
         ) : (
           <div
-            onDoubleClick={e => { e.stopPropagation(); setEditing(true); setEditName(scene.name); }}
+            onDoubleClick={e => {
+              if (!isOwner) return;
+              e.stopPropagation();
+              setEditing(true);
+              setEditName(scene.name);
+            }}
             style={{
               fontSize: 11,
               fontWeight: 600,
@@ -214,37 +233,44 @@ function SceneCard({
         )}
         <div style={{ fontSize: 9, color: theme.textSubtle }}>
           {timeAgo(scene.savedAt)}
+          {showOwner && scene.ownerName && (
+            <span style={{ marginLeft: 4 }}>
+              &middot; by {scene.ownerName}
+            </span>
+          )}
         </div>
       </div>
 
-      {/* Actions */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 2, flexShrink: 0 }}>
-        {confirmDelete ? (
-          <button
-            onClick={e => { e.stopPropagation(); onDelete(); }}
-            style={{
-              fontSize: 9,
-              fontFamily: 'inherit',
-              padding: '2px 6px',
-              border: '1px solid #ef4444',
-              borderRadius: 3,
-              background: 'rgba(239, 68, 68, 0.15)',
-              color: '#ef4444',
-              cursor: 'pointer',
-            }}
-          >
-            Delete?
-          </button>
-        ) : (
-          <IconButton
-            onClick={e => { e.stopPropagation(); setConfirmDelete(true); }}
-            title="Delete board"
-            danger
-          >
-            <TrashIcon />
-          </IconButton>
-        )}
-      </div>
+      {/* Actions — only for board owner */}
+      {isOwner && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 2, flexShrink: 0 }}>
+          {confirmDelete ? (
+            <button
+              onClick={e => { e.stopPropagation(); onDelete(); }}
+              style={{
+                fontSize: 9,
+                fontFamily: 'inherit',
+                padding: '2px 6px',
+                border: '1px solid #ef4444',
+                borderRadius: 3,
+                background: 'rgba(239, 68, 68, 0.15)',
+                color: '#ef4444',
+                cursor: 'pointer',
+              }}
+            >
+              Delete?
+            </button>
+          ) : (
+            <IconButton
+              onClick={e => { e.stopPropagation(); setConfirmDelete(true); }}
+              title="Delete board"
+              danger
+            >
+              <TrashIcon />
+            </IconButton>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -257,14 +283,16 @@ interface ScenesPanelProps {
   onRequestSignIn?: () => void;
 }
 
-/** Convert a Supabase BoardRow to a SavedScene for the UI. */
-function boardRowToScene(row: boardService.BoardRow): SavedScene {
+/** Convert a Supabase BoardRow to a BoardScene for the UI. */
+function boardRowToScene(row: boardService.BoardRow): BoardScene {
   return {
     id: row.id,
     name: row.name,
     savedAt: new Date(row.updated_at).getTime(),
     thumbnail: row.thumbnail_url ?? '',
     data: row.data,
+    ownerId: row.owner_id,
+    ownerName: row.owner_name,
   };
 }
 
@@ -272,9 +300,13 @@ export function ScenesPanel({ saveRequested, onSaveHandled, onRequestSignIn }: S
   const { state, dispatch } = useAppState();
   const theme = useThemeColors();
   const { user } = useAuth();
+  const { activeTeam } = useTeam();
   const isCloud = !!user;
+  const hasTeam = !!activeTeam;
 
-  const [scenes, setScenes] = useState<SavedScene[]>(() => (isCloud ? [] : loadScenes()));
+  const [boardsTab, setBoardsTab] = useState<BoardsTab>('my');
+  const [myScenes, setMyScenes] = useState<BoardScene[]>(() => (isCloud ? [] : loadScenes()));
+  const [teamScenes, setTeamScenes] = useState<BoardScene[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveName, setSaveName] = useState('');
@@ -288,18 +320,36 @@ export function ScenesPanel({ saveRequested, onSaveHandled, onRequestSignIn }: S
     setTimeout(() => setFeedback(null), 2000);
   }, []);
 
-  // Fetch boards from Supabase when user is authenticated
+  // Fetch personal boards from Supabase when user is authenticated
   useEffect(() => {
     if (!isCloud) {
-      setScenes(loadScenes());
+      setMyScenes(loadScenes());
       return;
     }
     setLoading(true);
-    boardService.fetchBoards()
-      .then(rows => setScenes(rows.map(boardRowToScene)))
+    boardService.fetchMyBoards()
+      .then(rows => setMyScenes(rows.map(boardRowToScene)))
       .catch(() => showFeedback('Failed to load boards'))
       .finally(() => setLoading(false));
   }, [isCloud, showFeedback]);
+
+  // Fetch team boards when team changes or team tab is selected
+  useEffect(() => {
+    if (!isCloud || !activeTeam) {
+      setTeamScenes([]);
+      return;
+    }
+    setLoading(true);
+    boardService.fetchTeamBoards(activeTeam.id)
+      .then(rows => setTeamScenes(rows.map(boardRowToScene)))
+      .catch(() => showFeedback('Failed to load team boards'))
+      .finally(() => setLoading(false));
+  }, [isCloud, activeTeam?.id, showFeedback]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Switch to "my" tab if user loses their team
+  useEffect(() => {
+    if (!hasTeam && boardsTab === 'team') setBoardsTab('my');
+  }, [hasTeam, boardsTab]);
 
   // Check for localStorage boards to migrate on first cloud login
   useEffect(() => {
@@ -341,15 +391,23 @@ export function ScenesPanel({ saveRequested, onSaveHandled, onRequestSignIn }: S
 
     if (isCloud) {
       setSaving(false);
-      const row = await boardService.createBoard(name, data, thumbnail);
+      const teamId = boardsTab === 'team' && activeTeam ? activeTeam.id : undefined;
+      const row = await boardService.createBoard(name, data, thumbnail, teamId);
       if (row) {
-        setScenes(prev => [boardRowToScene(row), ...prev]);
+        const scene = boardRowToScene(row);
+        // Also set owner name from current user for immediate display
+        if (user) scene.ownerName = user.user_metadata?.display_name || user.email || null;
+        if (boardsTab === 'team') {
+          setTeamScenes(prev => [scene, ...prev]);
+        } else {
+          setMyScenes(prev => [scene, ...prev]);
+        }
         showFeedback('Saved!');
       } else {
         showFeedback('Save failed');
       }
     } else {
-      const scene: SavedScene = {
+      const scene: BoardScene = {
         id: `scene-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
         name,
         savedAt: Date.now(),
@@ -357,7 +415,7 @@ export function ScenesPanel({ saveRequested, onSaveHandled, onRequestSignIn }: S
         data,
       };
       const updated = addScene(scene);
-      setScenes(updated);
+      setMyScenes(updated);
       setSaving(false);
       showFeedback('Saved!');
     }
@@ -386,27 +444,36 @@ export function ScenesPanel({ saveRequested, onSaveHandled, onRequestSignIn }: S
     }
   };
 
-  const handleLoad = (scene: SavedScene) => {
+  const handleLoad = (scene: BoardScene) => {
     dispatch({ type: 'LOAD_SCENE', data: scene.data });
   };
 
   const handleDelete = async (id: string) => {
     if (isCloud) {
-      setScenes(prev => prev.filter(s => s.id !== id));
+      if (boardsTab === 'team') {
+        setTeamScenes(prev => prev.filter(s => s.id !== id));
+      } else {
+        setMyScenes(prev => prev.filter(s => s.id !== id));
+      }
       const ok = await boardService.deleteBoard(id);
       if (!ok) showFeedback('Delete failed');
     } else {
-      setScenes(deleteScene(id));
+      setMyScenes(deleteScene(id));
     }
   };
 
   const handleRename = async (id: string, name: string) => {
     if (isCloud) {
-      setScenes(prev => prev.map(s => s.id === id ? { ...s, name } : s));
+      const update = (s: BoardScene) => s.id === id ? { ...s, name } : s;
+      if (boardsTab === 'team') {
+        setTeamScenes(prev => prev.map(update));
+      } else {
+        setMyScenes(prev => prev.map(update));
+      }
       const ok = await boardService.renameBoard(id, name);
       if (!ok) showFeedback('Rename failed');
     } else {
-      setScenes(renameScene(id, name));
+      setMyScenes(renameScene(id, name));
     }
   };
 
@@ -423,8 +490,8 @@ export function ScenesPanel({ saveRequested, onSaveHandled, onRequestSignIn }: S
       localStorage.setItem(`football-studio-migrated-${user.id}`, 'true');
       setMigrationPrompt(false);
       // Refresh from cloud
-      const rows = await boardService.fetchBoards();
-      setScenes(rows.map(boardRowToScene));
+      const rows = await boardService.fetchMyBoards();
+      setMyScenes(rows.map(boardRowToScene));
       showFeedback(`Imported ${local.length} boards!`);
     } else {
       showFeedback('Migration failed — some boards were not imported');
@@ -432,8 +499,58 @@ export function ScenesPanel({ saveRequested, onSaveHandled, onRequestSignIn }: S
     setMigrating(false);
   };
 
+  const displayedScenes = boardsTab === 'my' ? myScenes : teamScenes;
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      {/* Sub-tab bar: My Boards / Team Boards */}
+      <div style={{ display: 'flex', borderBottom: `1px solid ${theme.border}`, flexShrink: 0 }}>
+        <button
+          onClick={() => setBoardsTab('my')}
+          style={{
+            flex: 1,
+            minWidth: 0,
+            padding: '8px 4px',
+            fontSize: 11,
+            fontWeight: 600,
+            fontFamily: 'inherit',
+            letterSpacing: '0.03em',
+            textTransform: 'uppercase' as const,
+            border: 'none',
+            borderBottom: boardsTab === 'my' ? `2px solid ${theme.highlight}` : '2px solid transparent',
+            background: 'transparent',
+            color: boardsTab === 'my' ? theme.highlight : theme.textMuted,
+            cursor: 'pointer',
+            transition: 'all 0.15s',
+          }}
+        >
+          My Boards
+        </button>
+        {hasTeam && (
+          <button
+            onClick={() => setBoardsTab('team')}
+            style={{
+              flex: 1,
+              minWidth: 0,
+              padding: '8px 4px',
+              fontSize: 11,
+              fontWeight: 600,
+              fontFamily: 'inherit',
+              letterSpacing: '0.03em',
+              textTransform: 'uppercase' as const,
+              border: 'none',
+              borderBottom: boardsTab === 'team' ? `2px solid ${theme.highlight}` : '2px solid transparent',
+              background: 'transparent',
+              color: boardsTab === 'team' ? theme.highlight : theme.textMuted,
+              cursor: 'pointer',
+              transition: 'all 0.15s',
+            }}
+          >
+            Team Boards
+          </button>
+        )}
+      </div>
+
       {/* Action bar */}
       <div style={{ padding: '10px 10px 8px', borderBottom: `1px solid ${theme.border}`, flexShrink: 0 }}>
         {/* Save button */}
@@ -461,7 +578,7 @@ export function ScenesPanel({ saveRequested, onSaveHandled, onRequestSignIn }: S
             onMouseLeave={e => { e.currentTarget.style.background = hexToRgba(theme.highlight, 0.1); }}
           >
             <SaveIcon />
-            Save Board
+            {boardsTab === 'team' ? 'Save to Team' : 'Save Board'}
           </button>
         ) : (
           <button
@@ -607,7 +724,7 @@ export function ScenesPanel({ saveRequested, onSaveHandled, onRequestSignIn }: S
       </div>
 
       {/* Migration prompt */}
-      {migrationPrompt && (
+      {migrationPrompt && boardsTab === 'my' && (
         <div style={{
           padding: '8px 10px',
           borderBottom: `1px solid ${theme.border}`,
@@ -657,7 +774,7 @@ export function ScenesPanel({ saveRequested, onSaveHandled, onRequestSignIn }: S
         </div>
       )}
 
-      {/* Scene list */}
+      {/* Board list */}
       <div style={{ flex: 1, overflowY: 'auto' }}>
         {loading ? (
           <div style={{
@@ -668,7 +785,7 @@ export function ScenesPanel({ saveRequested, onSaveHandled, onRequestSignIn }: S
           }}>
             Loading boards...
           </div>
-        ) : scenes.length === 0 ? (
+        ) : displayedScenes.length === 0 ? (
           <div style={{
             padding: '24px 16px',
             textAlign: 'center',
@@ -676,20 +793,26 @@ export function ScenesPanel({ saveRequested, onSaveHandled, onRequestSignIn }: S
             fontSize: 11,
             lineHeight: 1.5,
           }}>
-            No saved boards yet.
+            {boardsTab === 'team'
+              ? 'No team boards yet.'
+              : 'No saved boards yet.'}
             <br />
             <span style={{ fontSize: 10, color: '#4b5563' }}>
-              Save your current board to get started.
+              {boardsTab === 'team'
+                ? 'Save your current board to the team to get started.'
+                : 'Save your current board to get started.'}
             </span>
           </div>
         ) : (
-          scenes.map(scene => (
+          displayedScenes.map(scene => (
             <SceneCard
               key={scene.id}
               scene={scene}
               onLoad={() => handleLoad(scene)}
               onDelete={() => handleDelete(scene.id)}
               onRename={name => handleRename(scene.id, name)}
+              isOwner={!scene.ownerId || scene.ownerId === user?.id}
+              showOwner={boardsTab === 'team'}
             />
           ))
         )}

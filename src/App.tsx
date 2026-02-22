@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import './App.css';
-import { AppStateProvider, useAppState } from './state/AppStateContext';
+import { AppStateProvider, useAppState, extractSceneData } from './state/AppStateContext';
 import { PitchCanvas } from './components/Canvas/PitchCanvas';
 import { Toolbar } from './components/Toolbar/Toolbar';
 import { RightPanel } from './components/RightPanel/RightPanel';
@@ -50,12 +50,40 @@ function AppContent() {
   const { activeTeam } = useTeam();
   const [showAuthFromSave, setShowAuthFromSave] = useState(false);
 
-  // Reset branding & team colors to defaults when not signed in
-  // (covers both initial page load and sign-out transitions)
+  // Refs for session auto-save/restore across sign-out/sign-in
+  const stateRef = useRef(state);
+  stateRef.current = state;
+  const prevUserIdRef = useRef<string | null>(null);
+  const initialLoadRef = useRef(true);
+
+  // Auto-save session on sign-out, full board reset, auto-restore on sign-in
   useEffect(() => {
-    if (!authLoading && !user) {
+    if (authLoading) return;
+
+    const prevUserId = prevUserIdRef.current;
+    const currentUserId = user?.id ?? null;
+
+    // Skip the very first auth resolution (page load — state already restored from localStorage)
+    if (initialLoadRef.current) {
+      initialLoadRef.current = false;
+      prevUserIdRef.current = currentUserId;
+      return;
+    }
+
+    // Sign-out: user was signed in, now signed out
+    if (!currentUserId && prevUserId) {
+      // Auto-save session for this user before resetting
+      try {
+        const sceneData = extractSceneData(stateRef.current);
+        localStorage.setItem(`football-studio-session-${prevUserId}`, JSON.stringify(sceneData));
+      } catch { /* storage full — silently ignore */ }
+
+      // Full board reset
+      dispatch({ type: 'RESET' });
       dispatch({ type: 'SET_TEAM_COLOR', team: 'A', color: THEME.teamA });
       dispatch({ type: 'SET_TEAM_COLOR', team: 'B', color: THEME.teamB });
+      dispatch({ type: 'SET_TEAM_OUTLINE_COLOR', team: 'A', color: '#000000' });
+      dispatch({ type: 'SET_TEAM_OUTLINE_COLOR', team: 'B', color: '#000000' });
       dispatch({ type: 'SET_CLUB_IDENTITY', identity: {
         primaryColor: null,
         secondaryColor: null,
@@ -63,13 +91,37 @@ function AppContent() {
         backgroundColor: null,
         logoDataUrl: null,
       }});
+      dispatch({ type: 'RENAME_TEAM', team: 'A', name: 'My Team' });
+      dispatch({ type: 'RENAME_TEAM', team: 'B', name: 'Opposition' });
     }
+
+    // Sign-in: user was signed out, now signed in
+    if (currentUserId && !prevUserId) {
+      const saved = localStorage.getItem(`football-studio-session-${currentUserId}`);
+      if (saved) {
+        try {
+          dispatch({ type: 'LOAD_SCENE', data: JSON.parse(saved) });
+        } catch { /* corrupt data — ignore */ }
+      }
+    }
+
+    prevUserIdRef.current = currentUserId;
   }, [user, authLoading, dispatch]);
 
-  // Sync team A name from active team (use team name as default instead of "My Team")
+  // Sync team A name + colours from active team on sign-in
   useEffect(() => {
-    if (activeTeam && state.teamAName === 'My Team') {
+    if (!activeTeam) return;
+
+    if (state.teamAName === 'My Team') {
       dispatch({ type: 'RENAME_TEAM', team: 'A', name: activeTeam.name });
+    }
+
+    // Always apply team colours when activeTeam is available
+    if (activeTeam.player_color) {
+      dispatch({ type: 'SET_TEAM_COLOR', team: 'A', color: activeTeam.player_color });
+    }
+    if (activeTeam.outline_color) {
+      dispatch({ type: 'SET_TEAM_OUTLINE_COLOR', team: 'A', color: activeTeam.outline_color });
     }
   }, [activeTeam]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -981,9 +1033,9 @@ function AppContent() {
           onPlayLines={handlePlayLines}
           onStepLines={handleStepLines}
           onExportLines={handleExportLines}
-          showPanel={showPanel && panelTab !== 'help'}
+          showPanel={showPanel && panelTab === 'settings'}
           onTogglePanel={() => {
-            if (showPanel && panelTab !== 'help') {
+            if (showPanel && panelTab === 'settings') {
               setShowPanel(false);
             } else {
               setPanelTab('settings');
@@ -996,6 +1048,15 @@ function AppContent() {
               setShowPanel(false);
             } else {
               setPanelTab('help');
+              setShowPanel(true);
+            }
+          }}
+          boardsActive={showPanel && panelTab === 'scenes'}
+          onOpenBoards={() => {
+            if (showPanel && panelTab === 'scenes') {
+              setShowPanel(false);
+            } else {
+              setPanelTab('scenes');
               setShowPanel(true);
             }
           }}

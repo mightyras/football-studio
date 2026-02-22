@@ -65,27 +65,23 @@ export function RightPanel({ rotation, activeTab, onTabChange, saveRequested, on
         height: '100%',
       }}
     >
-      {/* Tab bar */}
-      <div
-        style={{
-          display: 'flex',
-          borderBottom: `1px solid ${theme.border}`,
-          flexShrink: 0,
-        }}
-      >
-        <TabButton
-          active={activeTab === 'settings'}
-          onClick={() => onTabChange('settings')}
+      {/* Tab bar — only shown for settings; boards & help have their own TopBar icons */}
+      {activeTab === 'settings' && (
+        <div
+          style={{
+            display: 'flex',
+            borderBottom: `1px solid ${theme.border}`,
+            flexShrink: 0,
+          }}
         >
-          Settings
-        </TabButton>
-        <TabButton
-          active={activeTab === 'scenes'}
-          onClick={() => onTabChange('scenes')}
-        >
-          Boards
-        </TabButton>
-      </div>
+          <TabButton
+            active
+            onClick={() => onTabChange('settings')}
+          >
+            Settings
+          </TabButton>
+        </div>
+      )}
 
       {/* Tab content */}
       <div style={{ flex: 1, overflow: 'hidden' }}>

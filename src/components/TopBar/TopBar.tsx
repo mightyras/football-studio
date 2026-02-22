@@ -100,6 +100,15 @@ const HelpIcon = ({ active, accentColor }: { active: boolean; accentColor: strin
   </svg>
 );
 
+const BoardsIcon = ({ active, accentColor }: { active: boolean; accentColor: string }) => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={active ? accentColor : 'currentColor'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="3" y="3" width="7" height="7" rx="1" />
+    <rect x="14" y="3" width="7" height="7" rx="1" />
+    <rect x="3" y="14" width="7" height="7" rx="1" />
+    <rect x="14" y="14" width="7" height="7" rx="1" />
+  </svg>
+);
+
 const GearIcon = ({ active, accentColor }: { active: boolean; accentColor: string }) => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={active ? accentColor : 'currentColor'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <circle cx="12" cy="12" r="3" />
@@ -465,9 +474,11 @@ interface TopBarProps {
   onTogglePanel: () => void;
   onOpenHelp: () => void;
   helpActive: boolean;
+  boardsActive: boolean;
+  onOpenBoards: () => void;
 }
 
-export function TopBar({ onPlayLines, onStepLines, onExportLines, showPanel, onTogglePanel, onOpenHelp, helpActive }: TopBarProps) {
+export function TopBar({ onPlayLines, onStepLines, onExportLines, showPanel, onTogglePanel, onOpenHelp, helpActive, boardsActive, onOpenBoards }: TopBarProps) {
   const { state, dispatch } = useAppState();
   const theme = useThemeColors();
   const { user, loading: authLoading } = useAuth();
@@ -796,6 +807,39 @@ export function TopBar({ onPlayLines, onStepLines, onExportLines, showPanel, onT
           }}
         >
           <HelpIcon active={helpActive} accentColor={theme.highlight} />
+        </button>
+
+        {/* Boards button */}
+        <button
+          onClick={onOpenBoards}
+          title="Boards"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            padding: '4px 8px',
+            fontSize: 11,
+            fontFamily: 'inherit',
+            border: boardsActive ? `1px solid ${theme.highlight}` : '1px solid transparent',
+            borderRadius: 4,
+            background: boardsActive ? hexToRgba(theme.highlight, 0.15) : 'transparent',
+            color: boardsActive ? theme.highlight : theme.textMuted,
+            cursor: 'pointer',
+            transition: 'all 0.15s',
+          }}
+          onMouseEnter={e => {
+            if (!boardsActive) {
+              e.currentTarget.style.background = theme.surfaceHover;
+              e.currentTarget.style.color = theme.secondary;
+            }
+          }}
+          onMouseLeave={e => {
+            if (!boardsActive) {
+              e.currentTarget.style.background = 'transparent';
+              e.currentTarget.style.color = theme.textMuted;
+            }
+          }}
+        >
+          <BoardsIcon active={boardsActive} accentColor={theme.highlight} />
         </button>
 
         {/* Panel toggle */}
