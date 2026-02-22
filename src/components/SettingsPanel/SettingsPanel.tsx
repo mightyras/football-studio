@@ -7,7 +7,9 @@ import { useThemeColors } from '../../hooks/useThemeColors';
 import { hexToRgba } from '../../utils/colorUtils';
 
 const GRASS_PRESETS = [
-  { label: 'Dark', grass: '#1a5c2a', stripe: '#1e6b32' },
+  { label: 'Default', grass: '#1a5c2a', stripe: '#1e6b32' },
+  { label: 'Dark', grass: '#143d1f', stripe: '#184826' },
+  { label: 'Light', grass: '#179235', stripe: '#1da03d' },
   { label: 'Faded', grass: '#3a6b4a', stripe: '#3f755a' },
   { label: 'Black', grass: '#111111', stripe: '#1a1a1a' },
   { label: 'Obsidian', grass: '#1a1a2e', stripe: '#22223a' },
