@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase';
+import { sendInviteEmail, generateInviteLink } from './sendInviteEmail';
 import type { Invite, TeamRole } from '../types';
 
 /** Create a team invite. Caller must be a team admin (enforced by RLS). */
@@ -29,7 +30,49 @@ export async function createTeamInvite(
     .single();
 
   if (error || !data) return null;
+
+  // Send invite email (fire-and-forget — invite record is already saved)
+  sendInviteEmail(email, name).catch(() => {});
+
   return data as Invite;
+}
+
+/** Create a team invite and return a shareable link (instead of sending email). */
+export async function createTeamInviteWithLink(
+  teamId: string,
+  email: string,
+  role: TeamRole = 'member',
+  name?: string,
+): Promise<{ invite: Invite | null; inviteLink?: string }> {
+  if (!supabase) return { invite: null };
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { invite: null };
+
+  const row: Record<string, unknown> = {
+    team_id: teamId,
+    inviter_id: user.id,
+    invitee_email: email.toLowerCase().trim(),
+    role,
+  };
+  if (name?.trim()) row.invitee_name = name.trim();
+
+  const { data, error } = await supabase
+    .from('invites')
+    .insert(row)
+    .select()
+    .single();
+
+  if (error || !data) return { invite: null };
+
+  // Generate invite link (creates auth user if needed)
+  const result = await generateInviteLink(email, name);
+
+  return {
+    invite: data as Invite,
+    inviteLink: result.inviteLink,
+  };
 }
 
 /** Fetch pending invites for a team (admin only via RLS). */

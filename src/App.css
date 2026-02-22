@@ -37,6 +37,8 @@
   grid-area: canvas;
   background: var(--theme-background, #0d1117);
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 .formations {

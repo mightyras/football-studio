@@ -12,12 +12,15 @@ import { ExportDialog } from './components/AnimationPanel/ExportDialog';
 import { DeletePlayerConfirmDialog } from './components/DeletePlayerConfirmDialog';
 import { GoalCelebrationOverlay } from './components/GoalCelebrationOverlay';
 import { InviteBanner } from './components/TeamPanel/InviteBanner';
+import { PresenceBar } from './components/CollaborationPanel/PresenceBar';
 import { AuthModal } from './components/AuthModal/AuthModal';
+import { SetPasswordModal } from './components/AuthModal/SetPasswordModal';
 import { useAuth } from './state/AuthContext';
 import { useTeam } from './state/TeamContext';
 import { THEME } from './constants/colors';
 import { usePlayback } from './hooks/usePlayback';
 import { useZoom } from './hooks/useZoom';
+import { useCollaboration } from './hooks/useCollaboration';
 import { useThemeColors } from './hooks/useThemeColors';
 import { computeStepOrder, computeOneTouchIndices, ONE_TOUCH_DURATION_MS, type LineAnnotation } from './animation/annotationAnimator';
 import { ExportController, type ExportOptions } from './animation/exportController';
@@ -29,7 +32,7 @@ import { playKickSound, playGoalNetSound } from './utils/sound';
 import { findClosestGhost } from './utils/ghostUtils';
 
 function AppContent() {
-  const { state, dispatch } = useAppState();
+  const { state, dispatch, setDispatchInterceptor } = useAppState();
   const themeColors = useThemeColors();
 
   // Sync CSS custom properties for body/canvas backgrounds
@@ -46,7 +49,7 @@ function AppContent() {
   const zoom = useZoom();
 
   // Auth (for gating save behind sign-in)
-  const { user, loading: authLoading } = useAuth();
+  const { user, loading: authLoading, needsPasswordSetup, clearPasswordSetup } = useAuth();
   const { activeTeam } = useTeam();
   const [showAuthFromSave, setShowAuthFromSave] = useState(false);
 
@@ -55,6 +58,48 @@ function AppContent() {
   stateRef.current = state;
   const prevUserIdRef = useRef<string | null>(null);
   const initialLoadRef = useRef(true);
+
+  // ── Real-time collaboration ──
+  const [activeBoardId, setActiveBoardId] = useState<string | null>(null);
+  const [collabIsOwner, setCollabIsOwner] = useState(false);
+  const [collabPermission, setCollabPermission] = useState<'view' | 'edit' | 'owner'>('edit');
+
+  const userDisplayName = user?.user_metadata?.display_name ?? user?.email?.split('@')[0] ?? null;
+
+  const collaboration = useCollaboration(
+    activeBoardId,
+    dispatch,
+    stateRef,
+    user?.id ?? null,
+    userDisplayName,
+    collabIsOwner,
+    collabPermission,
+  );
+
+  // Register collaboration sendAction as the dispatch interceptor
+  useEffect(() => {
+    if (collaboration.isConnected) {
+      setDispatchInterceptor(collaboration.sendAction);
+    } else {
+      setDispatchInterceptor(null);
+    }
+    return () => setDispatchInterceptor(null);
+  }, [collaboration.isConnected, collaboration.sendAction, setDispatchInterceptor]);
+
+  // When user opens a collaborative board from ScenesPanel
+  const handleStartCollaboration = useCallback((boardId: string, isOwner: boolean, permission: 'view' | 'edit' | 'owner') => {
+    setActiveBoardId(boardId);
+    setCollabIsOwner(isOwner);
+    setCollabPermission(permission);
+  }, []);
+
+  // Leave collaboration
+  const handleLeaveCollaboration = useCallback(() => {
+    collaboration.disconnect();
+    setActiveBoardId(null);
+    setCollabIsOwner(false);
+    setCollabPermission('edit');
+  }, [collaboration]);
 
   // Auto-save session on sign-out, full board reset, auto-restore on sign-in
   useEffect(() => {
@@ -72,6 +117,11 @@ function AppContent() {
 
     // Sign-out: user was signed in, now signed out
     if (!currentUserId && prevUserId) {
+      // Leave any active collaboration
+      if (activeBoardId) {
+        handleLeaveCollaboration();
+      }
+
       // Auto-save session for this user before resetting
       try {
         const sceneData = extractSceneData(stateRef.current);
@@ -1067,6 +1117,7 @@ function AppContent() {
         <Toolbar />
       </div>
       <div className="canvas-area">
+        <PresenceBar onlineUsers={collaboration.onlineUsers} isConnected={collaboration.isConnected} onLeave={handleLeaveCollaboration} />
         <PitchCanvas playbackRef={activePlaybackRef} playerRunAnimRef={playerRunAnimRef} animationQueueRef={animationQueueRef} goalCelebrationRef={goalCelebrationRef} onGoalScored={handleGoalScored} zoom={zoom} />
       </div>
       {state.animationMode ? (
@@ -1101,6 +1152,7 @@ function AppContent() {
           saveRequested={saveSceneRequested}
           onSaveHandled={() => setSaveSceneRequested(false)}
           onRequestSignIn={() => setShowAuthFromSave(true)}
+          onStartCollaboration={handleStartCollaboration}
         />
       </div>
       <div className="statusbar">
@@ -1169,6 +1221,11 @@ function AppContent() {
       {/* Auth modal triggered from save hint */}
       {showAuthFromSave && (
         <AuthModal onClose={() => setShowAuthFromSave(false)} />
+      )}
+
+      {/* Password setup for invited users */}
+      {needsPasswordSetup && (
+        <SetPasswordModal onClose={clearPasswordSetup} />
       )}
     </div>
   );

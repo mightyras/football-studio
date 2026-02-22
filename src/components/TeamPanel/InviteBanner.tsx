@@ -1,32 +1,68 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useTeam } from '../../state/TeamContext';
-import { useThemeColors } from '../../hooks/useThemeColors';
+import { useAuth } from '../../state/AuthContext';
 import * as inviteService from '../../services/inviteService';
+import { fetchMyBoardInvites, acceptBoardInvite } from '../../services/collaborationService';
 
+/**
+ * InviteBanner — auto-accepts all pending team & board invites on login.
+ * No UI is shown unless there's a transient status message.
+ */
 export function InviteBanner() {
   const { pendingInvites, refresh } = useTeam();
-  const theme = useThemeColors();
-  const [processing, setProcessing] = useState<string | null>(null);
+  const { user } = useAuth();
+  const [status, setStatus] = useState<string | null>(null);
+  const accepting = useRef(false);
 
-  if (pendingInvites.length === 0) return null;
+  useEffect(() => {
+    if (!user || accepting.current) return;
 
-  async function handleAccept(inviteId: string) {
-    setProcessing(inviteId);
-    const ok = await inviteService.acceptInvite(inviteId);
-    if (ok) {
-      await refresh();
+    async function autoAcceptAll() {
+      accepting.current = true;
+
+      // Auto-accept team invites
+      for (const inv of pendingInvites) {
+        await inviteService.acceptInvite(inv.id);
+      }
+
+      // Fetch & auto-accept board invites
+      const boardInvites = await fetchMyBoardInvites();
+      for (const inv of boardInvites) {
+        await acceptBoardInvite(inv.id);
+      }
+
+      const total = pendingInvites.length + boardInvites.length;
+      if (total > 0) {
+        setStatus(`Joined ${total} invite${total > 1 ? 's' : ''} automatically`);
+        await refresh();
+        setTimeout(() => setStatus(null), 3000);
+      }
+
+      accepting.current = false;
     }
-    setProcessing(null);
-  }
 
-  async function handleDecline(inviteId: string) {
-    setProcessing(inviteId);
-    const ok = await inviteService.declineInvite(inviteId);
-    if (ok) {
-      await refresh();
+    if (pendingInvites.length > 0) {
+      autoAcceptAll();
+    } else {
+      // Still check board invites even if no team invites
+      async function checkBoardInvites() {
+        accepting.current = true;
+        const boardInvites = await fetchMyBoardInvites();
+        for (const inv of boardInvites) {
+          await acceptBoardInvite(inv.id);
+        }
+        if (boardInvites.length > 0) {
+          setStatus(`Joined ${boardInvites.length} board invite${boardInvites.length > 1 ? 's' : ''} automatically`);
+          await refresh();
+          setTimeout(() => setStatus(null), 3000);
+        }
+        accepting.current = false;
+      }
+      checkBoardInvites();
     }
-    setProcessing(null);
-  }
+  }, [user, pendingInvites, refresh]);
+
+  if (!status) return null;
 
   return (
     <div
@@ -36,70 +72,20 @@ export function InviteBanner() {
         left: '50%',
         transform: 'translateX(-50%)',
         zIndex: 1500,
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 6,
         maxWidth: 420,
         width: '90%',
+        background: '#16a34a',
+        border: '1px solid #22c55e',
+        borderRadius: 6,
+        padding: '10px 14px',
+        boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
+        fontSize: 12,
+        color: '#fff',
+        textAlign: 'center',
+        fontWeight: 600,
       }}
     >
-      {pendingInvites.map((inv) => (
-        <div
-          key={inv.id}
-          style={{
-            background: theme.border,
-            border: '1px solid #f59e0b',
-            borderRadius: 6,
-            padding: '10px 14px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 10,
-            boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
-            fontSize: 12,
-            color: theme.secondary,
-          }}
-        >
-          <div style={{ flex: 1 }}>
-            You've been invited to join a team
-            {inv.role === 'admin' ? ' as admin' : ''}
-          </div>
-          <button
-            disabled={processing === inv.id}
-            onClick={() => handleAccept(inv.id)}
-            style={{
-              padding: '4px 10px',
-              fontSize: 11,
-              fontFamily: 'inherit',
-              border: 'none',
-              borderRadius: 4,
-              background: '#f59e0b',
-              color: theme.inputBg,
-              fontWeight: 600,
-              cursor: processing === inv.id ? 'default' : 'pointer',
-              opacity: processing === inv.id ? 0.5 : 1,
-            }}
-          >
-            Accept
-          </button>
-          <button
-            disabled={processing === inv.id}
-            onClick={() => handleDecline(inv.id)}
-            style={{
-              padding: '4px 10px',
-              fontSize: 11,
-              fontFamily: 'inherit',
-              border: `1px solid ${theme.textSubtle}`,
-              borderRadius: 4,
-              background: 'transparent',
-              color: theme.textMuted,
-              cursor: processing === inv.id ? 'default' : 'pointer',
-              opacity: processing === inv.id ? 0.5 : 1,
-            }}
-          >
-            Decline
-          </button>
-        </div>
-      ))}
+      {status}
     </div>
   );
 }

@@ -1,6 +1,7 @@
-import { createContext, useContext, useEffect, useReducer, useRef, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useReducer, useRef, type ReactNode } from 'react';
 import type { AppState, ClubIdentity, SceneData } from '../types';
 import { appStateReducer, computePossession, defaultFacing, initialState, type AppAction } from './appStateReducer';
+import { remoteActionFlag } from './remoteActionFlag';
 import { relativeLuminance } from '../utils/colorDerivation';
 
 const STORAGE_KEY = 'football-studio-state';
@@ -169,6 +170,8 @@ function loadState(): AppState {
 interface AppStateContextValue {
   state: AppState;
   dispatch: React.Dispatch<AppAction>;
+  /** Register a callback that will be called after every non-remote dispatch (used by collaboration). */
+  setDispatchInterceptor: (fn: ((action: AppAction) => void) | null) => void;
 }
 
 const AppStateContext = createContext<AppStateContextValue | null>(null);
@@ -177,11 +180,26 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   // Use a ref so HMR picks up the latest reducer without requiring a full reload
   const reducerRef = useRef(appStateReducer);
   reducerRef.current = appStateReducer;
-  const [state, dispatch] = useReducer(
+  const [state, rawDispatch] = useReducer(
     (state: AppState, action: AppAction) => reducerRef.current(state, action),
     undefined,
     loadState,
   );
+
+  // Dispatch interceptor for collaboration: called after every local (non-remote) dispatch
+  const dispatchInterceptorRef = useRef<((action: AppAction) => void) | null>(null);
+
+  const dispatch = useCallback((action: AppAction) => {
+    rawDispatch(action);
+    // If collaboration interceptor is set and this isn't a remote action, broadcast it
+    if (dispatchInterceptorRef.current && !remoteActionFlag.current) {
+      dispatchInterceptorRef.current(action);
+    }
+  }, []);
+
+  const setDispatchInterceptor = useCallback((fn: ((action: AppAction) => void) | null) => {
+    dispatchInterceptorRef.current = fn;
+  }, []);
 
   // Persist to localStorage on every meaningful state change
   useEffect(() => {
@@ -193,7 +211,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   }, [state]);
 
   return (
-    <AppStateContext.Provider value={{ state, dispatch }}>
+    <AppStateContext.Provider value={{ state, dispatch, setDispatchInterceptor }}>
       {children}
     </AppStateContext.Provider>
   );

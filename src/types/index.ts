@@ -280,7 +280,7 @@ export type DrawingInProgress =
 
 export type PanelTab = 'settings' | 'scenes' | 'help';
 
-export type BoardsTab = 'my' | 'team';
+export type BoardsTab = 'my' | 'team' | 'shared';
 
 export type ZoomPreset = 'full' | 'top-half' | 'bottom-half';
 
@@ -382,6 +382,33 @@ export type Invite = {
   status: InviteStatus;
   created_at: string;
   expires_at: string;
+};
+
+// ── Collaboration types ──
+
+export type BoardCollaborator = {
+  board_id: string;
+  user_id: string;
+  permission: 'view' | 'edit';
+  invited_at: string;
+  profile?: {
+    id: string;
+    display_name: string | null;
+    email: string;
+    avatar_url: string | null;
+  };
+};
+
+export type OnlineUser = {
+  userId: string;
+  displayName: string;
+  avatarUrl: string | null;
+};
+
+export type CollaborationState = {
+  boardId: string;
+  isConnected: boolean;
+  onlineUsers: OnlineUser[];
 };
 
 // ── Saved scene types ──
