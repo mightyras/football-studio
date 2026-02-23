@@ -546,8 +546,8 @@ function hasMultipleSteps(annotations: Annotation[]): boolean {
  * Render lines and polygons (below players).
  */
 // Ghost fade constants (must match renderPipeline.ts)
-const GHOST_HOLD_MS = 3000;
-const GHOST_FADE_MS = 3000;
+const GHOST_HOLD_MS = 200;
+const GHOST_FADE_MS = 800;
 
 export function renderAnnotationsBase(
   ctx: CanvasRenderingContext2D,
@@ -565,11 +565,7 @@ export function renderAnnotationsBase(
   effectiveSteps?: Map<string, number>,
   showStepNumbers: boolean = true,
 ): void {
-  // Show step badges when enabled and there are line annotations
-  const showStepBadges = showStepNumbers && annotations.some(a =>
-    a.type === 'passing-line' || a.type === 'running-line' ||
-    a.type === 'curved-run' || a.type === 'dribble-line',
-  );
+  const showStepBadges = showStepNumbers;
 
   ctx.save();
   ctx.globalAlpha = ANNOTATION_OPACITY;
@@ -653,7 +649,7 @@ export function renderAnnotationsBase(
           const e = transform.worldToScreen(resolved.end.x, resolved.end.y);
           drawSelectionOutline(ctx, [s, e], false, accent);
         }
-        if (showStepBadges) {
+        if (showStepBadges && !isGhostAnn && !isAnimating) {
           const midX = (resolved.start.x + resolved.end.x) / 2;
           const midY = (resolved.start.y + resolved.end.y) / 2;
           const badgePos = transform.worldToScreen(midX, midY);
@@ -696,7 +692,7 @@ export function renderAnnotationsBase(
           const e = transform.worldToScreen(resolved.end.x, resolved.end.y);
           drawSelectionOutline(ctx, [s, e], false, accent);
         }
-        if (showStepBadges) {
+        if (showStepBadges && !isGhostAnn && !isAnimating) {
           const midX = (resolved.start.x + resolved.end.x) / 2;
           const midY = (resolved.start.y + resolved.end.y) / 2;
           const badgePos = transform.worldToScreen(midX, midY);
@@ -736,7 +732,7 @@ export function renderAnnotationsBase(
           const e = transform.worldToScreen(resolved.end.x, resolved.end.y);
           drawSelectionOutline(ctx, [s, e], false, accent);
         }
-        if (showStepBadges) {
+        if (showStepBadges && !isGhostAnn && !isAnimating) {
           const midX = (resolved.start.x + resolved.end.x) / 2;
           const midY = (resolved.start.y + resolved.end.y) / 2;
           const badgePos = transform.worldToScreen(midX, midY);
@@ -811,7 +807,7 @@ export function renderAnnotationsBase(
           const e = transform.worldToScreen(resolved.end.x, resolved.end.y);
           drawSelectionOutline(ctx, [s, e], false, accent);
         }
-        if (showStepBadges) {
+        if (showStepBadges && !isGhostAnn && !isAnimating) {
           const midX = (resolved.start.x + resolved.end.x) / 2;
           const midY = (resolved.start.y + resolved.end.y) / 2;
           const badgePos = transform.worldToScreen(midX, midY);

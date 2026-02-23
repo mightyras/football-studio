@@ -3,7 +3,7 @@ import { useCanvas } from '../../hooks/useCanvas';
 import { usePitchTransform } from '../../hooks/usePitchTransform';
 import { useCanvasInteraction } from '../../hooks/useCanvasInteraction';
 import { useAppState } from '../../state/AppStateContext';
-import { render } from '../../canvas/renderPipeline';
+import { render, type AnimContext } from '../../canvas/renderPipeline';
 import { PlayerEditPopover } from './PlayerEditPopover';
 import { AnnotationEditPopover } from './AnnotationEditPopover';
 import { BenchPanel } from '../BenchPanel/BenchPanel';
@@ -38,12 +38,14 @@ interface PitchCanvasProps {
   playbackRef?: React.RefObject<PlaybackController | null>;
   playerRunAnimRef?: React.MutableRefObject<PlayerRunAnimation[]>;
   animationQueueRef?: React.MutableRefObject<QueuedAnimation[]>;
+  stepQueueRef?: React.MutableRefObject<QueuedAnimation[]>;
+  completedStepBatchesRef?: React.MutableRefObject<{ batch: QueuedAnimation[]; undoCount: number }[]>;
   goalCelebrationRef?: React.MutableRefObject<GoalCelebration | null>;
   onGoalScored?: (celebration: GoalCelebration) => void;
   zoom: ZoomProps;
 }
 
-export function PitchCanvas({ playbackRef, playerRunAnimRef, animationQueueRef, goalCelebrationRef, onGoalScored, zoom }: PitchCanvasProps) {
+export function PitchCanvas({ playbackRef, playerRunAnimRef, animationQueueRef, stepQueueRef, completedStepBatchesRef, goalCelebrationRef, onGoalScored, zoom }: PitchCanvasProps) {
   const { canvasRef, containerRef, size } = useCanvas();
   const { state, dispatch } = useAppState();
   const transform = usePitchTransform(
@@ -61,6 +63,9 @@ export function PitchCanvas({ playbackRef, playerRunAnimRef, animationQueueRef, 
   const completedQueueAnimIds = useRef<Set<string>>(new Set());
   // Track which badge is focused for number-key editing
   const focusedBadgeAnnId = useRef<string | null>(null);
+  // Digit buffer for multi-digit step numbers (e.g. typing "12" quickly)
+  const stepDigitBuffer = useRef<string>('');
+  const stepDigitTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   transformRef.current = transform;
   stateRef.current = state;
 
@@ -77,35 +82,57 @@ export function PitchCanvas({ playbackRef, playerRunAnimRef, animationQueueRef, 
       if (e.key === 'Meta') dispatch({ type: 'SET_CMD_HELD', held: true });
       if (e.key === 'Shift') dispatch({ type: 'SET_SHIFT_HELD', held: true });
 
-      // Number keys 1-9: set step on selected line annotation (badge or just-drawn)
-      if (e.key >= '1' && e.key <= '9') {
+      // Number keys 0-9: set step on selected line annotation (badge or just-drawn).
+      // Accumulates digits with a 500ms timeout to support multi-digit steps (e.g. "12").
+      if (e.key >= '0' && e.key <= '9') {
         const currentState = stateRef.current;
         const selId = focusedBadgeAnnId.current || currentState.selectedAnnotationId;
         if (selId) {
           const selAnn = currentState.annotations.find(a => a.id === selId);
           if (selAnn && isLineAnnotation(selAnn.type)) {
-            const requestedStep = parseInt(e.key);
-            // Guardrail: prevent setting a step lower than the incoming annotation's step
-            const lineAnn = selAnn as { startPlayerId?: string; start: { x: number; y: number } };
-            if (lineAnn.startPlayerId) {
-              const minStep = computeMinStepForGhostStart(
-                lineAnn.startPlayerId, lineAnn.start,
-                currentState.annotations, currentState.previewGhosts,
-              );
-              if (requestedStep < minStep) {
-                e.preventDefault();
-                return; // reject too-low step
-              }
-            }
             e.preventDefault();
-            dispatch({ type: 'EDIT_ANNOTATION', annotationId: selId, changes: { animStep: requestedStep } });
+
+            // Don't allow leading zero
+            if (e.key === '0' && stepDigitBuffer.current === '') return;
+
+            // Append digit to buffer
+            stepDigitBuffer.current += e.key;
+
+            // Clear any pending commit timer
+            if (stepDigitTimer.current) clearTimeout(stepDigitTimer.current);
+
+            // Commit the buffered number after a short delay (allows typing multi-digit)
+            const capturedSelId = selId;
+            stepDigitTimer.current = setTimeout(() => {
+              const step = parseInt(stepDigitBuffer.current, 10);
+              stepDigitBuffer.current = '';
+              stepDigitTimer.current = null;
+              if (isNaN(step) || step < 1) return;
+
+              // Guardrail: prevent setting a step lower than the incoming annotation's step
+              const latestState = stateRef.current;
+              const latestAnn = latestState.annotations.find(a => a.id === capturedSelId);
+              if (latestAnn) {
+                const lineAnn = latestAnn as { startPlayerId?: string; start: { x: number; y: number } };
+                if (lineAnn.startPlayerId) {
+                  const minStep = computeMinStepForGhostStart(
+                    lineAnn.startPlayerId, lineAnn.start,
+                    latestState.annotations, latestState.previewGhosts,
+                  );
+                  if (step < minStep) return; // reject too-low step
+                }
+              }
+              dispatch({ type: 'EDIT_ANNOTATION', annotationId: capturedSelId, changes: { animStep: step } });
+            }, 500);
             return;
           }
         }
       }
-      // Escape: clear badge focus and selection
+      // Escape: clear badge focus, selection, and digit buffer
       if (e.key === 'Escape' && focusedBadgeAnnId.current) {
         focusedBadgeAnnId.current = null;
+        stepDigitBuffer.current = '';
+        if (stepDigitTimer.current) { clearTimeout(stepDigitTimer.current); stepDigitTimer.current = null; }
         dispatch({ type: 'SELECT_ANNOTATION', annotationId: null });
       }
     };
@@ -118,6 +145,9 @@ export function PitchCanvas({ playbackRef, playerRunAnimRef, animationQueueRef, 
       dispatch({ type: 'SET_CMD_HELD', held: false });
       dispatch({ type: 'SET_SHIFT_HELD', held: false });
       focusedBadgeAnnId.current = null;
+      // Clear digit buffer on blur
+      stepDigitBuffer.current = '';
+      if (stepDigitTimer.current) { clearTimeout(stepDigitTimer.current); stepDigitTimer.current = null; }
     };
 
     window.addEventListener('keydown', handleKeyDown);
@@ -127,6 +157,8 @@ export function PitchCanvas({ playbackRef, playerRunAnimRef, animationQueueRef, 
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
       window.removeEventListener('blur', handleBlur);
+      // Clean up digit timer on unmount
+      if (stepDigitTimer.current) { clearTimeout(stepDigitTimer.current); stepDigitTimer.current = null; }
     };
   }, [dispatch]);
 
@@ -390,6 +422,10 @@ export function PitchCanvas({ playbackRef, playerRunAnimRef, animationQueueRef, 
           completedQueueAnimIds.current.add(fa.annotationId);
         }
 
+        // Stamp completed-step ghosts immediately so they start fading now
+        // (only stamps ghosts with createdAt === 0, so won't re-stamp already-fading ones)
+        dispatch({ type: 'STAMP_GHOST_FADE_START', time: performance.now() });
+
         // Check animation queue for next batch (same step = simultaneous)
         const queue = animationQueueRef?.current;
         if (queue && queue.length > 0) {
@@ -484,7 +520,7 @@ export function PitchCanvas({ playbackRef, playerRunAnimRef, animationQueueRef, 
               startPos,
               endPos: resolvedEndPos,
               controlPoint,
-              startTime: nowMs,
+              startTime: nowMs + (next.startDelay ?? 0),
               durationMs: next.durationMs,
               animationType: next.animationType,
               endPlayerId: next.endPlayerId,
@@ -498,8 +534,6 @@ export function PitchCanvas({ playbackRef, playerRunAnimRef, animationQueueRef, 
           playerRunAnimRef.current = [];
           // Clear completed tracking (annotations are now in ghostAnnotationIds)
           completedQueueAnimIds.current.clear();
-          // Stamp all ghosts with current time so their fade timers start now
-          dispatch({ type: 'STAMP_GHOST_FADE_START', time: performance.now() });
         }
       } else if (finishedAnims.length > 0) {
         // Some finished but not all — remove finished ones, keep remaining active
@@ -517,11 +551,48 @@ export function PitchCanvas({ playbackRef, playerRunAnimRef, animationQueueRef, 
         }
       }
 
-      render(ctx, transformRef.current!, renderState, size.width, size.height, runAnimOverlays, goalCelebrationRef?.current ?? undefined, now);
+
+      // Build animation context for render pipeline.
+      // isAnimActive is true when animations are running, auto-advancing, or mid step-through.
+      // completedStepBatchesRef tracks executed steps — it's populated from the first step
+      // and cleared when the session ends (Escape, all steps done, or new Space play).
+      const hasAutoQueue = (animationQueueRef?.current?.length ?? 0) > 0;
+      const isInSteppingSession = (completedStepBatchesRef?.current?.length ?? 0) > 0;
+      const isAnimActive = activeAnims.length > 0 || hasAutoQueue || isInSteppingSession;
+      const nextStepAnnIds = new Set<string>();
+      // Check auto-play queue
+      const autoQueue = animationQueueRef?.current;
+      if (autoQueue && autoQueue.length > 0) {
+        const nextStep = autoQueue[0].step;
+        for (const q of autoQueue) {
+          if (q.step === nextStep) nextStepAnnIds.add(q.annotationId);
+          else break;
+        }
+      }
+      // Check step-through queue
+      const stepQueue = stepQueueRef?.current;
+      if (stepQueue && stepQueue.length > 0) {
+        const nextStep = stepQueue[0].step;
+        for (const q of stepQueue) {
+          if (q.step === nextStep) nextStepAnnIds.add(q.annotationId);
+          else break;
+        }
+      }
+      // If a next-step annotation was previously in completedQueueAnimIds, remove it.
+      // This handles backward stepping (Left Arrow / CMD+Z) where UNDO restores the
+      // annotation but completedQueueAnimIds still had it marked as completed.
+      for (const id of nextStepAnnIds) {
+        completedQueueAnimIds.current.delete(id);
+      }
+      const animContext: AnimContext = {
+        isActive: isAnimActive,
+        nextStepAnnotationIds: nextStepAnnIds.size > 0 ? nextStepAnnIds : undefined,
+      };
+      render(ctx, transformRef.current!, renderState, size.width, size.height, runAnimOverlays, goalCelebrationRef?.current ?? undefined, now, animContext);
       ctx.restore();
 
-      // Auto-cleanup fully faded ghosts (3s hold + 3s fade = 6s total)
-      const GHOST_TOTAL_MS = 6000;
+      // Auto-cleanup fully faded ghosts (0.2s hold + 0.8s fade = 1.0s total)
+      const GHOST_TOTAL_MS = 1000;
       for (const ghost of stateRef.current.ghostPlayers) {
         if (ghost.createdAt > 0 && now - ghost.createdAt > GHOST_TOTAL_MS) {
           dispatch({ type: 'CLEAR_PLAYER_GHOSTS', playerId: ghost.playerId });

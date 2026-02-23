@@ -101,8 +101,19 @@ export function computeStepOrder(annotations: LineAnnotation[]): number[] | null
   return stepAssignment;
 }
 
-/** Duration for one-touch bounce passes (ms). Slightly shorter than normal 1000ms to keep tempo up. */
+/** Duration for one-touch bounce passes (ms). Slightly shorter than normal to keep tempo up. */
 export const ONE_TOUCH_DURATION_MS = 600;
+
+/** Default animation durations per type (ms). */
+export const ANIM_DURATION_MS = {
+  pass: 1000,
+  run: 1100,      // slightly slower than a pass
+  dribble: 1400,  // noticeably slower — running with the ball
+} as const;
+
+/** Delay before a pass starts when targeting a same-step runner (ms).
+ *  Gives the runner a head start so the ball isn't kicked into empty space. */
+export const PASS_LEAD_DELAY_MS = 250;
 
 /**
  * Detect which annotations are "one-touch" passes.

@@ -1355,7 +1355,7 @@ export function appStateReducer(state: AppState, action: AppAction): AppState {
         resolvedPossession: computePossession(newPlayers, newBall, d.possession, state.resolvedPossession),
         ghostPlayers: [],
         ghostAnnotationIds: [],
-        previewGhosts: [],
+        previewGhosts: d.previewGhosts ?? [],
         // Clear transient state
         selectedPlayerId: null,
         hoveredPlayerId: null,
