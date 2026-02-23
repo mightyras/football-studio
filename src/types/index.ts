@@ -116,6 +116,7 @@ export type QueuedAnimation = {
   endPlayerId?: string;
   isOneTouch?: boolean;        // one-touch bounce pass — no ease-in, ball leaves instantly
   step: number;                // animation step — same step = simultaneous
+  startDelay?: number;         // delay before animation starts (ms) — used for passes targeting runners
 };
 
 /** Visual overlay data passed through render pipeline during run animation */
@@ -417,6 +418,7 @@ export type SceneData = {
   players: Player[];
   ball: BallState;
   annotations: Annotation[];
+  previewGhosts?: PreviewGhost[];
   teamAName: string;
   teamBName: string;
   teamAColor: string;

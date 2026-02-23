@@ -17,6 +17,8 @@ import {
   computeStepOrder,
   computeOneTouchIndices,
   ONE_TOUCH_DURATION_MS,
+  ANIM_DURATION_MS,
+  PASS_LEAD_DELAY_MS,
   type LineAnnotation,
 } from './annotationAnimator';
 import { render } from '../canvas/renderPipeline';
@@ -175,9 +177,9 @@ export class RunAnimExportController {
             0,
           );
 
-          // Determine batch duration
+          // Determine batch duration (account for delayed starts, e.g. pass lead delay)
           const batchDurationMs = Math.max(
-            ...anims.map((a) => a.durationMs),
+            ...anims.map((a) => a.startTime + a.durationMs),
           );
           const batchTotalFrames = Math.ceil(batchDurationMs / dtMs) + 1;
 
@@ -364,7 +366,7 @@ export class RunAnimExportController {
           ann.type === 'curved-run'
             ? ((ann as CurvedRunAnnotation).curveDirection ?? 'left')
             : undefined,
-        durationMs: isOneTouch ? ONE_TOUCH_DURATION_MS : 1000,
+        durationMs: isOneTouch ? ONE_TOUCH_DURATION_MS : ANIM_DURATION_MS[animationType],
         animationType,
         endPlayerId: ann.endPlayerId,
         isOneTouch,
@@ -372,6 +374,22 @@ export class RunAnimExportController {
       });
     }
     if (queue.length === 0) return null;
+
+    // Sync pass duration to target runner's duration so ball and player arrive together.
+    // Also add a lead delay so the runner gets a head start before the ball is kicked.
+    for (const item of queue) {
+      if (item.animationType === 'pass' && item.endPlayerId) {
+        const targetRun = queue.find(
+          q => q.playerId === item.endPlayerId && q.step === item.step && q.animationType !== 'pass'
+        );
+        if (targetRun) {
+          const totalDuration = Math.max(item.durationMs, targetRun.durationMs);
+          const delay = Math.min(PASS_LEAD_DELAY_MS, totalDuration * 0.3);
+          item.startDelay = delay;
+          item.durationMs = totalDuration - delay;
+        }
+      }
+    }
 
     return { queue, allLineAnns };
   }
@@ -495,7 +513,7 @@ export class RunAnimExportController {
         startPos,
         endPos: resolvedEndPos,
         controlPoint,
-        startTime: virtualStartTime,
+        startTime: virtualStartTime + (item.startDelay ?? 0),
         durationMs: item.durationMs,
         animationType: item.animationType,
         endPlayerId: item.endPlayerId,

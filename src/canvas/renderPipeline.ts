@@ -76,9 +76,17 @@ function renderLogoBadge(
   ctx.restore();
 }
 
-// Ghost fade constants
-const GHOST_HOLD_MS = 3000;  // visible at full opacity for 3s after animation
-const GHOST_FADE_MS = 3000;  // then fade out over 3s
+// Ghost fade constants — fast fade so completed-step ghosts don't pile up
+const GHOST_HOLD_MS = 200;   // barely visible at full opacity
+const GHOST_FADE_MS = 800;   // then fade out quickly
+
+/** Animation context passed from PitchCanvas to control what renders during animation. */
+export type AnimContext = {
+  /** True when any run/step animation is active or queued. */
+  isActive: boolean;
+  /** Annotation IDs in the next upcoming step (for filtering preview ghosts). */
+  nextStepAnnotationIds?: Set<string>;
+};
 
 /** Compute ghost opacity based on elapsed time since fade started. */
 function ghostOpacity(baseOpacity: number, createdAt: number, now: number): number {
@@ -98,6 +106,7 @@ export function render(
   runAnimOverlays?: RunAnimationOverlay[],
   goalCelebration?: GoalCelebration,
   now?: number,
+  animContext: AnimContext = { isActive: false },
 ) {
   ctx.clearRect(0, 0, width, height);
 
@@ -174,22 +183,38 @@ export function render(
     ...(runAnimOverlays ? runAnimOverlays.map(o => o.ghostPlayer) : []),
   ];
 
-  // Compute effective animation step order for badges
-  const lineAnns = state.annotations.filter(
-    (a): a is LineAnnotation =>
-      a.type === 'passing-line' || a.type === 'running-line' ||
-      a.type === 'curved-run' || a.type === 'dribble-line',
-  );
-  const effectiveSteps = new Map<string, number>();
-  if (lineAnns.length > 0) {
-    const stepOrder = computeStepOrder(lineAnns);
-    lineAnns.forEach((ann, i) => {
-      effectiveSteps.set(ann.id, stepOrder ? stepOrder[i] : (ann.animStep ?? 1));
-    });
-  }
+  // Annotations layer 1: lines and polygons (below players).
+  // During animation: show only ghost (completed), currently-animating, and next-step lines.
+  // Next-step lines act as a preview of what's about to happen.
+  {
+    // Compute effective animation step order for badges
+    const lineAnns = state.annotations.filter(
+      (a): a is LineAnnotation =>
+        a.type === 'passing-line' || a.type === 'running-line' ||
+        a.type === 'curved-run' || a.type === 'dribble-line',
+    );
+    const effectiveSteps = new Map<string, number>();
+    if (lineAnns.length > 0) {
+      const stepOrder = computeStepOrder(lineAnns);
+      lineAnns.forEach((ann, i) => {
+        effectiveSteps.set(ann.id, stepOrder ? stepOrder[i] : (ann.animStep ?? 1));
+      });
+    }
 
-  // Annotations layer 1: lines and polygons (below players)
-  renderAnnotationsBase(ctx, transform, state.annotations, state.players, state.selectedAnnotationId, state.playerRadius, accent, state.ghostAnnotationIds, runAnimOverlays, allGhosts, state.previewGhosts ?? [], now, effectiveSteps, state.showStepNumbers);
+    // Filter annotations during animation: only ghost (fading) + currently-animating.
+    // All other lines (including next step) are hidden until their step plays.
+    const visibleAnnotations = animContext.isActive
+      ? state.annotations.filter(ann =>
+          state.ghostAnnotationIds.includes(ann.id) ||
+          runAnimOverlays?.some(o => o.annotationId === ann.id)
+        )
+      : state.annotations;
+
+    // Hide step badges during animation (the sequence makes the order clear)
+    const showSteps = animContext.isActive ? false : state.showStepNumbers;
+
+    renderAnnotationsBase(ctx, transform, visibleAnnotations, state.players, state.selectedAnnotationId, state.playerRadius, accent, state.ghostAnnotationIds, runAnimOverlays, allGhosts, state.previewGhosts ?? [], now, effectiveSteps, showSteps);
+  }
 
   // Ghost players (semi-transparent copies at run origin, below real players)
   if (allGhosts.length) {
@@ -232,10 +257,14 @@ export function render(
   }
 
   // Preview ghosts (semi-transparent at run destination, below real players)
-  if (state.previewGhosts?.length) {
+  // Hidden during animation to reduce clutter; shown when building.
+  const visiblePreviewGhosts = animContext.isActive
+    ? []
+    : (state.previewGhosts ?? []);
+  if (visiblePreviewGhosts.length) {
     ctx.save();
     ctx.globalAlpha = 0.25;
-    for (const pg of state.previewGhosts) {
+    for (const pg of visiblePreviewGhosts) {
       const teamColor = pg.team === 'A' ? state.teamAColor : state.teamBColor;
       const outlineColor = pg.team === 'A' ? state.teamAOutlineColor : state.teamBOutlineColor;
       const labelAbove = pg.team === 'A' ? teamAAttacksDown : teamBAttacksDown;
@@ -327,7 +356,10 @@ export function render(
   }
 
   // Snap indicators (subtle rings on players connected to lines, above player tokens)
-  renderSnapIndicators(ctx, transform, state.annotations, state.players, state.playerRadius);
+  // Hidden during run animation to reduce visual clutter.
+  if (!animContext.isActive) {
+    renderSnapIndicators(ctx, transform, state.annotations, state.players, state.playerRadius);
+  }
 
   // Annotations layer 2: text (above players)
   renderAnnotationsText(ctx, transform, state.annotations, state.selectedAnnotationId, accent);

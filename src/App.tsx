@@ -22,7 +22,7 @@ import { usePlayback } from './hooks/usePlayback';
 import { useZoom } from './hooks/useZoom';
 import { useCollaboration } from './hooks/useCollaboration';
 import { useThemeColors } from './hooks/useThemeColors';
-import { computeStepOrder, computeOneTouchIndices, ONE_TOUCH_DURATION_MS, type LineAnnotation } from './animation/annotationAnimator';
+import { computeStepOrder, computeOneTouchIndices, ONE_TOUCH_DURATION_MS, ANIM_DURATION_MS, PASS_LEAD_DELAY_MS, type LineAnnotation } from './animation/annotationAnimator';
 import { ExportController, type ExportOptions } from './animation/exportController';
 import { RunAnimExportController } from './animation/runAnimExportController';
 import type { AnimationSequence, CurvedRunAnnotation, GoalCelebration, PanelTab, PlayerRunAnimation, QueuedAnimation } from './types';
@@ -363,7 +363,7 @@ function AppContent() {
         curveDirection: ann.type === 'curved-run'
           ? ((ann as CurvedRunAnnotation).curveDirection ?? 'left')
           : undefined,
-        durationMs: isOneTouch ? ONE_TOUCH_DURATION_MS : 1000,
+        durationMs: isOneTouch ? ONE_TOUCH_DURATION_MS : ANIM_DURATION_MS[animationType],
         animationType,
         endPlayerId: ann.endPlayerId,
         isOneTouch,
@@ -371,6 +371,22 @@ function AppContent() {
       });
     }
     if (queue.length === 0) return null;
+
+    // Sync pass duration to target runner's duration so ball and player arrive together.
+    // Also add a lead delay so the runner gets a head start before the ball is kicked.
+    for (const item of queue) {
+      if (item.animationType === 'pass' && item.endPlayerId) {
+        const targetRun = queue.find(
+          q => q.playerId === item.endPlayerId && q.step === item.step && q.animationType !== 'pass'
+        );
+        if (targetRun) {
+          const totalDuration = Math.max(item.durationMs, targetRun.durationMs);
+          const delay = Math.min(PASS_LEAD_DELAY_MS, totalDuration * 0.3); // cap at 30% of total
+          item.startDelay = delay;
+          item.durationMs = totalDuration - delay; // pass covers remaining time after delay
+        }
+      }
+    }
 
     return { queue, selectedId, isReplay, allLineAnns };
   }, [state]);
@@ -410,7 +426,7 @@ function AppContent() {
         curveDirection: ann.type === 'curved-run'
           ? ((ann as CurvedRunAnnotation).curveDirection ?? 'left')
           : undefined,
-        durationMs: isOneTouch ? ONE_TOUCH_DURATION_MS : 1000,
+        durationMs: isOneTouch ? ONE_TOUCH_DURATION_MS : ANIM_DURATION_MS[animationType],
         animationType,
         endPlayerId: ann.endPlayerId,
         isOneTouch,
@@ -418,6 +434,22 @@ function AppContent() {
       });
     }
     if (queue.length === 0) return null;
+
+    // Sync pass duration to target runner's duration so ball and player arrive together.
+    // Also add a lead delay so the runner gets a head start before the ball is kicked.
+    for (const item of queue) {
+      if (item.animationType === 'pass' && item.endPlayerId) {
+        const targetRun = queue.find(
+          q => q.playerId === item.endPlayerId && q.step === item.step && q.animationType !== 'pass'
+        );
+        if (targetRun) {
+          const totalDuration = Math.max(item.durationMs, targetRun.durationMs);
+          const delay = Math.min(PASS_LEAD_DELAY_MS, totalDuration * 0.3);
+          item.startDelay = delay;
+          item.durationMs = totalDuration - delay;
+        }
+      }
+    }
 
     return { queue, allLineAnns };
   }, [state]);
@@ -519,7 +551,7 @@ function AppContent() {
         startPos,
         endPos: resolvedEndPos,
         controlPoint,
-        startTime: nowMs,
+        startTime: nowMs + (item.startDelay ?? 0),
         durationMs: item.durationMs,
         animationType: item.animationType,
         endPlayerId: item.endPlayerId,
@@ -1121,7 +1153,7 @@ function AppContent() {
       </div>
       <div className="canvas-area">
         <PresenceBar onlineUsers={collaboration.onlineUsers} isConnected={collaboration.isConnected} onLeave={handleLeaveCollaboration} />
-        <PitchCanvas playbackRef={activePlaybackRef} playerRunAnimRef={playerRunAnimRef} animationQueueRef={animationQueueRef} goalCelebrationRef={goalCelebrationRef} onGoalScored={handleGoalScored} zoom={zoom} />
+        <PitchCanvas playbackRef={activePlaybackRef} playerRunAnimRef={playerRunAnimRef} animationQueueRef={animationQueueRef} stepQueueRef={stepQueueRef} completedStepBatchesRef={completedStepBatchesRef} goalCelebrationRef={goalCelebrationRef} onGoalScored={handleGoalScored} zoom={zoom} />
       </div>
       {state.animationMode ? (
         <>
