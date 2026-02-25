@@ -14,15 +14,16 @@ import { computeStepOrder, type LineAnnotation } from '../animation/annotationAn
 let cachedLogoUrl: string | null = null;
 let cachedLogoImg: HTMLImageElement | null = null;
 
-function getLogoImage(dataUrl: string): HTMLImageElement | null {
-  if (dataUrl === cachedLogoUrl && cachedLogoImg?.complete) {
+function getLogoImage(url: string): HTMLImageElement | null {
+  if (url === cachedLogoUrl && cachedLogoImg?.complete) {
     return cachedLogoImg;
   }
   // Start loading (will be ready next frame)
-  if (dataUrl !== cachedLogoUrl) {
-    cachedLogoUrl = dataUrl;
+  if (url !== cachedLogoUrl) {
+    cachedLogoUrl = url;
     cachedLogoImg = new Image();
-    cachedLogoImg.src = dataUrl;
+    if (!url.startsWith('data:')) cachedLogoImg.crossOrigin = 'anonymous';
+    cachedLogoImg.src = url;
   }
   return cachedLogoImg?.complete ? cachedLogoImg : null;
 }
@@ -45,34 +46,46 @@ function getTeamLogoImage(url: string): HTMLImageElement | null {
   return cachedTeamLogoImg?.complete ? cachedTeamLogoImg : null;
 }
 
-function renderLogoBadge(
+function renderLogoBadges(
   ctx: CanvasRenderingContext2D,
   transform: PitchTransform,
-  logoDataUrl: string,
+  logoUrl: string,
 ) {
-  const img = getLogoImage(logoDataUrl);
+  const img = getLogoImage(logoUrl);
   if (!img) return;
 
-  // Position in the bottom-right green padding area — fully visible
   const pad = PITCH.padding;
-  const logoWorldSize = Math.min(pad * 0.75, 5); // slightly larger than before
+  const logoWorldSize = Math.min(pad * 0.75, 5);
   const aspect = img.width / img.height;
   const logoW = (aspect >= 1 ? logoWorldSize : logoWorldSize * aspect) * transform.scale;
   const logoH = (aspect >= 1 ? logoWorldSize / aspect : logoWorldSize) * transform.scale;
 
-  // Place in the bottom-right corner of the green surround
-  const anchor = transform.worldToScreen(PITCH.length + pad * 0.5, PITCH.width + pad * 0.5);
-  const x = anchor.x - logoW / 2;
-  const y = anchor.y - logoH / 2;
+  // The four corners of the green surround in world coordinates
+  const inset = pad * 0.5;
+  const corners = [
+    transform.worldToScreen(-inset, -inset),
+    transform.worldToScreen(-inset, PITCH.width + inset),
+    transform.worldToScreen(PITCH.length + inset, -inset),
+    transform.worldToScreen(PITCH.length + inset, PITCH.width + inset),
+  ];
+
+  // Pick the corner closest to screen top-left and bottom-right
+  let topLeft = corners[0], bottomRight = corners[0];
+  for (const c of corners) {
+    if (c.x + c.y < topLeft.x + topLeft.y) topLeft = c;
+    if (c.x + c.y > bottomRight.x + bottomRight.y) bottomRight = c;
+  }
 
   ctx.save();
-  // Drop shadow for the logo
   ctx.shadowColor = 'rgba(0, 0, 0, 0.4)';
   ctx.shadowBlur = 6 * (transform.scale / 10);
   ctx.shadowOffsetX = 0;
   ctx.shadowOffsetY = 2 * (transform.scale / 10);
-  ctx.globalAlpha = 0.85;
-  ctx.drawImage(img, x, y, logoW, logoH);
+  ctx.globalAlpha = 0.55;
+
+  ctx.drawImage(img, topLeft.x - logoW / 2, topLeft.y - logoH / 2, logoW, logoH);
+  ctx.drawImage(img, bottomRight.x - logoW / 2, bottomRight.y - logoH / 2, logoW, logoH);
+
   ctx.restore();
 }
 
@@ -137,9 +150,10 @@ export function render(
   // Zone overlay — after pitch/benches, before cover shadows and players
   renderZoneOverlay(ctx, transform, state.pitchSettings, accent);
 
-  // Club logo badge — in the green padding area, before players
-  if (state.clubIdentity.logoDataUrl) {
-    renderLogoBadge(ctx, transform, state.clubIdentity.logoDataUrl);
+  // Club logo badges — in the green padding area corners, before players
+  const badgeLogoUrl = state.teamALogoUrl || state.clubIdentity.logoDataUrl;
+  if (badgeLogoUrl) {
+    renderLogoBadges(ctx, transform, badgeLogoUrl);
   }
 
   const possessionTeam = state.resolvedPossession;
