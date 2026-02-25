@@ -591,7 +591,7 @@ export function TopBar({ onPlayLines, onStepLines, onExportLines, showPanel, onT
                 Formation
               </span>
               <span style={{ fontSize: 11, color: openFormationDropdown === 'A' ? theme.highlight : theme.textMuted, lineHeight: 1.3 }}>
-                {getFormationName(state.teamAFormation)}
+                {state.teamAFormation ? getFormationName(state.teamAFormation) : 'None'}
               </span>
             </button>
             {openFormationDropdown === 'A' && (
@@ -645,7 +645,7 @@ export function TopBar({ onPlayLines, onStepLines, onExportLines, showPanel, onT
                 Formation
               </span>
               <span style={{ fontSize: 11, color: openFormationDropdown === 'B' ? theme.highlight : theme.textMuted, lineHeight: 1.3 }}>
-                {getFormationName(state.teamBFormation)}
+                {state.teamBFormation ? getFormationName(state.teamBFormation) : 'None'}
               </span>
             </button>
             {openFormationDropdown === 'B' && (
@@ -915,7 +915,7 @@ export function TopBar({ onPlayLines, onStepLines, onExportLines, showPanel, onT
       {showResetConfirm && (
         <ResetConfirmDialog
           onConfirm={() => {
-            dispatch({ type: 'RESET' });
+            dispatch({ type: 'RESET', defaultFormationId: activeTeam?.default_formation_id });
             setShowResetConfirm(false);
           }}
           onCancel={() => setShowResetConfirm(false)}

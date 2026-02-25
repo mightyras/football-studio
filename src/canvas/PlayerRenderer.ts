@@ -60,7 +60,7 @@ export function drawPlayer(
   isHovered: boolean,
   playerRadius: number,
   showOrientation: boolean,
-  isOutOfPossession: boolean,
+  _isOutOfPossession: boolean,
   isCmdHeld: boolean,
   outlineColor: string,
   labelAbove: boolean,
@@ -336,7 +336,7 @@ export function drawCoverShadow(
   ctx: CanvasRenderingContext2D,
   transform: PitchTransform,
   player: Player,
-  teamColor: string,
+  _teamColor: string,
   playerRadius: number,
 ) {
   const pos = transform.worldToScreen(player.x, player.y);
@@ -407,7 +407,7 @@ export function drawFOV(
   ctx: CanvasRenderingContext2D,
   transform: PitchTransform,
   player: Player,
-  teamColor: string,
+  _teamColor: string,
   playerRadius: number,
   expanded: boolean,
 ) {

@@ -362,6 +362,7 @@ export type Team = {
   background_color: string | null;
   player_color: string | null;
   outline_color: string | null;
+  default_formation_id: string;
 };
 
 export type TeamMember = {

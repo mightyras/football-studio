@@ -243,7 +243,7 @@ export function BenchPanel() {
 
 function SubstituteRow({
   sub,
-  team,
+  team: _team,
   teamColor,
   isPending,
   onSubIn,

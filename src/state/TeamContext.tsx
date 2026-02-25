@@ -36,6 +36,8 @@ type TeamContextValue = {
   refreshInvites: () => Promise<void>;
   /** Refresh just the created teams (admin dashboard) */
   refreshCreatedTeams: () => Promise<void>;
+  /** Update the active team's default formation (admin only) */
+  updateDefaultFormation: (formationId: string) => Promise<boolean>;
 };
 
 const ACTIVE_TEAM_KEY = 'football-studio-active-team';
@@ -160,6 +162,23 @@ export function TeamProvider({ children }: { children: ReactNode }) {
     [setActiveTeamId, refresh],
   );
 
+  const updateDefaultFormation = useCallback(
+    async (formationId: string): Promise<boolean> => {
+      if (!activeTeam) return false;
+      const ok = await teamService.updateDefaultFormation(activeTeam.id, formationId);
+      if (ok) {
+        // Optimistically update local state so UI reflects immediately
+        setTeams((prev) =>
+          prev.map((t) =>
+            t.id === activeTeam.id ? { ...t, default_formation_id: formationId } : t,
+          ),
+        );
+      }
+      return ok;
+    },
+    [activeTeam],
+  );
+
   return (
     <TeamContext.Provider
       value={{
@@ -175,6 +194,7 @@ export function TeamProvider({ children }: { children: ReactNode }) {
         refresh,
         refreshInvites,
         refreshCreatedTeams,
+        updateDefaultFormation,
       }}
     >
       {children}

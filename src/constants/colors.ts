@@ -13,7 +13,7 @@ export const THEME_DEFAULTS_LIGHT = {
   primary: '#f5f5f5',      // Light gray UI background
   secondary: '#1e293b',    // Dark slate text & icons
   highlight: '#d97706',    // Amber-600 (darker for contrast on light bg)
-  background: '#fafafa',   // Near-white board background
+  background: '#e0e0e0',   // Light gray board background (slightly darker than UI)
 } as const;
 
 /** Full derived theme (used as fallback when no branding is active). */

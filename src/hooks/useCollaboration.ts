@@ -148,7 +148,7 @@ export function useCollaboration(
       const state = channel.presenceState();
       const users: OnlineUser[] = [];
       for (const [, presences] of Object.entries(state)) {
-        for (const p of presences as Array<{ userId: string; displayName: string; avatarUrl: string | null }>) {
+        for (const p of presences as unknown as Array<{ userId: string; displayName: string; avatarUrl: string | null }>) {
           if (p.userId !== userId) {
             users.push({
               userId: p.userId,
@@ -225,7 +225,7 @@ export function useCollaboration(
     return () => {
       // Cleanup
       channel.unsubscribe();
-      supabase.removeChannel(channel);
+      supabase!.removeChannel(channel);
       channelRef.current = null;
       setIsConnected(false);
       setOnlineUsers([]);

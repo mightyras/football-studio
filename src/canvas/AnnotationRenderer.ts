@@ -1,6 +1,6 @@
-import type { Annotation, DrawingInProgress, DrawSubTool, GhostPlayer, PassingLineAnnotation, PlayerMarkingAnnotation, PreviewGhost, RunningLineAnnotation, CurvedRunAnnotation, DribbleLineAnnotation, Player, PitchTransform, RunAnimationOverlay, WorldPoint } from '../types';
+import type { Annotation, DrawingInProgress, DrawSubTool, GhostPlayer, PassingLineAnnotation, PreviewGhost, RunningLineAnnotation, CurvedRunAnnotation, DribbleLineAnnotation, Player, PitchTransform, RunAnimationOverlay, WorldPoint } from '../types';
 import { THEME } from '../constants/colors';
-import { curvedRunControlPoint, CURVE_BULGE_FACTOR } from '../utils/curveGeometry';
+import { curvedRunControlPoint } from '../utils/curveGeometry';
 import { findClosestGhost } from '../utils/ghostUtils';
 
 // ── Constants ──
@@ -573,21 +573,6 @@ function drawStepBadge(
   ctx.fillStyle = color;
   ctx.fillText(String(step), x, y + 0.5);
   ctx.restore();
-}
-
-/**
- * Check if annotations have multiple distinct step numbers.
- * Only show step badges when there are 2+ distinct steps.
- */
-function hasMultipleSteps(annotations: Annotation[]): boolean {
-  const steps = new Set<number>();
-  for (const ann of annotations) {
-    if (ann.type === 'passing-line' || ann.type === 'running-line' || ann.type === 'curved-run' || ann.type === 'dribble-line') {
-      steps.add(ann.animStep ?? 1);
-      if (steps.size > 1) return true;
-    }
-  }
-  return false;
 }
 
 // ── Public exports ──

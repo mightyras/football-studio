@@ -6,11 +6,13 @@ import { Toolbar } from './components/Toolbar/Toolbar';
 import { RightPanel } from './components/RightPanel/RightPanel';
 import { TopBar } from './components/TopBar/TopBar';
 import { StatusBar } from './components/StatusBar/StatusBar';
-import { KeyframeStrip } from './components/AnimationPanel/KeyframeStrip';
-import { PlaybackControls } from './components/AnimationPanel/PlaybackControls';
+// KeyframeStrip and PlaybackControls hidden — Animation Mode UI disabled for now
+// import { KeyframeStrip } from './components/AnimationPanel/KeyframeStrip';
+// import { PlaybackControls } from './components/AnimationPanel/PlaybackControls';
 import { ExportDialog } from './components/AnimationPanel/ExportDialog';
 import { DeletePlayerConfirmDialog } from './components/DeletePlayerConfirmDialog';
-import { GoalCelebrationOverlay } from './components/GoalCelebrationOverlay';
+// GoalCelebrationOverlay imported for future use
+// import { GoalCelebrationOverlay } from './components/GoalCelebrationOverlay';
 import { InviteBanner } from './components/TeamPanel/InviteBanner';
 import { PresenceBar } from './components/CollaborationPanel/PresenceBar';
 import { AuthModal } from './components/AuthModal/AuthModal';
@@ -48,10 +50,9 @@ function AppContent() {
   // Zoom/pan state (view-layer only, not in app reducer)
   const zoom = useZoom();
 
-  // Auth (for gating save behind sign-in)
+  // Auth (gate entire app behind sign-in)
   const { user, loading: authLoading, needsPasswordSetup, clearPasswordSetup } = useAuth();
   const { activeTeam } = useTeam();
-  const [showAuthFromSave, setShowAuthFromSave] = useState(false);
 
   // Refs for session auto-save/restore across sign-out/sign-in
   const stateRef = useRef(state);
@@ -129,7 +130,7 @@ function AppContent() {
       } catch { /* storage full — silently ignore */ }
 
       // Full board reset
-      dispatch({ type: 'RESET' });
+      dispatch({ type: 'RESET', defaultFormationId: activeTeam?.default_formation_id });
       dispatch({ type: 'SET_TEAM_COLOR', team: 'A', color: THEME.teamA });
       dispatch({ type: 'SET_TEAM_COLOR', team: 'B', color: THEME.teamB });
       dispatch({ type: 'SET_TEAM_OUTLINE_COLOR', team: 'A', color: '#000000' });
@@ -188,12 +189,12 @@ function AppContent() {
     controllerRef,
     status: playbackStatus,
     currentIndex: playbackIndex,
-    progress: playbackProgress,
+    // progress: playbackProgress, // Animation Mode UI disabled
     play,
     pause,
     stop,
     seekToKeyframe,
-    setSpeed,
+    // setSpeed, // Animation Mode UI disabled
   } = usePlayback(state.animationSequence);
 
   // ── Per-player run animation (Space key / Play Lines) ──
@@ -207,20 +208,16 @@ function AppContent() {
 
   // ── Copy-to-clipboard toast ──
   const [copyToast, setCopyToast] = useState(false);
-  const copyToastTimer = useRef<ReturnType<typeof setTimeout>>();
+  const copyToastTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   // ── Goal celebration ──
-  const [goalCelebration, setGoalCelebration] = useState<GoalCelebration | null>(null);
+  const [, setGoalCelebration] = useState<GoalCelebration | null>(null);
   const goalCelebrationRef = useRef<GoalCelebration | null>(null);
 
   const handleGoalScored = useCallback((celebration: GoalCelebration) => {
     setGoalCelebration(celebration);
     goalCelebrationRef.current = celebration;
     playGoalNetSound();
-  }, []);
-
-  const handleGoalDismiss = useCallback(() => {
-    setGoalCelebration(null);
   }, []);
 
   // Playback ref for PitchCanvas (Animation Mode only now)
@@ -233,12 +230,13 @@ function AppContent() {
   const [exportProgress, setExportProgress] = useState(0);
   const exportControllerRef = useRef<ExportController | RunAnimExportController | null>(null);
 
-  const handleOpenExport = useCallback((seq: AnimationSequence) => {
-    setExportSequence(seq);
-    setShowExportDialog(true);
-    setExporting(false);
-    setExportProgress(0);
-  }, []);
+  // Animation Mode UI disabled — handleOpenExport commented out
+  // const handleOpenExport = useCallback((seq: AnimationSequence) => {
+  //   setExportSequence(seq);
+  //   setShowExportDialog(true);
+  //   setExporting(false);
+  //   setExportProgress(0);
+  // }, []);
 
   const handleExportLines = useCallback(() => {
     // Open export dialog for run-animation export (no sequence needed)
@@ -248,10 +246,11 @@ function AppContent() {
     setExportProgress(0);
   }, []);
 
-  const handleExportKeyframes = useCallback(() => {
-    if (!state.animationSequence || state.animationSequence.keyframes.length < 2) return;
-    handleOpenExport(state.animationSequence);
-  }, [state.animationSequence, handleOpenExport]);
+  // Animation Mode UI disabled — handleExportKeyframes commented out
+  // const handleExportKeyframes = useCallback(() => {
+  //   if (!state.animationSequence || state.animationSequence.keyframes.length < 2) return;
+  //   handleOpenExport(state.animationSequence);
+  // }, [state.animationSequence, handleOpenExport]);
 
   const handleExport = useCallback(async (options: ExportOptions) => {
     setExporting(true);
@@ -962,12 +961,12 @@ function AppContent() {
       if (e.key === 'x' && !e.metaKey && !e.ctrlKey) {
         dispatch({ type: 'SET_ACTIVE_TOOL', tool: 'formation-move' });
       }
-      // Animation mode toggle
-      if (e.key === 'f' && !e.metaKey && !e.ctrlKey) {
-        dispatch({
-          type: state.animationMode ? 'EXIT_ANIMATION_MODE' : 'ENTER_ANIMATION_MODE',
-        });
-      }
+      // Animation mode toggle (disabled — feature hidden from UI)
+      // if (e.key === 'f' && !e.metaKey && !e.ctrlKey) {
+      //   dispatch({
+      //     type: state.animationMode ? 'EXIT_ANIMATION_MODE' : 'ENTER_ANIMATION_MODE',
+      //   });
+      // }
       // Orientation toggle
       if (e.key === 'o' && !e.metaKey && !e.ctrlKey) {
         dispatch({ type: 'SET_SHOW_ORIENTATION', show: !state.showOrientation });
@@ -1041,13 +1040,9 @@ function AppContent() {
       // Cmd+S / Ctrl+S — Save Scene
       if (e.key === 's' && (e.metaKey || e.ctrlKey) && !e.shiftKey) {
         e.preventDefault();
-        if (!user) {
-          setShowAuthFromSave(true);
-        } else {
-          setShowPanel(true);
-          setPanelTab('scenes');
-          setSaveSceneRequested(true);
-        }
+        setShowPanel(true);
+        setPanelTab('scenes');
+        setSaveSceneRequested(true);
       }
 
       // Cmd+Shift+E / Ctrl+Shift+E — Export PNG
@@ -1080,50 +1075,29 @@ function AppContent() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [dispatch, state, playbackStatus, playbackIndex, play, pause, stop, seekToKeyframe, zoom, buildAnimQueue, startAnimBatch]);
 
-  const totalKeyframes = state.animationSequence?.keyframes.length ?? 0;
+  // Animation Mode playback handlers disabled — UI hidden
+  // const totalKeyframes = state.animationSequence?.keyframes.length ?? 0;
+  // const handlePrev = () => { ... };
+  // const handleNext = () => { ... };
+  // const handleSeekStart = () => { ... };
+  // const handleSeekEnd = () => { ... };
+  // const handleSpeedChange = (speed: number) => { ... };
 
-  // Playback control handlers
-  const handlePrev = () => {
-    if (playbackStatus !== 'idle') {
-      seekToKeyframe(Math.max(0, playbackIndex - 1));
-    } else if (state.activeKeyframeIndex !== null) {
-      dispatch({ type: 'SELECT_KEYFRAME', index: Math.max(0, state.activeKeyframeIndex - 1) });
-    }
-  };
-
-  const handleNext = () => {
-    const maxIdx = totalKeyframes - 1;
-    if (playbackStatus !== 'idle') {
-      seekToKeyframe(Math.min(maxIdx, playbackIndex + 1));
-    } else if (state.activeKeyframeIndex !== null) {
-      dispatch({ type: 'SELECT_KEYFRAME', index: Math.min(maxIdx, state.activeKeyframeIndex + 1) });
-    }
-  };
-
-  const handleSeekStart = () => {
-    if (playbackStatus !== 'idle') {
-      seekToKeyframe(0);
-    } else {
-      dispatch({ type: 'SELECT_KEYFRAME', index: 0 });
-    }
-  };
-
-  const handleSeekEnd = () => {
-    const maxIdx = totalKeyframes - 1;
-    if (playbackStatus !== 'idle') {
-      seekToKeyframe(maxIdx);
-    } else if (maxIdx >= 0) {
-      dispatch({ type: 'SELECT_KEYFRAME', index: maxIdx });
-    }
-  };
-
-  const handleSpeedChange = (speed: number) => {
-    setSpeed(speed);
-    dispatch({ type: 'SET_ANIMATION_SPEED', speedMultiplier: speed });
-  };
+  // Auth gate — require sign-in before accessing the app
+  if (authLoading) {
+    return (
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        height: '100vh', background: themeColors.background, color: themeColors.secondary,
+        fontFamily: 'inherit', fontSize: 14,
+      }}>
+        Loading…
+      </div>
+    );
+  }
 
   return (
-    <div className={`app-layout ${showPanel ? 'app-layout--panel-open' : ''} ${state.animationMode ? 'app-layout--animation' : ''}`}>
+    <div className={`app-layout ${showPanel ? 'app-layout--panel-open' : ''}`}>
       <div className="topbar">
         <TopBar
           onPlayLines={handlePlayLines}
@@ -1166,30 +1140,7 @@ function AppContent() {
         <PresenceBar onlineUsers={collaboration.onlineUsers} isConnected={collaboration.isConnected} onLeave={handleLeaveCollaboration} />
         <PitchCanvas playbackRef={activePlaybackRef} playerRunAnimRef={playerRunAnimRef} animationQueueRef={animationQueueRef} stepQueueRef={stepQueueRef} completedStepBatchesRef={completedStepBatchesRef} goalCelebrationRef={goalCelebrationRef} onGoalScored={handleGoalScored} zoom={zoom} />
       </div>
-      {state.animationMode ? (
-        <>
-          <div className="keyframe-strip">
-            <KeyframeStrip onExport={handleExportKeyframes} />
-          </div>
-          <div className="playback-controls">
-            <PlaybackControls
-              status={playbackStatus}
-              currentIndex={playbackStatus !== 'idle' ? playbackIndex : (state.activeKeyframeIndex ?? 0)}
-              progress={playbackProgress}
-              totalKeyframes={totalKeyframes}
-              speedMultiplier={state.animationSequence?.speedMultiplier ?? 1}
-              onPlay={play}
-              onPause={pause}
-              onStop={stop}
-              onPrev={handlePrev}
-              onNext={handleNext}
-              onSeekStart={handleSeekStart}
-              onSeekEnd={handleSeekEnd}
-              onSpeedChange={handleSpeedChange}
-            />
-          </div>
-        </>
-      ) : null}
+      {/* Animation Mode UI hidden — feature preserved in code for future use */}
       <div className="formations">
         <RightPanel
           rotation={zoom.rotation}
@@ -1197,7 +1148,7 @@ function AppContent() {
           onTabChange={setPanelTab}
           saveRequested={saveSceneRequested}
           onSaveHandled={() => setSaveSceneRequested(false)}
-          onRequestSignIn={() => setShowAuthFromSave(true)}
+          onRequestSignIn={() => {}}
           onStartCollaboration={handleStartCollaboration}
         />
       </div>
@@ -1264,9 +1215,9 @@ function AppContent() {
         </div>
       )}
 
-      {/* Auth modal triggered from save hint */}
-      {showAuthFromSave && (
-        <AuthModal onClose={() => setShowAuthFromSave(false)} />
+      {/* Auth gate — show sign-in overlay when not authenticated */}
+      {!user && !authLoading && (
+        <AuthModal onClose={() => {}} />
       )}
 
       {/* Password setup for invited users */}

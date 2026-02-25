@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { useAppState } from '../../state/AppStateContext';
 import type { AttackDirection, PitchRotation, ZoneDirection } from '../../types';
 import { ColorSwatchPicker } from './ColorSwatchPicker';

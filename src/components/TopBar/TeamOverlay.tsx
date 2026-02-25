@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useAppState } from '../../state/AppStateContext';
 import { useThemeColors } from '../../hooks/useThemeColors';
+import { useTeam } from '../../state/TeamContext';
 import { ColorSwatchPicker } from '../SettingsPanel/ColorSwatchPicker';
 import { FormationCard } from '../FormationPanel/FormationCard';
 import { FORMATIONS } from '../../constants/formations';
@@ -347,10 +348,14 @@ interface FormationDropdownProps {
 export function FormationDropdown({ team, onClose }: FormationDropdownProps) {
   const { state, dispatch } = useAppState();
   const theme = useThemeColors();
+  const { activeTeam, isSuperAdmin, updateDefaultFormation } = useTeam();
   const containerRef = useRef<HTMLDivElement>(null);
 
   const isMyTeam = team === 'A';
   const activeFormation = isMyTeam ? state.teamAFormation : state.teamBFormation;
+  const isAdmin = isMyTeam && activeTeam && (activeTeam.myRole === 'admin' || isSuperAdmin);
+  const defaultFormationId = activeTeam?.default_formation_id ?? '4-4-2';
+  const isDefault = activeFormation === defaultFormationId;
 
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
 
@@ -397,6 +402,60 @@ export function FormationDropdown({ team, onClose }: FormationDropdownProps) {
       onPointerDown={e => e.stopPropagation()}
       onKeyDown={e => e.stopPropagation()}
     >
+      {/* Default formation indicator — Team A only */}
+      {isMyTeam && activeTeam && (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '4px 4px 8px',
+            borderBottom: `1px solid ${theme.borderSubtle}`,
+            marginBottom: 6,
+          }}
+        >
+          {isDefault ? (
+            <span style={{ fontSize: 11, color: theme.highlight, fontWeight: 500 }}>
+              ★ Default formation
+            </span>
+          ) : (
+            <>
+              <span style={{ fontSize: 11, color: theme.textMuted }}>
+                Default: {getFormationName(defaultFormationId)}
+              </span>
+              {isAdmin && (
+                <button
+                  onClick={async () => {
+                    if (activeFormation) await updateDefaultFormation(activeFormation);
+                  }}
+                  style={{
+                    fontSize: 11,
+                    color: theme.highlight,
+                    background: 'transparent',
+                    border: 'none',
+                    cursor: 'pointer',
+                    fontFamily: 'inherit',
+                    fontWeight: 500,
+                    padding: '2px 6px',
+                    borderRadius: 4,
+                    transition: 'background 0.15s',
+                  }}
+                  onMouseEnter={e => {
+                    e.currentTarget.style.background = theme.surfaceHover;
+                  }}
+                  onMouseLeave={e => {
+                    e.currentTarget.style.background = 'transparent';
+                  }}
+                  title="Set current formation as team default"
+                >
+                  Set as default
+                </button>
+              )}
+            </>
+          )}
+        </div>
+      )}
+
       <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
         {FORMATION_GROUPS.map(group => {
           const isCollapsed = !!collapsed[group.label];

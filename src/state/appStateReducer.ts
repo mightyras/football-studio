@@ -72,7 +72,7 @@ export type AppAction =
   | { type: 'EDIT_ANNOTATION'; annotationId: string; changes: Partial<Annotation> }
   | { type: 'UNDO' }
   | { type: 'REDO' }
-  | { type: 'RESET' }
+  | { type: 'RESET'; defaultFormationId?: string }
   | { type: 'ENTER_ANIMATION_MODE' }
   | { type: 'EXIT_ANIMATION_MODE' }
   | { type: 'CAPTURE_KEYFRAME' }
@@ -128,9 +128,13 @@ function formationToWorld(
   }
 }
 
-function createDefaultPlayers(teamADirection: AttackDirection = 'up'): Player[] {
+function createDefaultPlayers(
+  teamADirection: AttackDirection = 'up',
+  teamAFormationId: string = '4-4-2',
+): Player[] {
   const players: Player[] = [];
-  const formation = FORMATIONS[0]; // 4-4-2
+  const teamAFormation = FORMATIONS.find(f => f.id === teamAFormationId) || FORMATIONS[0];
+  const teamBFormation = FORMATIONS[0]; // Opposition always 4-4-2
 
   // GK sits near own goal: high-x (bottom) if defending high-x, low-x (top) otherwise
   const gkAX = defendsHighX('A', teamADirection) ? PITCH.length - 4 : 4;
@@ -139,12 +143,12 @@ function createDefaultPlayers(teamADirection: AttackDirection = 'up'): Player[] 
   const facingA = defaultFacing('A', teamADirection);
   const facingB = defaultFacing('B', teamADirection);
 
-  // Team A
+  // Team A (uses team's default formation)
   players.push({
     id: 'a-1', team: 'A', number: 1, name: 'GK', isGK: true,
     x: gkAX, y: PITCH.width / 2, facing: facingA,
   });
-  formation.positions.forEach((pos, i) => {
+  teamAFormation.positions.forEach((pos, i) => {
     const world = formationToWorld(pos, 'A', teamADirection);
     players.push({
       id: `a-${i + 2}`, team: 'A', number: pos.defaultNumber, name: pos.role,
@@ -152,12 +156,12 @@ function createDefaultPlayers(teamADirection: AttackDirection = 'up'): Player[] 
     });
   });
 
-  // Team B
+  // Team B (always 4-4-2)
   players.push({
     id: 'b-1', team: 'B', number: 1, name: 'GK', isGK: true,
     x: gkBX, y: PITCH.width / 2, facing: facingB,
   });
-  formation.positions.forEach((pos, i) => {
+  teamBFormation.positions.forEach((pos, i) => {
     const world = formationToWorld(pos, 'B', teamADirection);
     players.push({
       id: `b-${i + 2}`, team: 'B', number: pos.defaultNumber, name: pos.role,
@@ -873,7 +877,8 @@ export function appStateReducer(state: AppState, action: AppAction): AppState {
       };
     }
 
-    case 'RESET':
+    case 'RESET': {
+      const resetFormationId = action.defaultFormationId || '4-4-2';
       return {
         ...initialState,
         teamAColor: state.teamAColor,
@@ -882,13 +887,15 @@ export function appStateReducer(state: AppState, action: AppAction): AppState {
         teamBOutlineColor: state.teamBOutlineColor,
         clubIdentity: state.clubIdentity,
         themeMode: state.themeMode,
-        players: createDefaultPlayers(initialState.teamADirection),
+        teamAFormation: resetFormationId,
+        players: createDefaultPlayers(initialState.teamADirection, resetFormationId),
         ball: { ...defaultBall },
         annotations: [],
         ghostPlayers: [],
         ghostAnnotationIds: [],
         previewGhosts: [],
       };
+    }
 
     // --- Annotation / Drawing actions ---
 

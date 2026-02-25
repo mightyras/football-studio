@@ -1,6 +1,6 @@
 import type { AppState, GoalCelebration, GhostPlayer, PitchTransform, RunAnimationOverlay } from '../types';
 import { PITCH } from '../constants/pitch';
-import { THEME } from '../constants/colors';
+import { THEME, THEME_DEFAULTS_LIGHT } from '../constants/colors';
 import { renderPitch, renderGoalNetRipple } from './PitchRenderer';
 import { drawBall } from './BallRenderer';
 import { drawPlayer, drawCoverShadow, drawFOV } from './PlayerRenderer';
@@ -113,8 +113,9 @@ export function render(
   // Resolve accent color: club identity highlight overrides default theme accent
   const accent = state.clubIdentity.highlightColor || THEME.accent;
 
-  // Resolve board background color
-  const bgColor = state.clubIdentity.backgroundColor || THEME.pitchBackground;
+  // Resolve board background color (respect light/dark theme mode)
+  const defaultBg = state.themeMode === 'light' ? THEME_DEFAULTS_LIGHT.background : THEME.pitchBackground;
+  const bgColor = state.clubIdentity.backgroundColor || defaultBg;
 
   renderPitch(ctx, transform, width, height, state.pitchSettings, bgColor);
 

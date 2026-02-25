@@ -10,7 +10,7 @@ export async function fetchMyTeams(): Promise<
   // Get team memberships with team data
   const { data, error } = await supabase
     .from('team_members')
-    .select('role, teams:team_id(id, name, created_by, created_at, logo_url, primary_color, secondary_color, highlight_color, background_color, player_color, outline_color)')
+    .select('role, teams:team_id(id, name, created_by, created_at, logo_url, primary_color, secondary_color, highlight_color, background_color, player_color, outline_color, default_formation_id)')
     .eq('user_id', (await supabase.auth.getUser()).data.user?.id ?? '');
 
   if (error || !data) return [];
@@ -29,6 +29,7 @@ export async function fetchMyTeams(): Promise<
       background_color: row.teams.background_color ?? null,
       player_color: row.teams.player_color ?? null,
       outline_color: row.teams.outline_color ?? null,
+      default_formation_id: row.teams.default_formation_id ?? '4-4-2',
       myRole: row.role as TeamRole,
     }));
 }
@@ -144,7 +145,7 @@ export async function fetchCreatedTeams(): Promise<Team[]> {
 
   const { data, error } = await supabase
     .from('teams')
-    .select('id, name, created_by, created_at, logo_url, primary_color, secondary_color, highlight_color, background_color, player_color, outline_color')
+    .select('id, name, created_by, created_at, logo_url, primary_color, secondary_color, highlight_color, background_color, player_color, outline_color, default_formation_id')
     .eq('created_by', user.id)
     .order('created_at', { ascending: false });
 
@@ -161,6 +162,7 @@ export async function fetchCreatedTeams(): Promise<Team[]> {
     background_color: t.background_color ?? null,
     player_color: t.player_color ?? null,
     outline_color: t.outline_color ?? null,
+    default_formation_id: t.default_formation_id ?? '4-4-2',
   }));
 }
 
@@ -188,6 +190,19 @@ export async function createTeamForAdmin(
   }
 
   return teamId;
+}
+
+/** Update a team's default formation (admin only via RLS). */
+export async function updateDefaultFormation(
+  teamId: string,
+  formationId: string,
+): Promise<boolean> {
+  if (!supabase) return false;
+  const { error } = await supabase
+    .from('teams')
+    .update({ default_formation_id: formationId })
+    .eq('id', teamId);
+  return !error;
 }
 
 /** Update a team's branding (logo, colors). */

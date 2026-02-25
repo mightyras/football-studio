@@ -534,16 +534,16 @@ export function PitchCanvas({ playbackRef, playerRunAnimRef, animationQueueRef, 
             });
           }
 
-          playerRunAnimRef.current = nextAnims;
+          if (playerRunAnimRef) playerRunAnimRef.current = nextAnims;
         } else {
           // No more in queue — clear the animation ref
-          playerRunAnimRef.current = [];
+          if (playerRunAnimRef) playerRunAnimRef.current = [];
           // Clear completed tracking (annotations are now in ghostAnnotationIds)
           completedQueueAnimIds.current.clear();
         }
       } else if (finishedAnims.length > 0) {
         // Some finished but not all — remove finished ones, keep remaining active
-        playerRunAnimRef.current = activeAnims.filter(a => !finishedAnims.includes(a));
+        if (playerRunAnimRef) playerRunAnimRef.current = activeAnims.filter(a => !finishedAnims.includes(a));
         for (const fa of finishedAnims) {
           completedQueueAnimIds.current.add(fa.annotationId);
         }

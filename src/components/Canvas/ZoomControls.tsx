@@ -67,7 +67,7 @@ export function ZoomControls({
         display: 'flex',
         alignItems: 'center',
         gap: 2,
-        background: 'rgba(15, 23, 42, 0.9)',
+        background: hexToRgba(theme.primary, 0.9),
         borderRadius: 6,
         padding: '3px 4px',
         border: `1px solid ${theme.border}`,

@@ -16,15 +16,6 @@ const FormationMoveIcon = () => (
   </svg>
 );
 
-const AnimateIcon = () => (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <rect x="2" y="2" width="20" height="20" rx="2" />
-    <line x1="7" y1="2" x2="7" y2="22" />
-    <line x1="17" y1="2" x2="17" y2="22" />
-    <line x1="2" y1="12" x2="22" y2="12" />
-  </svg>
-);
-
 const SelectIcon = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z" />
@@ -355,20 +346,6 @@ export function Toolbar() {
         </div>
       )}
 
-      <div style={{ height: 1, width: 28, background: theme.border, margin: '8px 0' }} />
-
-      {/* Animation mode toggle */}
-      <ToolButton
-        active={state.animationMode}
-        onClick={() =>
-          dispatch({
-            type: state.animationMode ? 'EXIT_ANIMATION_MODE' : 'ENTER_ANIMATION_MODE',
-          })
-        }
-        title={state.animationMode ? 'Exit Animation Mode' : 'Animation Mode (F)'}
-      >
-        <AnimateIcon />
-      </ToolButton>
     </div>
   );
 }

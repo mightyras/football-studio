@@ -245,8 +245,7 @@ export function buildSequenceFromAnnotations(
     const playerMoves = new Map<string, { fromX: number; fromY: number; toX: number; toY: number }>();
 
     for (const ann of stepAnnotations) {
-      // Resolve start and end positions
-      const resolvedStart = resolvePosition(ann.start, ann.startPlayerId, currentPlayers);
+      // Resolve end position
       const resolvedEnd = resolvePosition(ann.end, ann.endPlayerId, currentPlayers);
 
       switch (ann.type) {
