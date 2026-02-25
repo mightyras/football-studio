@@ -11,6 +11,7 @@ export type PlayerRunFrame = {
   finished: boolean;
   ballX?: number;           // ball position during pass/dribble animations
   ballY?: number;
+  ballElevation?: number;   // 0..1 sinusoidal arc height for lofted passes (0 = ground, 1 = apex)
 };
 
 /**
@@ -51,6 +52,21 @@ function interpolatePath(
 }
 
 /**
+ * Multi-phase lofted ball elevation with bounces after landing.
+ * Uses rawT (linear time, NOT eased) so bounces get proper wall-clock time.
+ *   Phase 1 (0 → 0.55): main arc — full-height parabolic flight
+ *   Phase 2 (0.55 → 0.75): first bounce — 45% height
+ *   Phase 3 (0.75 → 0.88): second bounce — 18% height
+ *   Phase 4 (0.88 → 1.0): settled on ground
+ */
+function loftedBounceElevation(rawT: number): number {
+  if (rawT < 0.55) return Math.sin(Math.PI * (rawT / 0.55));
+  if (rawT < 0.75) return Math.sin(Math.PI * ((rawT - 0.55) / 0.20)) * 0.45;
+  if (rawT < 0.88) return Math.sin(Math.PI * ((rawT - 0.75) / 0.13)) * 0.18;
+  return 0;
+}
+
+/**
  * Compute the current position of a player/ball along a line path.
  * Supports run (player moves), pass (ball moves, player stays), and dribble (both move).
  */
@@ -73,7 +89,18 @@ export function computeRunFrame(
   const animationType = anim.animationType ?? 'run';
 
   if (animationType === 'pass') {
-    // Pass: ball travels along the path, player stays at start
+    // Pass: ball travels along the path, player stays at start.
+    // Lofted pass: ball arcs through the air. Long passes (≥32m) bounce on landing.
+    let ballElevation: number | undefined;
+    if (anim.isLofted) {
+      const dx = anim.endPos.x - anim.startPos.x;
+      const dy = anim.endPos.y - anim.startPos.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      ballElevation = dist >= 32
+        ? loftedBounceElevation(rawT)
+        : Math.sin(Math.PI * rawT);
+    }
+
     return {
       playerId: anim.playerId,
       x: anim.startPos.x,
@@ -84,6 +111,7 @@ export function computeRunFrame(
       finished: rawT >= 1,
       ballX: x,
       ballY: y,
+      ballElevation,
     };
   }
 

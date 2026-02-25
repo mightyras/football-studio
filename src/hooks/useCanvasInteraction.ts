@@ -180,7 +180,7 @@ export function useCanvasInteraction(
         }
 
         // --- Line sub-tools: passing, running, dribble ---
-        if (subTool === 'passing-line' || subTool === 'running-line' || subTool === 'curved-run' || subTool === 'dribble-line') {
+        if (subTool === 'passing-line' || subTool === 'lofted-pass' || subTool === 'running-line' || subTool === 'curved-run' || subTool === 'dribble-line') {
           if (state.drawingInProgress && state.drawingInProgress.type === 'line') {
             // Second click: commit the line
             const dp = state.drawingInProgress;
@@ -214,15 +214,17 @@ export function useCanvasInteraction(
               nextStep = Math.max(nextStep, minStep);
             }
 
+            const annType = dp.subTool === 'lofted-pass' ? 'passing-line' : dp.subTool;
             const ann: Annotation = {
               id: `ann-${Date.now()}`,
-              type: dp.subTool,
+              type: annType,
               start: dp.start,
               end: endPoint,
               startPlayerId: dp.startPlayerId,
               endPlayerId,
               color: '#ffffff',
               animStep: nextStep,
+              ...(dp.subTool === 'lofted-pass' ? { passType: 'lofted' as const } : {}),
               ...(dp.subTool === 'curved-run' ? { curveDirection: e.shiftKey ? 'right' : 'left' } : {}),
             };
             dispatch({ type: 'ADD_ANNOTATION', annotation: ann });
@@ -242,7 +244,7 @@ export function useCanvasInteraction(
               if (snapPlayer) startFromGhost = true;
             }
             // Running-line, curved-run, passing-line and dribble-line MUST start from a player (or ghost)
-            if ((subTool === 'running-line' || subTool === 'curved-run' || subTool === 'passing-line' || subTool === 'dribble-line' || subTool === 'player-marking') && !snapPlayer) return;
+            if ((subTool === 'running-line' || subTool === 'curved-run' || subTool === 'passing-line' || subTool === 'lofted-pass' || subTool === 'dribble-line' || subTool === 'player-marking') && !snapPlayer) return;
             dispatch({
               type: 'START_DRAWING',
               drawing: {
@@ -750,7 +752,7 @@ export function useCanvasInteraction(
             if ((subTool === 'player-polygon' || subTool === 'player-line' || subTool === 'player-marking') && hit) {
               canvas.style.cursor = 'pointer';
             } else if (
-              (subTool === 'passing-line' || subTool === 'running-line' || subTool === 'curved-run' || subTool === 'dribble-line')
+              (subTool === 'passing-line' || subTool === 'lofted-pass' || subTool === 'running-line' || subTool === 'curved-run' || subTool === 'dribble-line')
               && (hit || (!state.drawingInProgress && state.previewGhosts.length > 0 && findPlayerAtScreen(
                 screen.x, screen.y,
                 state.previewGhosts.map(g => ({ id: g.playerId, team: g.team, number: g.number, name: g.name, x: g.x, y: g.y, facing: g.facing, isGK: g.isGK })),

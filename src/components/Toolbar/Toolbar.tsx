@@ -72,6 +72,13 @@ const PassLineSubIcon = () => (
   </svg>
 );
 
+const LoftedPassSubIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M4 20 Q12 2 20 8" strokeDasharray="3 2" />
+    <polyline points="16 6 20 8 18 12" />
+  </svg>
+);
+
 const RunLineSubIcon = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" strokeDasharray="3 3">
     <line x1="4" y1="20" x2="18" y2="6" />
@@ -197,6 +204,7 @@ type SubToolEntry =
 const SUB_TOOLS: SubToolEntry[] = [
   // Line tools
   { type: 'tool', subTool: 'passing-line', icon: <PassLineSubIcon />, title: 'Passing Line (P)' },
+  { type: 'tool', subTool: 'lofted-pass', icon: <LoftedPassSubIcon />, title: 'Lofted Pass (I)' },
   { type: 'tool', subTool: 'running-line', icon: <RunLineSubIcon />, title: 'Running Line (R)' },
   { type: 'tool', subTool: 'curved-run', icon: <CurvedRunSubIcon />, title: 'Curved Run (C)' },
   { type: 'tool', subTool: 'dribble-line', icon: <DribbleSubIcon />, title: 'Dribble Line (B)' },

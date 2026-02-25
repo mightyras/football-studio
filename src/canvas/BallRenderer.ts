@@ -229,13 +229,35 @@ export function drawBall(
   isSelected: boolean,
   isHovered: boolean,
   accent: string = THEME.accent,
+  elevation?: number,  // 0..1 sinusoidal arc height for lofted passes
 ) {
   const pos = transform.worldToScreen(ball.x, ball.y);
-  const screenRadius = getBallScreenRadius(transform, ball);
+  const baseScreenRadius = getBallScreenRadius(transform, ball);
+
+  // Elevation effects: ball scales up, lifts off ground, shadow stays below
+  const elev = elevation ?? 0;
+  const scaleMultiplier = 1 + elev * 0.3;              // 1.0 → 1.3 at apex
+  const screenRadius = baseScreenRadius * scaleMultiplier;
+  const liftPx = elev * 25 * (transform.scale / 10);   // vertical offset in pixels
 
   ctx.save();
 
-  // Shadow
+  // Ground shadow for lofted ball (drawn at ground position, before ball lifts)
+  if (elev > 0) {
+    const shadowScale = 1 - elev * 0.4;                // shadow shrinks at height
+    const shadowAlpha = 0.3 * (1 - elev * 0.5);        // shadow fades at height
+    const shadowRx = baseScreenRadius * shadowScale;
+    const shadowRy = shadowRx * 0.5;                    // elliptical for perspective
+    ctx.beginPath();
+    ctx.ellipse(pos.x, pos.y + 2, shadowRx, shadowRy, 0, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(0, 0, 0, ${shadowAlpha})`;
+    ctx.fill();
+  }
+
+  // Ball Y position: lift upward when elevated
+  const ballY = pos.y - liftPx;
+
+  // Drop shadow (standard, relative to ball position)
   ctx.shadowColor = 'rgba(0, 0, 0, 0.45)';
   ctx.shadowBlur = 5;
   ctx.shadowOffsetX = 0;
@@ -243,7 +265,7 @@ export function drawBall(
 
   // White ball base
   ctx.beginPath();
-  ctx.arc(pos.x, pos.y, screenRadius, 0, Math.PI * 2);
+  ctx.arc(pos.x, ballY, screenRadius, 0, Math.PI * 2);
   ctx.fillStyle = '#ffffff';
   ctx.fill();
 
@@ -254,15 +276,15 @@ export function drawBall(
   if (screenRadius >= 6) {
     ctx.save();
     ctx.beginPath();
-    ctx.arc(pos.x, pos.y, screenRadius, 0, Math.PI * 2);
+    ctx.arc(pos.x, ballY, screenRadius, 0, Math.PI * 2);
     ctx.clip();
-    drawSphericalPattern(ctx, pos.x, pos.y, screenRadius, ball.rotationX, ball.rotationY);
+    drawSphericalPattern(ctx, pos.x, ballY, screenRadius, ball.rotationX, ball.rotationY);
     ctx.restore();
   }
 
   // Ball outline
   ctx.beginPath();
-  ctx.arc(pos.x, pos.y, screenRadius, 0, Math.PI * 2);
+  ctx.arc(pos.x, ballY, screenRadius, 0, Math.PI * 2);
   ctx.strokeStyle = 'rgba(0, 0, 0, 0.25)';
   ctx.lineWidth = Math.max(1, screenRadius * 0.05);
   ctx.stroke();
@@ -270,24 +292,24 @@ export function drawBall(
   // Subtle shine highlight
   const gradient = ctx.createRadialGradient(
     pos.x - screenRadius * 0.25,
-    pos.y - screenRadius * 0.3,
+    ballY - screenRadius * 0.3,
     screenRadius * 0.05,
     pos.x,
-    pos.y,
+    ballY,
     screenRadius,
   );
   gradient.addColorStop(0, 'rgba(255, 255, 255, 0.35)');
   gradient.addColorStop(0.5, 'rgba(255, 255, 255, 0)');
   gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
   ctx.beginPath();
-  ctx.arc(pos.x, pos.y, screenRadius, 0, Math.PI * 2);
+  ctx.arc(pos.x, ballY, screenRadius, 0, Math.PI * 2);
   ctx.fillStyle = gradient;
   ctx.fill();
 
   // Hover ring
   if (isHovered && !isSelected) {
     ctx.beginPath();
-    ctx.arc(pos.x, pos.y, screenRadius + 4, 0, Math.PI * 2);
+    ctx.arc(pos.x, ballY, screenRadius + 4, 0, Math.PI * 2);
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
     ctx.lineWidth = 2;
     ctx.stroke();
@@ -296,7 +318,7 @@ export function drawBall(
   // Selected ring (amber, matching player convention)
   if (isSelected) {
     ctx.beginPath();
-    ctx.arc(pos.x, pos.y, screenRadius + 5, 0, Math.PI * 2);
+    ctx.arc(pos.x, ballY, screenRadius + 5, 0, Math.PI * 2);
     ctx.strokeStyle = hexToRgba(accent, 0.5);
     ctx.lineWidth = 2;
     ctx.stroke();

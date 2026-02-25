@@ -89,6 +89,56 @@ function drawArrowhead(
   ctx.restore();
 }
 
+/**
+ * Compute the control point for a lofted-pass arc.
+ * The arc bows perpendicular to the line, always "upward" on screen (toward top of pitch).
+ */
+function loftedArcControlPoint(start: WorldPoint, end: WorldPoint): WorldPoint {
+  const dx = end.x - start.x;
+  const dy = end.y - start.y;
+  const len = Math.sqrt(dx * dx + dy * dy);
+  if (len < 0.01) return { x: (start.x + end.x) / 2, y: (start.y + end.y) / 2 };
+  const midX = (start.x + end.x) / 2;
+  const midY = (start.y + end.y) / 2;
+  // Perpendicular offset (always positive Y direction in world = toward top of pitch)
+  const arcHeight = len * 0.18;
+  const perpX = -dy / len * arcHeight;
+  const perpY = dx / len * arcHeight;
+  return { x: midX + perpX, y: midY + perpY };
+}
+
+/** Draw a lofted pass line — dashed quadratic bezier arc with arrowhead. */
+function drawLoftedPassLine(
+  ctx: CanvasRenderingContext2D,
+  transform: PitchTransform,
+  start: WorldPoint,
+  end: WorldPoint,
+  color: string,
+  withArrow: boolean,
+) {
+  const cpWorld = loftedArcControlPoint(start, end);
+  const s = transform.worldToScreen(start.x, start.y);
+  const e = transform.worldToScreen(end.x, end.y);
+  const cp = transform.worldToScreen(cpWorld.x, cpWorld.y);
+  const dashScreen = [DASH_WORLD * transform.scale * 0.7, GAP_WORLD * transform.scale * 0.5];
+
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = LINE_WIDTH_WORLD * transform.scale;
+  ctx.lineCap = 'round';
+  ctx.setLineDash(dashScreen);
+  ctx.beginPath();
+  ctx.moveTo(s.x, s.y);
+  ctx.quadraticCurveTo(cp.x, cp.y, e.x, e.y);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.restore();
+
+  if (withArrow) {
+    drawArrowhead(ctx, cp, e, color);
+  }
+}
+
 function drawStraightLine(
   ctx: CanvasRenderingContext2D,
   transform: PitchTransform,
@@ -625,21 +675,35 @@ export function renderAnnotationsBase(
           : playersForGhost;
         const resolved = resolveLineEndpoints(ann, passResolvedPlayers, previewGhosts);
         const offset = offsetEndpointsFromPlayers(resolved.start, resolved.end, resolved.startSnapped, resolved.endSnapped, playerRadius);
+        const isLoftedAnn = ann.passType === 'lofted';
 
         if (isAnimating && runAnimOverlay) {
-          // Progressive fade: split line at animation progress
           const p = runAnimOverlay.progress;
-          const splitPt: WorldPoint = {
-            x: lerpNum(offset.start.x, offset.end.x, p),
-            y: lerpNum(offset.start.y, offset.end.y, p),
-          };
-          // Behind ball → ghost opacity
-          ctx.save();
-          ctx.globalAlpha = 0.15;
-          drawStraightLine(ctx, transform, offset.start, splitPt, ann.color, [], false);
-          ctx.restore();
-          // Ahead of ball → full opacity
-          drawStraightLine(ctx, transform, splitPt, offset.end, ann.color, [], true);
+          if (isLoftedAnn) {
+            // Lofted: split the bezier arc at animation progress
+            const cpWorld = loftedArcControlPoint(offset.start, offset.end);
+            const [behind, ahead] = splitQuadraticBezier(offset.start, cpWorld, offset.end, p);
+            // Behind ball → ghost opacity
+            ctx.save();
+            ctx.globalAlpha = 0.15;
+            drawCurvedSegment(ctx, transform, behind.start, behind.control, behind.end, ann.color, false);
+            ctx.restore();
+            // Ahead of ball → full opacity
+            drawCurvedSegment(ctx, transform, ahead.start, ahead.control, ahead.end, ann.color, true);
+          } else {
+            // Ground pass: split straight line
+            const splitPt: WorldPoint = {
+              x: lerpNum(offset.start.x, offset.end.x, p),
+              y: lerpNum(offset.start.y, offset.end.y, p),
+            };
+            ctx.save();
+            ctx.globalAlpha = 0.15;
+            drawStraightLine(ctx, transform, offset.start, splitPt, ann.color, [], false);
+            ctx.restore();
+            drawStraightLine(ctx, transform, splitPt, offset.end, ann.color, [], true);
+          }
+        } else if (isLoftedAnn) {
+          drawLoftedPassLine(ctx, transform, offset.start, offset.end, ann.color, true);
         } else {
           drawStraightLine(ctx, transform, offset.start, offset.end, ann.color, [], true);
         }
@@ -1142,6 +1206,8 @@ export function renderDrawingPreview(
         drawCurvedLine(ctx, transform, drawing.start, effectiveEnd, previewColor, shiftHeld ? 'right' : 'left');
       } else if (drawing.subTool === 'dribble-line') {
         drawWavyLine(ctx, transform, drawing.start, effectiveEnd, previewColor);
+      } else if (drawing.subTool === 'lofted-pass') {
+        drawLoftedPassLine(ctx, transform, drawing.start, effectiveEnd, previewColor, true);
       } else {
         drawStraightLine(ctx, transform, drawing.start, effectiveEnd, previewColor, dash, true);
       }

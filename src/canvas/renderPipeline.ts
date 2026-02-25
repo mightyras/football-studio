@@ -365,7 +365,9 @@ export function render(
   renderAnnotationsText(ctx, transform, state.annotations, state.selectedAnnotationId, accent);
 
   // Ball renders on top of players
-  drawBall(ctx, transform, state.ball, state.ballSelected, state.ballHovered, accent);
+  // Pass elevation from lofted pass overlay (if any) for arc rendering
+  const loftedOverlay = runAnimOverlays?.find(o => o.isLofted && o.ballElevation != null);
+  drawBall(ctx, transform, state.ball, state.ballSelected, state.ballHovered, accent, loftedOverlay?.ballElevation);
 
   // Drawing preview (topmost layer, above everything)
   if (state.drawingInProgress) {

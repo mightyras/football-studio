@@ -107,8 +107,9 @@ export const ONE_TOUCH_DURATION_MS = 600;
 /** Default animation durations per type (ms). */
 export const ANIM_DURATION_MS = {
   pass: 1000,
-  run: 1100,      // slightly slower than a pass
-  dribble: 1400,  // noticeably slower — running with the ball
+  loftedPass: 1500, // longer flight time — includes bounces after landing
+  run: 1100,        // slightly slower than a pass
+  dribble: 1400,    // noticeably slower — running with the ball
 } as const;
 
 /** Delay before a pass starts when targeting a same-step runner (ms).

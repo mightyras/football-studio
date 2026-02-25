@@ -11,6 +11,7 @@ import type {
   RunAnimationOverlay,
   GhostPlayer,
   CurvedRunAnnotation,
+  PassingLineAnnotation,
 } from '../types';
 import { computeRunFrame } from './playerRunAnimator';
 import {
@@ -265,6 +266,8 @@ export class RunAnimExportController {
                       ? { x: frame.ballX, y: frame.ballY }
                       : undefined,
                   animationType: animType,
+                  isLofted: anim.isLofted,
+                  ballElevation: frame.ballElevation,
                 });
               }
             }
@@ -351,6 +354,7 @@ export class RunAnimExportController {
     const queue: QueuedAnimation[] = [];
     for (let idx = 0; idx < ordered.length; idx++) {
       const { ann } = ordered[idx];
+      const isLofted = ann.type === 'passing-line' && (ann as PassingLineAnnotation).passType === 'lofted';
       const animationType: 'run' | 'pass' | 'dribble' =
         ann.type === 'passing-line'
           ? 'pass'
@@ -358,6 +362,7 @@ export class RunAnimExportController {
             ? 'dribble'
             : 'run';
       const isOneTouch = oneTouchIndices.has(idx);
+      const baseDuration = isLofted ? ANIM_DURATION_MS.loftedPass : ANIM_DURATION_MS[animationType];
       queue.push({
         annotationId: ann.id,
         playerId: ann.startPlayerId ?? '',
@@ -366,10 +371,11 @@ export class RunAnimExportController {
           ann.type === 'curved-run'
             ? ((ann as CurvedRunAnnotation).curveDirection ?? 'left')
             : undefined,
-        durationMs: isOneTouch ? ONE_TOUCH_DURATION_MS : ANIM_DURATION_MS[animationType],
+        durationMs: isOneTouch ? ONE_TOUCH_DURATION_MS : baseDuration,
         animationType,
         endPlayerId: ann.endPlayerId,
         isOneTouch,
+        isLofted: isLofted || undefined,
         step: ordered[idx].step,
       });
     }
@@ -518,6 +524,7 @@ export class RunAnimExportController {
         animationType: item.animationType,
         endPlayerId: item.endPlayerId,
         isOneTouch: item.isOneTouch,
+        isLofted: item.isLofted,
       });
     }
 

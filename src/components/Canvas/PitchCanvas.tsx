@@ -318,14 +318,18 @@ export function PitchCanvas({ playbackRef, playerRunAnimRef, animationQueueRef, 
           const prevBall = renderState.ball;
           const dx = runFrame.ballX - prevBall.x;
           const dy = runFrame.ballY - prevBall.y;
+          // Lofted passes: freeze rotation while airborne, resume rolling on ground contact (bounces)
+          const isAirborne = runAnim.isLofted && runFrame.ballElevation != null && runFrame.ballElevation > 0.01;
+          const rotX = isAirborne ? prevBall.rotationX : prevBall.rotationX + dx / prevBall.radius;
+          const rotY = isAirborne ? prevBall.rotationY : prevBall.rotationY + dy / prevBall.radius;
           renderState = {
             ...renderState,
             ball: {
               ...prevBall,
               x: runFrame.ballX,
               y: runFrame.ballY,
-              rotationX: prevBall.rotationX + dx / prevBall.radius,
-              rotationY: prevBall.rotationY + dy / prevBall.radius,
+              rotationX: rotX,
+              rotationY: rotY,
             },
           };
         }
@@ -352,6 +356,8 @@ export function PitchCanvas({ playbackRef, playerRunAnimRef, animationQueueRef, 
               ? { x: runFrame.ballX, y: runFrame.ballY }
               : undefined,
             animationType: animType,
+            isLofted: runAnim.isLofted,
+            ballElevation: runFrame.ballElevation,
           });
         }
 

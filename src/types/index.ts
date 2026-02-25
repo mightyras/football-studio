@@ -102,6 +102,7 @@ export type PlayerRunAnimation = {
   animationType: 'run' | 'pass' | 'dribble';  // what kind of animation
   endPlayerId?: string;        // target player for pass animations
   isOneTouch?: boolean;        // one-touch bounce pass — no ease-in, ball leaves instantly
+  isLofted?: boolean;          // lofted pass — ball arcs through the air
 };
 
 /** A queued animation waiting to start (no startTime yet) */
@@ -117,6 +118,7 @@ export type QueuedAnimation = {
   isOneTouch?: boolean;        // one-touch bounce pass — no ease-in, ball leaves instantly
   step: number;                // animation step — same step = simultaneous
   startDelay?: number;         // delay before animation starts (ms) — used for passes targeting runners
+  isLofted?: boolean;          // lofted pass — ball arcs through the air
 };
 
 /** Visual overlay data passed through render pipeline during run animation */
@@ -127,6 +129,8 @@ export type RunAnimationOverlay = {
   ghostPlayer: GhostPlayer;   // transient ghost to render during animation
   ballPos?: WorldPoint;       // ball position during pass/dribble animations
   animationType: 'run' | 'pass' | 'dribble';
+  isLofted?: boolean;         // lofted pass — enables elevation rendering
+  ballElevation?: number;     // 0..1 sinusoidal arc height (0 = ground, 1 = apex)
 };
 
 /** Transient goal celebration state — lives in React state / mutable ref, NOT in AppState */
@@ -149,6 +153,7 @@ export type WorldPoint = { x: number; y: number };
 export type DrawSubTool =
   | 'text'
   | 'passing-line'
+  | 'lofted-pass'
   | 'running-line'
   | 'curved-run'
   | 'dribble-line'
@@ -170,6 +175,7 @@ export type TextAnnotation = {
 export type PassingLineAnnotation = {
   id: string;
   type: 'passing-line';
+  passType?: 'ground' | 'lofted'; // default: 'ground' when undefined
   start: WorldPoint;
   end: WorldPoint;
   startPlayerId?: string;
@@ -272,7 +278,7 @@ export type Annotation =
   | PlayerMarkingAnnotation;
 
 export type DrawingInProgress =
-  | { type: 'line'; subTool: 'passing-line' | 'running-line' | 'curved-run' | 'dribble-line'; start: WorldPoint; startPlayerId?: string; startFromGhost?: boolean; curveDirection?: 'left' | 'right' }
+  | { type: 'line'; subTool: 'passing-line' | 'lofted-pass' | 'running-line' | 'curved-run' | 'dribble-line'; start: WorldPoint; startPlayerId?: string; startFromGhost?: boolean; curveDirection?: 'left' | 'right' }
   | { type: 'polygon'; points: WorldPoint[] }
   | { type: 'player-polygon'; playerIds: string[] }
   | { type: 'player-line'; playerIds: string[] }

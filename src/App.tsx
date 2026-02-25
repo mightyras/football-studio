@@ -25,7 +25,7 @@ import { useThemeColors } from './hooks/useThemeColors';
 import { computeStepOrder, computeOneTouchIndices, ONE_TOUCH_DURATION_MS, ANIM_DURATION_MS, PASS_LEAD_DELAY_MS, type LineAnnotation } from './animation/annotationAnimator';
 import { ExportController, type ExportOptions } from './animation/exportController';
 import { RunAnimExportController } from './animation/runAnimExportController';
-import type { AnimationSequence, CurvedRunAnnotation, GoalCelebration, PanelTab, PlayerRunAnimation, QueuedAnimation } from './types';
+import type { AnimationSequence, CurvedRunAnnotation, GoalCelebration, PanelTab, PassingLineAnnotation, PlayerRunAnimation, QueuedAnimation } from './types';
 import { renderSceneToBlob } from './utils/sceneRenderer';
 import { curvedRunControlPoint } from './utils/curveGeometry';
 import { playKickSound, playGoalNetSound } from './utils/sound';
@@ -351,11 +351,13 @@ function AppContent() {
     const queue: QueuedAnimation[] = [];
     for (let idx = 0; idx < ordered.length; idx++) {
       const { ann } = ordered[idx];
+      const isLofted = ann.type === 'passing-line' && (ann as PassingLineAnnotation).passType === 'lofted';
       const animationType: 'run' | 'pass' | 'dribble' =
         ann.type === 'passing-line' ? 'pass'
         : ann.type === 'dribble-line' ? 'dribble'
         : 'run';
       const isOneTouch = oneTouchIndices.has(idx);
+      const baseDuration = isLofted ? ANIM_DURATION_MS.loftedPass : ANIM_DURATION_MS[animationType];
       queue.push({
         annotationId: ann.id,
         playerId: ann.startPlayerId ?? '',
@@ -363,10 +365,11 @@ function AppContent() {
         curveDirection: ann.type === 'curved-run'
           ? ((ann as CurvedRunAnnotation).curveDirection ?? 'left')
           : undefined,
-        durationMs: isOneTouch ? ONE_TOUCH_DURATION_MS : ANIM_DURATION_MS[animationType],
+        durationMs: isOneTouch ? ONE_TOUCH_DURATION_MS : baseDuration,
         animationType,
         endPlayerId: ann.endPlayerId,
         isOneTouch,
+        isLofted: isLofted || undefined,
         step: ordered[idx].step,
       });
     }
@@ -414,11 +417,13 @@ function AppContent() {
     const queue: QueuedAnimation[] = [];
     for (let idx = 0; idx < ordered.length; idx++) {
       const { ann } = ordered[idx];
+      const isLofted = ann.type === 'passing-line' && (ann as PassingLineAnnotation).passType === 'lofted';
       const animationType: 'run' | 'pass' | 'dribble' =
         ann.type === 'passing-line' ? 'pass'
         : ann.type === 'dribble-line' ? 'dribble'
         : 'run';
       const isOneTouch = oneTouchIndices.has(idx);
+      const baseDuration = isLofted ? ANIM_DURATION_MS.loftedPass : ANIM_DURATION_MS[animationType];
       queue.push({
         annotationId: ann.id,
         playerId: ann.startPlayerId ?? '',
@@ -426,10 +431,11 @@ function AppContent() {
         curveDirection: ann.type === 'curved-run'
           ? ((ann as CurvedRunAnnotation).curveDirection ?? 'left')
           : undefined,
-        durationMs: isOneTouch ? ONE_TOUCH_DURATION_MS : ANIM_DURATION_MS[animationType],
+        durationMs: isOneTouch ? ONE_TOUCH_DURATION_MS : baseDuration,
         animationType,
         endPlayerId: ann.endPlayerId,
         isOneTouch,
+        isLofted: isLofted || undefined,
         step: ordered[idx].step,
       });
     }
@@ -556,6 +562,7 @@ function AppContent() {
         animationType: item.animationType,
         endPlayerId: item.endPlayerId,
         isOneTouch: item.isOneTouch,
+        isLofted: item.isLofted,
       });
     }
 
@@ -914,6 +921,10 @@ function AppContent() {
       if (e.key === 'p' && !e.metaKey && !e.ctrlKey) {
         dispatch({ type: 'SET_ACTIVE_TOOL', tool: 'draw' });
         dispatch({ type: 'SET_DRAW_SUB_TOOL', subTool: 'passing-line' });
+      }
+      if (e.key === 'i' && !e.metaKey && !e.ctrlKey) {
+        dispatch({ type: 'SET_ACTIVE_TOOL', tool: 'draw' });
+        dispatch({ type: 'SET_DRAW_SUB_TOOL', subTool: 'lofted-pass' });
       }
       if (e.key === 'r' && !e.metaKey && !e.ctrlKey) {
         dispatch({ type: 'SET_ACTIVE_TOOL', tool: 'draw' });
