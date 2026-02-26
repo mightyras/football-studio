@@ -50,9 +50,10 @@ interface RightPanelProps {
   onSaveHandled?: () => void;
   onRequestSignIn?: () => void;
   onStartCollaboration?: (boardId: string, isOwner: boolean, permission: 'view' | 'edit' | 'owner') => void;
+  onStartTour?: () => void;
 }
 
-export function RightPanel({ rotation, activeTab, onTabChange, saveRequested, onSaveHandled, onRequestSignIn, onStartCollaboration }: RightPanelProps) {
+export function RightPanel({ rotation, activeTab, onTabChange, saveRequested, onSaveHandled, onRequestSignIn, onStartCollaboration, onStartTour }: RightPanelProps) {
   const theme = useThemeColors();
 
   return (
@@ -91,7 +92,7 @@ export function RightPanel({ rotation, activeTab, onTabChange, saveRequested, on
         ) : activeTab === 'scenes' ? (
           <ScenesPanel saveRequested={saveRequested} onSaveHandled={onSaveHandled} onRequestSignIn={onRequestSignIn} onStartCollaboration={onStartCollaboration} />
         ) : (
-          <HelpPanel />
+          <HelpPanel onStartTour={onStartTour} />
         )}
       </div>
     </div>

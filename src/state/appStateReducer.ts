@@ -134,7 +134,7 @@ function createDefaultPlayers(
 ): Player[] {
   const players: Player[] = [];
   const teamAFormation = FORMATIONS.find(f => f.id === teamAFormationId) || FORMATIONS[0];
-  const teamBFormation = FORMATIONS[0]; // Opposition always 4-4-2
+  const teamBFormation = FORMATIONS.find(f => f.id === '4-4-2') || FORMATIONS[0];
 
   // GK sits near own goal: high-x (bottom) if defending high-x, low-x (top) otherwise
   const gkAX = defendsHighX('A', teamADirection) ? PITCH.length - 4 : 4;

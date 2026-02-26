@@ -22,10 +22,12 @@ type AuthContextValue = {
   loading: boolean;
   needsPasswordSetup: boolean;
   clearPasswordSetup: () => void;
+  expiredInviteMessage: string | null;
   signInWithEmail: (email: string, password: string) => Promise<{ error: string | null }>;
   signUpWithEmail: (email: string, password: string, firstName?: string, lastName?: string) => Promise<{ error: string | null }>;
   signInWithMagicLink: (email: string) => Promise<{ error: string | null }>;
   signInWithGoogle: () => Promise<{ error: string | null }>;
+  resetPassword: (email: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
   updateProfile: (fields: { display_name?: string }) => Promise<{ error: string | null }>;
   updateEmail: (newEmail: string) => Promise<{ error: string | null }>;
@@ -49,10 +51,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const [needsPasswordSetup, setNeedsPasswordSetup] = useState(false);
+  const [expiredInviteMessage, setExpiredInviteMessage] = useState<string | null>(null);
 
   const clearPasswordSetup = useCallback(() => {
     setNeedsPasswordSetup(false);
-  }, []);
+    // Clear the persisted flag so it doesn't re-appear on reload
+    if (user?.id) {
+      localStorage.removeItem(`football-studio-needs-password-${user.id}`);
+    }
+  }, [user]);
 
   useEffect(() => {
     if (!supabase) {
@@ -64,6 +71,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const hash = window.location.hash;
     const isInviteCallback = hash.includes('type=invite') || hash.includes('type=recovery');
 
+    // Detect expired/invalid invite links (Supabase redirects with error params in hash)
+    const hashParams = new URLSearchParams(hash.replace('#', ''));
+    const authError = hashParams.get('error');
+    const authErrorDesc = hashParams.get('error_description');
+    if (authError && authErrorDesc) {
+      setExpiredInviteMessage(authErrorDesc.replace(/\+/g, ' '));
+      // Clean the URL hash so it doesn't persist on refresh
+      window.history.replaceState(null, '', window.location.pathname);
+    }
+
     // Check existing session
     supabase.auth.getSession().then(({ data: { session } }) => {
       const u = session?.user ?? null;
@@ -71,8 +88,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (u) {
         fetchProfile(u.id).then(setProfile);
       }
-      // If arriving via invite link, show password setup
+      // If arriving via invite link, show password setup and persist across reloads
       if (isInviteCallback && u) {
+        setNeedsPasswordSetup(true);
+        localStorage.setItem(`football-studio-needs-password-${u.id}`, 'true');
+      } else if (u && localStorage.getItem(`football-studio-needs-password-${u.id}`)) {
+        // Restore persisted flag (user reloaded before completing password setup)
         setNeedsPasswordSetup(true);
       }
       setLoading(false);
@@ -91,6 +112,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // Also detect invite via auth event
         if (event === 'PASSWORD_RECOVERY' && u) {
           setNeedsPasswordSetup(true);
+          localStorage.setItem(`football-studio-needs-password-${u.id}`, 'true');
         }
       },
     );
@@ -129,6 +151,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: { redirectTo: window.location.origin },
+    });
+    return { error: error?.message ?? null };
+  }, []);
+
+  const resetPassword = useCallback(async (email: string) => {
+    if (!supabase) return { error: 'Supabase not configured' };
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: window.location.origin,
     });
     return { error: error?.message ?? null };
   }, []);
@@ -174,10 +204,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         loading,
         needsPasswordSetup,
         clearPasswordSetup,
+        expiredInviteMessage,
         signInWithEmail,
         signUpWithEmail,
         signInWithMagicLink,
         signInWithGoogle,
+        resetPassword,
         signOut,
         updateProfile,
         updateEmail,

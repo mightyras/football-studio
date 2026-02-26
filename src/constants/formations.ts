@@ -18,9 +18,9 @@ export const FORMATIONS: Formation[] = [
       pos(0.12, 0.38, 'CB', 5),
       pos(0.12, 0.62, 'CB', 4),
       pos(0.18, 0.85, 'FB', 2),   // right FB
-      pos(0.48, 0.25, 'CM', 8),
-      pos(0.48, 0.50, 'CM', 6),
-      pos(0.48, 0.75, 'CM', 10),
+      pos(0.48, 0.25, 'OM', 8),
+      pos(0.48, 0.50, 'DM', 6),
+      pos(0.48, 0.75, 'OM', 10),
       pos(0.80, 0.15, 'LW', 11),  // left winger
       pos(0.80, 0.50, 'CF', 9),
       pos(0.80, 0.85, 'RW', 7),   // right winger
@@ -37,8 +37,8 @@ export const FORMATIONS: Formation[] = [
       pos(0.12, 0.62, 'CB', 4),
       pos(0.18, 0.85, 'FB', 2),   // right FB
       pos(0.38, 0.50, 'DM', 6),
-      pos(0.53, 0.25, 'CM', 8),
-      pos(0.53, 0.75, 'CM', 10),
+      pos(0.53, 0.25, 'OM', 8),
+      pos(0.53, 0.75, 'OM', 10),
       pos(0.80, 0.20, 'LW', 11),  // left winger
       pos(0.80, 0.50, 'CF', 9),
       pos(0.80, 0.80, 'RW', 7),   // right winger

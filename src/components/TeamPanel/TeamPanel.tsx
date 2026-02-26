@@ -155,6 +155,8 @@ function PendingInviteRow({
   const [copying, setCopying] = useState(false);
   const [copied, setCopied] = useState(false);
 
+  const isExpired = new Date(invite.expires_at) < new Date();
+
   async function handleCopy() {
     setCopying(true);
     setCopied(false);
@@ -182,9 +184,29 @@ function PendingInviteRow({
           overflow: 'hidden',
           textOverflow: 'ellipsis',
           whiteSpace: 'nowrap',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 6,
         }}
       >
-        {invite.invitee_name || invite.invitee_email}
+        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          {invite.invitee_name || invite.invitee_email}
+        </span>
+        {isExpired && (
+          <span
+            style={{
+              fontSize: 9,
+              fontWeight: 600,
+              color: '#ef4444',
+              background: 'rgba(239, 68, 68, 0.15)',
+              borderRadius: 3,
+              padding: '1px 5px',
+              flexShrink: 0,
+            }}
+          >
+            Expired
+          </span>
+        )}
       </div>
       <div style={{ fontSize: 10, color: theme.textSubtle }}>
         {invite.invitee_name ? invite.invitee_email : invite.role}
@@ -192,7 +214,7 @@ function PendingInviteRow({
       <button
         onClick={handleCopy}
         disabled={copying}
-        title="Copy invite link"
+        title={isExpired ? 'Generate a fresh invite link' : 'Copy invite link'}
         style={{
           background: 'transparent',
           border: 'none',
@@ -205,7 +227,7 @@ function PendingInviteRow({
           whiteSpace: 'nowrap',
         }}
       >
-        {copying ? '...' : copied ? 'Copied!' : 'Copy Link'}
+        {copying ? '...' : copied ? 'Copied!' : isExpired ? 'Resend Link' : 'Copy Link'}
       </button>
       <button
         onClick={onCancel}
@@ -249,6 +271,8 @@ export function TeamPanel({ onClose }: Props) {
   const [teamName, setTeamName] = useState(activeTeam?.name ?? '');
   const [confirmLeave, setConfirmLeave] = useState(false);
   const [dangerOpen, setDangerOpen] = useState(false);
+  const [memberError, setMemberError] = useState<string | null>(null);
+  const [confirmRemove, setConfirmRemove] = useState<TeamMember | null>(null);
 
   const isAdmin = activeTeam?.myRole === 'admin';
 
@@ -349,9 +373,22 @@ export function TeamPanel({ onClose }: Props) {
     await refresh();
   }
 
-  async function handleRemoveMember(userId: string) {
-    if (!activeTeam) return;
-    await teamService.removeMember(activeTeam.id, userId);
+  function handleRemoveMember(userId: string) {
+    const member = members.find((m) => m.user_id === userId);
+    if (!member) return;
+    setMemberError(null);
+    setConfirmRemove(member);
+  }
+
+  async function confirmAndRemoveMember() {
+    if (!activeTeam || !confirmRemove) return;
+    const userId = confirmRemove.user_id;
+    setConfirmRemove(null);
+    const success = await teamService.removeMember(activeTeam.id, userId);
+    if (!success) {
+      setMemberError('Failed to remove member. Please try again.');
+      return;
+    }
     await refresh();
   }
 
@@ -567,6 +604,66 @@ export function TeamPanel({ onClose }: Props) {
               teamOutlineColor={activeTeam?.outline_color || state.teamAOutlineColor}
             />
           ))}
+          {confirmRemove && (
+            <div
+              style={{
+                marginTop: 8,
+                padding: '10px 12px',
+                background: 'rgba(239, 68, 68, 0.08)',
+                border: '1px solid rgba(239, 68, 68, 0.25)',
+                borderRadius: 6,
+              }}
+            >
+              <div style={{ fontSize: 12, color: theme.secondary, lineHeight: 1.5, marginBottom: 8 }}>
+                Remove <strong>{confirmRemove.profile?.display_name || 'this member'}</strong>
+                {confirmRemove.profile?.email && (
+                  <span style={{ color: theme.textMuted }}> ({confirmRemove.profile.email})</span>
+                )}
+                {' '}from <strong>{activeTeam.name}</strong>?
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button
+                  onClick={confirmAndRemoveMember}
+                  style={{
+                    padding: '5px 12px',
+                    fontSize: 11,
+                    fontFamily: 'inherit',
+                    fontWeight: 600,
+                    border: 'none',
+                    borderRadius: 4,
+                    background: '#ef4444',
+                    color: '#fff',
+                    cursor: 'pointer',
+                    transition: 'background 0.15s',
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = '#dc2626'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = '#ef4444'; }}
+                >
+                  Remove
+                </button>
+                <button
+                  onClick={() => setConfirmRemove(null)}
+                  style={{
+                    padding: '5px 12px',
+                    fontSize: 11,
+                    fontFamily: 'inherit',
+                    border: `1px solid ${theme.borderSubtle}`,
+                    borderRadius: 4,
+                    background: 'transparent',
+                    color: theme.textMuted,
+                    cursor: 'pointer',
+                  }}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+          {memberError && (
+            <div style={{ color: '#ef4444', fontSize: 11, marginTop: 6 }}>
+              {memberError}
+            </div>
+          )}
         </div>
 
         {/* Pending invites (admin only) */}

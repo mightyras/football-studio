@@ -32,6 +32,9 @@ import { renderSceneToBlob } from './utils/sceneRenderer';
 import { curvedRunControlPoint } from './utils/curveGeometry';
 import { playKickSound, playGoalNetSound } from './utils/sound';
 import { findClosestGhost } from './utils/ghostUtils';
+import { TourProvider, useTour } from './components/Tour/useTour';
+import { TourOverlay } from './components/Tour/TourOverlay';
+import { WelcomeModal } from './components/WelcomeModal/WelcomeModal';
 
 function AppContent() {
   const { state, dispatch, setDispatchInterceptor } = useAppState();
@@ -53,6 +56,15 @@ function AppContent() {
   // Auth (gate entire app behind sign-in)
   const { user, loading: authLoading, needsPasswordSetup, clearPasswordSetup } = useAuth();
   const { activeTeam } = useTeam();
+  const tour = useTour();
+
+  // Welcome modal for first-time users
+  const [showWelcome, setShowWelcome] = useState(false);
+  useEffect(() => {
+    if (user && !localStorage.getItem('football-studio-welcome-seen')) {
+      setShowWelcome(true);
+    }
+  }, [user]);
 
   // Refs for session auto-save/restore across sign-out/sign-in
   const stateRef = useRef(state);
@@ -1150,6 +1162,7 @@ function AppContent() {
           onSaveHandled={() => setSaveSceneRequested(false)}
           onRequestSignIn={() => {}}
           onStartCollaboration={handleStartCollaboration}
+          onStartTour={() => setShowPanel(false)}
         />
       </div>
       <div className="statusbar">
@@ -1215,6 +1228,24 @@ function AppContent() {
         </div>
       )}
 
+      {/* Spotlight walkthrough tour */}
+      <TourOverlay />
+
+      {/* Welcome modal for first-time users (after password setup if needed) */}
+      {showWelcome && !needsPasswordSetup && (
+        <WelcomeModal
+          onClose={() => {
+            localStorage.setItem('football-studio-welcome-seen', 'true');
+            setShowWelcome(false);
+          }}
+          onStartTour={() => {
+            localStorage.setItem('football-studio-welcome-seen', 'true');
+            setShowWelcome(false);
+            tour.start();
+          }}
+        />
+      )}
+
       {/* Auth gate — show sign-in overlay when not authenticated */}
       {!user && !authLoading && (
         <AuthModal onClose={() => {}} />
@@ -1231,7 +1262,9 @@ function AppContent() {
 function App() {
   return (
     <AppStateProvider>
-      <AppContent />
+      <TourProvider>
+        <AppContent />
+      </TourProvider>
     </AppStateProvider>
   );
 }

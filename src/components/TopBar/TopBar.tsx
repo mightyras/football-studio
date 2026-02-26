@@ -146,7 +146,7 @@ function DisplayDropdown() {
   }, [open]);
 
   return (
-    <div ref={dropdownRef} style={{ position: 'relative' }}>
+    <div ref={dropdownRef} style={{ position: 'relative' }} data-tour="display-options">
       <button
         onClick={() => setOpen(prev => !prev)}
         title="Display options"
@@ -550,7 +550,7 @@ export function TopBar({ onPlayLines, onStepLines, onExportLines, showPanel, onT
       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
         {/* Team A: name trigger + formation trigger */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
-          <div style={{ position: 'relative' }}>
+          <div style={{ position: 'relative' }} data-tour="team-name-a">
             <TeamNameTrigger
               name={state.teamAName}
               color={state.teamAColor}
@@ -566,7 +566,7 @@ export function TopBar({ onPlayLines, onStepLines, onExportLines, showPanel, onT
               <TeamOverlay team="A" onClose={() => setOpenTeamOverlay(null)} />
             )}
           </div>
-          <div style={{ position: 'relative' }}>
+          <div style={{ position: 'relative' }} data-tour="formation-a">
             <button
               onClick={() => {
                 dispatch({ type: 'SET_ACTIVE_TEAM', team: 'A' });
@@ -680,7 +680,7 @@ export function TopBar({ onPlayLines, onStepLines, onExportLines, showPanel, onT
       </div>
 
       {/* Right: Display dropdown + Play/Export + Panel toggle */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+      <div data-tour="play-area" style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
         {/* Display options (Orientation / Cover Shadow) */}
         <DisplayDropdown />
 
@@ -813,6 +813,7 @@ export function TopBar({ onPlayLines, onStepLines, onExportLines, showPanel, onT
         <button
           onClick={onOpenBoards}
           title="Boards"
+          data-tour="boards-button"
           style={{
             display: 'flex',
             alignItems: 'center',
@@ -844,6 +845,7 @@ export function TopBar({ onPlayLines, onStepLines, onExportLines, showPanel, onT
 
         {/* Panel toggle */}
         <button
+          data-tour="settings-toggle"
           onClick={onTogglePanel}
           title={showPanel ? 'Hide panel' : 'Show settings'}
           style={{

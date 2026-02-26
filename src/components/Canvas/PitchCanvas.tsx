@@ -615,6 +615,7 @@ export function PitchCanvas({ playbackRef, playerRunAnimRef, animationQueueRef, 
   return (
     <div
       ref={containerRef}
+      data-tour="pitch"
       style={{
         width: '100%',
         flex: 1,

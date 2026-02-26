@@ -60,6 +60,7 @@ export function ZoomControls({
 
   return (
     <div
+      data-tour="zoom-controls"
       style={{
         position: 'absolute',
         bottom: 8,
