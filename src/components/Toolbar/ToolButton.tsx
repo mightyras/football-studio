@@ -7,14 +7,16 @@ interface ToolButtonProps {
   onClick: () => void;
   title: string;
   children: ReactNode;
+  dataTour?: string;
 }
 
-export function ToolButton({ active, onClick, title, children }: ToolButtonProps) {
+export function ToolButton({ active, onClick, title, children, dataTour }: ToolButtonProps) {
   const theme = useThemeColors();
   return (
     <button
       onClick={onClick}
       title={title}
+      data-tour={dataTour}
       style={{
         width: 40,
         height: 40,

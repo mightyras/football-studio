@@ -10,7 +10,7 @@ interface AuthModalProps {
 }
 
 export function AuthModal({ onClose }: AuthModalProps) {
-  const { signInWithEmail, signInWithMagicLink } = useAuth();
+  const { signInWithEmail, signInWithMagicLink, resetPassword, expiredInviteMessage } = useAuth();
   const theme = useThemeColors();
   const dialogRef = useRef<HTMLDivElement>(null);
 
@@ -20,6 +20,7 @@ export function AuthModal({ onClose }: AuthModalProps) {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [magicLinkSent, setMagicLinkSent] = useState(false);
+  const [resetSent, setResetSent] = useState(false);
 
   useEffect(() => {
     function handleKey(e: KeyboardEvent) {
@@ -28,6 +29,21 @@ export function AuthModal({ onClose }: AuthModalProps) {
     document.addEventListener('keydown', handleKey);
     return () => document.removeEventListener('keydown', handleKey);
   }, [onClose]);
+
+  async function handleForgotPassword() {
+    if (!email.trim()) {
+      setError('Enter your email address first');
+      return;
+    }
+    setError(null);
+    setBusy(true);
+    try {
+      const { error: err } = await resetPassword(email.trim());
+      if (err) { setError(err); } else { setResetSent(true); }
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -101,10 +117,27 @@ export function AuthModal({ onClose }: AuthModalProps) {
           Football Tactics Studio
         </h2>
 
+        {/* Expired invite warning */}
+        {expiredInviteMessage && (
+          <div style={{
+            marginBottom: 12,
+            padding: '8px 12px',
+            fontSize: 12,
+            lineHeight: 1.5,
+            color: '#d97706',
+            background: 'rgba(217, 119, 6, 0.1)',
+            border: '1px solid rgba(217, 119, 6, 0.25)',
+            borderRadius: 6,
+            textAlign: 'center',
+          }}>
+            Your invite link has expired. Please ask your team admin for a new link, or sign in with your email.
+          </div>
+        )}
+
         {/* Method toggle */}
         <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
           <button
-            onClick={() => { setMethod('email'); setError(null); setMagicLinkSent(false); }}
+            onClick={() => { setMethod('email'); setError(null); setMagicLinkSent(false); setResetSent(false); }}
             style={{
               flex: 1,
               padding: '6px',
@@ -120,7 +153,7 @@ export function AuthModal({ onClose }: AuthModalProps) {
             Email & Password
           </button>
           <button
-            onClick={() => { setMethod('magic'); setError(null); setMagicLinkSent(false); }}
+            onClick={() => { setMethod('magic'); setError(null); setMagicLinkSent(false); setResetSent(false); }}
             style={{
               flex: 1,
               padding: '6px',
@@ -137,8 +170,8 @@ export function AuthModal({ onClose }: AuthModalProps) {
           </button>
         </div>
 
-        {/* Magic link sent confirmation */}
-        {magicLinkSent ? (
+        {/* Confirmation messages */}
+        {magicLinkSent || resetSent ? (
           <div style={{
             padding: '12px 16px',
             background: hexToRgba(theme.highlight, 0.1),
@@ -149,7 +182,9 @@ export function AuthModal({ onClose }: AuthModalProps) {
             lineHeight: 1.5,
             textAlign: 'center',
           }}>
-            Check your email for a login link.
+            {resetSent
+              ? 'Check your email for a password reset link.'
+              : 'Check your email for a login link.'}
           </div>
         ) : (
           <form onSubmit={handleSubmit}>
@@ -165,17 +200,39 @@ export function AuthModal({ onClose }: AuthModalProps) {
                 onBlur={e => { e.currentTarget.style.borderColor = theme.borderSubtle; }}
               />
               {method === 'email' && (
-                <input
-                  type="password"
-                  placeholder="Password"
-                  value={password}
-                  onChange={e => setPassword(e.target.value)}
-                  required
-                  minLength={6}
-                  style={inputStyle}
-                  onFocus={e => { e.currentTarget.style.borderColor = theme.highlight; }}
-                  onBlur={e => { e.currentTarget.style.borderColor = theme.borderSubtle; }}
-                />
+                <>
+                  <input
+                    type="password"
+                    placeholder="Password"
+                    value={password}
+                    onChange={e => setPassword(e.target.value)}
+                    required
+                    minLength={6}
+                    style={inputStyle}
+                    onFocus={e => { e.currentTarget.style.borderColor = theme.highlight; }}
+                    onBlur={e => { e.currentTarget.style.borderColor = theme.borderSubtle; }}
+                  />
+                  <button
+                    type="button"
+                    onClick={handleForgotPassword}
+                    disabled={busy}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: theme.textMuted,
+                      fontSize: 11,
+                      fontFamily: 'inherit',
+                      cursor: busy ? 'wait' : 'pointer',
+                      padding: 0,
+                      alignSelf: 'flex-end',
+                      marginTop: -4,
+                    }}
+                    onMouseEnter={e => { e.currentTarget.style.color = theme.highlight; }}
+                    onMouseLeave={e => { e.currentTarget.style.color = theme.textMuted; }}
+                  >
+                    Forgot Password?
+                  </button>
+                </>
               )}
             </div>
 

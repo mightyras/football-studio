@@ -234,6 +234,7 @@ export function Toolbar() {
         active={state.activeTool === 'select'}
         onClick={() => dispatch({ type: 'SET_ACTIVE_TOOL', tool: 'select' })}
         title="Select & Move (V)"
+        dataTour="tool-select"
       >
         <SelectIcon />
       </ToolButton>
@@ -248,6 +249,7 @@ export function Toolbar() {
           }
         }}
         title="Formation Move (X)"
+        dataTour="tool-formation-move"
       >
         <FormationMoveIcon />
       </ToolButton>
@@ -281,6 +283,7 @@ export function Toolbar() {
           }
         }}
         title="Draw (W)"
+        dataTour="tool-draw"
       >
         <DrawIcon />
       </ToolButton>
