@@ -109,6 +109,13 @@ const BoardsIcon = ({ active, accentColor }: { active: boolean; accentColor: str
   </svg>
 );
 
+const ResetPositionsIcon = () => (
+  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="1 4 1 10 7 10" />
+    <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
+  </svg>
+);
+
 const GearIcon = ({ active, accentColor }: { active: boolean; accentColor: string }) => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={active ? accentColor : 'currentColor'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <circle cx="12" cy="12" r="3" />
@@ -598,6 +605,36 @@ export function TopBar({ onPlayLines, onStepLines, onExportLines, showPanel, onT
               <FormationDropdown team="A" onClose={() => setOpenFormationDropdown(null)} />
             )}
           </div>
+          {state.teamAFormation && (
+            <button
+              onClick={() => dispatch({ type: 'RESET_POSITIONS', team: 'A' })}
+              title="Reset positions to formation defaults"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: 3,
+                border: '1px solid transparent',
+                borderRadius: 3,
+                background: 'transparent',
+                color: theme.textSubtle,
+                cursor: 'pointer',
+                transition: 'all 0.15s',
+              }}
+              onMouseEnter={e => {
+                e.currentTarget.style.color = theme.highlight;
+                e.currentTarget.style.borderColor = theme.borderSubtle;
+                e.currentTarget.style.background = theme.surfaceHover;
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.color = theme.textSubtle;
+                e.currentTarget.style.borderColor = 'transparent';
+                e.currentTarget.style.background = 'transparent';
+              }}
+            >
+              <ResetPositionsIcon />
+            </button>
+          )}
         </div>
 
         <span style={{ color: theme.borderSubtle, fontSize: 13 }}>vs</span>
@@ -652,6 +689,36 @@ export function TopBar({ onPlayLines, onStepLines, onExportLines, showPanel, onT
               <FormationDropdown team="B" onClose={() => setOpenFormationDropdown(null)} />
             )}
           </div>
+          {state.teamBFormation && (
+            <button
+              onClick={() => dispatch({ type: 'RESET_POSITIONS', team: 'B' })}
+              title="Reset positions to formation defaults"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: 3,
+                border: '1px solid transparent',
+                borderRadius: 3,
+                background: 'transparent',
+                color: theme.textSubtle,
+                cursor: 'pointer',
+                transition: 'all 0.15s',
+              }}
+              onMouseEnter={e => {
+                e.currentTarget.style.color = theme.highlight;
+                e.currentTarget.style.borderColor = theme.borderSubtle;
+                e.currentTarget.style.background = theme.surfaceHover;
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.color = theme.textSubtle;
+                e.currentTarget.style.borderColor = 'transparent';
+                e.currentTarget.style.background = 'transparent';
+              }}
+            >
+              <ResetPositionsIcon />
+            </button>
+          )}
         </div>
 
         <button

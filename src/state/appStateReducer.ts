@@ -18,6 +18,7 @@ export type AppAction =
   | { type: 'SET_TEAM_DIRECTION'; direction: AttackDirection }
   | { type: 'SET_PITCH_SETTINGS'; settings: Partial<PitchSettings> }
   | { type: 'APPLY_FORMATION'; team: 'A' | 'B'; formationId: string }
+  | { type: 'RESET_POSITIONS'; team: 'A' | 'B' }
   | { type: 'MOVE_PLAYER'; playerId: string; x: number; y: number }
   | { type: 'ADD_PLAYER'; player: Player }
   | { type: 'DELETE_PLAYER'; playerId: string }
@@ -437,6 +438,48 @@ export function appStateReducer(state: AppState, action: AppAction): AppState {
       return {
         ...state, ...undo, players: updatedPlayers, [formationKey]: action.formationId,
         resolvedPossession: computePossession(updatedPlayers, state.ball, state.possession, state.resolvedPossession),
+      };
+    }
+
+    case 'RESET_POSITIONS': {
+      // Reset player positions to their current formation defaults,
+      // preserving names, numbers, and all other player properties.
+      const fKey = action.team === 'A' ? 'teamAFormation' : 'teamBFormation';
+      const currentFormationId = state[fKey];
+      if (!currentFormationId) return state;
+
+      const resetFormation = FORMATIONS.find(f => f.id === currentFormationId);
+      if (!resetFormation) return state;
+
+      const undoReset = withUndo(state);
+
+      const resetOutfield = state.players.filter(
+        p => p.team === action.team && !p.isGK,
+      );
+      const resetMapping = matchPlayersToPositions(
+        resetOutfield,
+        resetFormation.positions,
+        action.team,
+        state.teamADirection,
+      );
+
+      const resetGkX = defendsHighX(action.team, state.teamADirection) ? PITCH.length - 4 : 4;
+      const resetFace = defaultFacing(action.team, state.teamADirection);
+
+      const resetPlayers = state.players.map(p => {
+        if (p.team !== action.team) return p;
+        if (p.isGK) return { ...p, x: resetGkX, y: PITCH.width / 2, facing: resetFace };
+
+        const targetPos = resetMapping.get(p.id);
+        if (!targetPos) return p;
+
+        const world = formationToWorld(targetPos, action.team, state.teamADirection);
+        return { ...p, x: world.x, y: world.y, facing: resetFace };
+      });
+
+      return {
+        ...state, ...undoReset, players: resetPlayers,
+        resolvedPossession: computePossession(resetPlayers, state.ball, state.possession, state.resolvedPossession),
       };
     }
 
