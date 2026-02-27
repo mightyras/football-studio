@@ -8,6 +8,8 @@ export async function createTeamInvite(
   email: string,
   role: TeamRole = 'member',
   name?: string,
+  teamName?: string,
+  teamLogoUrl?: string,
 ): Promise<Invite | null> {
   if (!supabase) return null;
   const {
@@ -32,7 +34,7 @@ export async function createTeamInvite(
   if (error || !data) return null;
 
   // Send invite email (fire-and-forget — invite record is already saved)
-  sendInviteEmail(email, name).catch(() => {});
+  sendInviteEmail(email, name, teamName, teamLogoUrl).catch(() => {});
 
   return data as Invite;
 }
@@ -43,6 +45,8 @@ export async function createTeamInviteWithLink(
   email: string,
   role: TeamRole = 'member',
   name?: string,
+  teamName?: string,
+  teamLogoUrl?: string,
 ): Promise<{ invite: Invite | null; inviteLink?: string }> {
   if (!supabase) return { invite: null };
   const {
@@ -67,7 +71,7 @@ export async function createTeamInviteWithLink(
   if (error || !data) return { invite: null };
 
   // Generate invite link (creates auth user if needed)
-  const result = await generateInviteLink(email, name);
+  const result = await generateInviteLink(email, name, teamName, teamLogoUrl);
 
   return {
     invite: data as Invite,

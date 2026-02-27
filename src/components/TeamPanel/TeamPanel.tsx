@@ -296,6 +296,8 @@ export function TeamPanel({ onClose }: Props) {
       email,
       inviteRole,
       inviteName.trim() || undefined,
+      activeTeam.name,
+      activeTeam.logo_url ?? undefined,
     );
     setInviting(false);
 
@@ -323,6 +325,8 @@ export function TeamPanel({ onClose }: Props) {
       email,
       inviteRole,
       inviteName.trim() || undefined,
+      activeTeam.name,
+      activeTeam.logo_url ?? undefined,
     );
     setInviting(false);
 

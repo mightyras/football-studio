@@ -8,6 +8,8 @@ import { supabase } from '../lib/supabase';
 export async function sendInviteEmail(
   email: string,
   name?: string,
+  teamName?: string,
+  teamLogoUrl?: string,
 ): Promise<{ status: 'invited' | 'existing_user' | 'error'; message?: string }> {
   if (!supabase) return { status: 'error', message: 'Supabase not configured' };
 
@@ -16,6 +18,8 @@ export async function sendInviteEmail(
       body: {
         email,
         name: name || undefined,
+        teamName: teamName || undefined,
+        teamLogoUrl: teamLogoUrl || undefined,
         redirectTo: window.location.origin,
       },
     });
@@ -40,6 +44,8 @@ export async function sendInviteEmail(
 export async function generateInviteLink(
   email: string,
   name?: string,
+  teamName?: string,
+  teamLogoUrl?: string,
 ): Promise<{ status: 'invited' | 'existing_user' | 'error'; inviteLink?: string; message?: string }> {
   if (!supabase) return { status: 'error', message: 'Supabase not configured' };
 
@@ -48,6 +54,8 @@ export async function generateInviteLink(
       body: {
         email,
         name: name || undefined,
+        teamName: teamName || undefined,
+        teamLogoUrl: teamLogoUrl || undefined,
         redirectTo: window.location.origin,
         mode: 'link',
       },

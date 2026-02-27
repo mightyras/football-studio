@@ -112,7 +112,7 @@ export function TeamConfigPanel({ team, onClose, onUpdated }: TeamConfigPanelPro
     if (!trimmed) return;
     setInviting(true);
     setInviteError(null);
-    const ok = await inviteService.createTeamInvite(team.id, trimmed, 'admin', inviteName);
+    const ok = await inviteService.createTeamInvite(team.id, trimmed, 'admin', inviteName, team.name, team.logo_url ?? undefined);
     if (ok) {
       setInviteEmail('');
       setInviteName('');
