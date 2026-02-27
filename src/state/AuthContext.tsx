@@ -81,6 +81,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       window.history.replaceState(null, '', window.location.pathname);
     }
 
+    // Handle safe invite/confirm links: /auth/confirm?token_hash=xxx&type=invite
+    // These links redirect through the app instead of hitting /auth/v1/verify directly,
+    // which prevents email prefetchers (Microsoft Safe Links) from consuming the token.
+    const searchParams = new URLSearchParams(window.location.search);
+    const tokenHash = searchParams.get('token_hash');
+    const tokenType = searchParams.get('type');
+    const isTokenConfirm = window.location.pathname === '/auth/confirm' && tokenHash && tokenType;
+
+    if (isTokenConfirm) {
+      // Verify the token via the Supabase SDK (POST request, not GET — safe from prefetchers)
+      supabase.auth.verifyOtp({
+        token_hash: tokenHash,
+        type: tokenType as 'invite' | 'magiclink' | 'email',
+      }).then(({ data, error: verifyError }) => {
+        // Clean URL regardless of outcome
+        window.history.replaceState(null, '', '/');
+        if (verifyError) {
+          setExpiredInviteMessage(verifyError.message);
+          setLoading(false);
+          return;
+        }
+        const u = data.session?.user ?? data.user ?? null;
+        setUser(u as User | null);
+        if (u) {
+          fetchProfile(u.id).then(setProfile);
+          // Invited users need to set a password
+          if (tokenType === 'invite' || tokenType === 'recovery') {
+            setNeedsPasswordSetup(true);
+            localStorage.setItem(`football-studio-needs-password-${u.id}`, 'true');
+          }
+        }
+        setLoading(false);
+      });
+      return; // Skip normal session check — verifyOtp handles it
+    }
+
     // Check existing session
     supabase.auth.getSession().then(({ data: { session } }) => {
       const u = session?.user ?? null;
