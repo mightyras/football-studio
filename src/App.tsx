@@ -582,11 +582,7 @@ function AppContent() {
 
   // ── Play Lines button handler (plays ALL annotations, like Space but without needing selection) ──
   const handlePlayLines = useCallback(() => {
-    // If animation is already running, cancel it so we can restart
-    if (playerRunAnimRef.current.length > 0) {
-      playerRunAnimRef.current = [];
-      animationQueueRef.current = [];
-    }
+    if (playerRunAnimRef.current.length > 0) return; // already animating
 
     // Cancel any active stepping session
     stepQueueRef.current = [];
@@ -619,8 +615,7 @@ function AppContent() {
 
   // ── Step Lines button handler (step-by-step through ALL annotations, like Right arrow) ──
   const handleStepLines = useCallback(() => {
-    // If a step animation is mid-flight, let it finish
-    if (playerRunAnimRef.current.length > 0) return;
+    if (playerRunAnimRef.current.length > 0) return; // animation playing
 
     // If no stepping queue yet, build one (first press)
     if (stepQueueRef.current.length === 0 && completedStepBatchesRef.current.length === 0) {
@@ -751,13 +746,7 @@ function AppContent() {
         const tag = (e.target as HTMLElement)?.tagName;
         if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (e.target as HTMLElement)?.isContentEditable) return;
         e.preventDefault();
-        if (!state.drawingInProgress) {
-          // If animation is already running, cancel it so we can restart
-          if (playerRunAnimRef.current.length > 0) {
-            playerRunAnimRef.current = [];
-            animationQueueRef.current = [];
-          }
-
+        if (!state.drawingInProgress && playerRunAnimRef.current.length === 0) {
           // Cancel any active stepping session
           stepQueueRef.current = [];
           completedStepBatchesRef.current = [];
