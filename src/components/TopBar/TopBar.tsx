@@ -110,7 +110,7 @@ const BoardsIcon = ({ active, accentColor }: { active: boolean; accentColor: str
 );
 
 const ResetPositionsIcon = () => (
-  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
     <polyline points="1 4 1 10 7 10" />
     <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
   </svg>
@@ -613,11 +613,11 @@ export function TopBar({ onPlayLines, onStepLines, onExportLines, showPanel, onT
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                padding: 3,
+                padding: 4,
                 border: '1px solid transparent',
-                borderRadius: 3,
+                borderRadius: 4,
                 background: 'transparent',
-                color: theme.textSubtle,
+                color: theme.textMuted,
                 cursor: 'pointer',
                 transition: 'all 0.15s',
               }}
@@ -627,7 +627,7 @@ export function TopBar({ onPlayLines, onStepLines, onExportLines, showPanel, onT
                 e.currentTarget.style.background = theme.surfaceHover;
               }}
               onMouseLeave={e => {
-                e.currentTarget.style.color = theme.textSubtle;
+                e.currentTarget.style.color = theme.textMuted;
                 e.currentTarget.style.borderColor = 'transparent';
                 e.currentTarget.style.background = 'transparent';
               }}
@@ -697,11 +697,11 @@ export function TopBar({ onPlayLines, onStepLines, onExportLines, showPanel, onT
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                padding: 3,
+                padding: 4,
                 border: '1px solid transparent',
-                borderRadius: 3,
+                borderRadius: 4,
                 background: 'transparent',
-                color: theme.textSubtle,
+                color: theme.textMuted,
                 cursor: 'pointer',
                 transition: 'all 0.15s',
               }}
@@ -711,7 +711,7 @@ export function TopBar({ onPlayLines, onStepLines, onExportLines, showPanel, onT
                 e.currentTarget.style.background = theme.surfaceHover;
               }}
               onMouseLeave={e => {
-                e.currentTarget.style.color = theme.textSubtle;
+                e.currentTarget.style.color = theme.textMuted;
                 e.currentTarget.style.borderColor = 'transparent';
                 e.currentTarget.style.background = 'transparent';
               }}
