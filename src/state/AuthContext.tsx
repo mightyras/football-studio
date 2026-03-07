@@ -154,8 +154,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     );
 
     // Pause token auto-refresh when offline to prevent retry-loop flooding
-    const handleOffline = () => supabase.auth.stopAutoRefresh();
-    const handleOnline = () => supabase.auth.startAutoRefresh();
+    const handleOffline = () => supabase?.auth.stopAutoRefresh();
+    const handleOnline = () => supabase?.auth.startAutoRefresh();
     window.addEventListener('offline', handleOffline);
     window.addEventListener('online', handleOnline);
 

@@ -35,6 +35,32 @@ import { findClosestGhost } from './utils/ghostUtils';
 import { TourProvider, useTour } from './components/Tour/useTour';
 import { TourOverlay } from './components/Tour/TourOverlay';
 import { WelcomeModal } from './components/WelcomeModal/WelcomeModal';
+import { Sentry } from './lib/sentry';
+import { useSentryUser } from './hooks/useSentryUser';
+
+function SentryFallback({ resetError }: { resetError?: () => void }) {
+  return (
+    <div style={{ padding: 20, textAlign: 'center', color: '#999' }}>
+      <p style={{ margin: '0 0 8px' }}>Something went wrong.</p>
+      {resetError && (
+        <button
+          onClick={resetError}
+          style={{
+            padding: '6px 16px',
+            borderRadius: 4,
+            border: '1px solid #555',
+            background: 'transparent',
+            color: '#ccc',
+            cursor: 'pointer',
+            fontSize: 13,
+          }}
+        >
+          Try again
+        </button>
+      )}
+    </div>
+  );
+}
 
 function AppContent() {
   const { state, dispatch, setDispatchInterceptor } = useAppState();
@@ -57,6 +83,9 @@ function AppContent() {
   const { user, loading: authLoading, needsPasswordSetup, clearPasswordSetup } = useAuth();
   const { activeTeam } = useTeam();
   const tour = useTour();
+
+  // Sync Supabase user ID to Sentry context (UUID only, no PII)
+  useSentryUser();
 
   // Welcome modal for first-time users
   const [showWelcome, setShowWelcome] = useState(false);
@@ -1212,20 +1241,24 @@ function AppContent() {
       </div>
       <div className="canvas-area">
         <PresenceBar onlineUsers={collaboration.onlineUsers} isConnected={collaboration.isConnected} onLeave={handleLeaveCollaboration} />
-        <PitchCanvas playbackRef={activePlaybackRef} playerRunAnimRef={playerRunAnimRef} animationQueueRef={animationQueueRef} stepQueueRef={stepQueueRef} completedStepBatchesRef={completedStepBatchesRef} goalCelebrationRef={goalCelebrationRef} onGoalScored={handleGoalScored} zoom={zoom} />
+        <Sentry.ErrorBoundary fallback={<SentryFallback />}>
+          <PitchCanvas playbackRef={activePlaybackRef} playerRunAnimRef={playerRunAnimRef} animationQueueRef={animationQueueRef} stepQueueRef={stepQueueRef} completedStepBatchesRef={completedStepBatchesRef} goalCelebrationRef={goalCelebrationRef} onGoalScored={handleGoalScored} zoom={zoom} />
+        </Sentry.ErrorBoundary>
       </div>
       {/* Animation Mode UI hidden — feature preserved in code for future use */}
       <div className="formations">
-        <RightPanel
-          rotation={zoom.rotation}
-          activeTab={panelTab}
-          onTabChange={setPanelTab}
-          saveRequested={saveSceneRequested}
-          onSaveHandled={() => setSaveSceneRequested(false)}
-          onRequestSignIn={() => {}}
-          onStartCollaboration={handleStartCollaboration}
-          onStartTour={() => setShowPanel(false)}
-        />
+        <Sentry.ErrorBoundary fallback={<SentryFallback />}>
+          <RightPanel
+            rotation={zoom.rotation}
+            activeTab={panelTab}
+            onTabChange={setPanelTab}
+            saveRequested={saveSceneRequested}
+            onSaveHandled={() => setSaveSceneRequested(false)}
+            onRequestSignIn={() => {}}
+            onStartCollaboration={handleStartCollaboration}
+            onStartTour={() => setShowPanel(false)}
+          />
+        </Sentry.ErrorBoundary>
       </div>
       <div className="statusbar">
         <StatusBar />
