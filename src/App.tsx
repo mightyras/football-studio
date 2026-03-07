@@ -257,6 +257,16 @@ function AppContent() {
   const [copyToast, setCopyToast] = useState(false);
   const copyToastTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
+  // ── Restore-annotations toast ──
+  const [restoreToast, setRestoreToast] = useState(false);
+  const restoreToastTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
+  // ── Post-animation restore: tracks EXECUTE_RUN count for play-all / step-all ──
+  const restoreUndoCountRef = useRef(0);
+  // Guards against spurious re-calls of handlePlayLines after animation completes.
+  // Set true when play-all starts; cleared on Escape-restore, toast dismiss, or new session.
+  const playAllActiveRef = useRef(false);
+
   // ── Goal celebration ──
   const [, setGoalCelebration] = useState<GoalCelebration | null>(null);
   const goalCelebrationRef = useRef<GoalCelebration | null>(null);
@@ -618,14 +628,23 @@ function AppContent() {
   // ── Play Lines button handler (plays ALL annotations, like Space but without needing selection) ──
   const handlePlayLines = useCallback(() => {
     if (playerRunAnimRef.current.length > 0) return; // already animating
+    if (playAllActiveRef.current) return; // play-all cycle completed, awaiting restore/dismiss
 
     // Cancel any active stepping session
     stepQueueRef.current = [];
     completedStepBatchesRef.current = [];
 
+    // Clear previous restore state
+    clearTimeout(restoreToastTimer.current);
+    setRestoreToast(false);
+
     const result = buildAnimQueueForAll();
     if (!result) return;
     const { queue, allLineAnns } = result;
+
+    // Track total EXECUTE_RUN count for post-animation Escape restore
+    restoreUndoCountRef.current = queue.length;
+    playAllActiveRef.current = true;
 
     // Clear existing ghosts for all involved players
     const involvedPlayerIds = new Set(queue.map(q => q.playerId));
@@ -672,6 +691,10 @@ function AppContent() {
 
       stepQueueRef.current = queue;
       completedStepBatchesRef.current = [];
+      restoreUndoCountRef.current = 0;
+      playAllActiveRef.current = false;
+      clearTimeout(restoreToastTimer.current);
+      setRestoreToast(false);
     }
 
     // Pull next batch from step queue
@@ -692,6 +715,7 @@ function AppContent() {
 
     // Track for Left arrow undo
     completedStepBatchesRef.current.push({ batch, undoCount: batch.length });
+    restoreUndoCountRef.current += batch.length;
 
     // Don't store in animationQueueRef — PitchCanvas won't auto-advance
     const animatableTypes = ['running-line', 'curved-run', 'passing-line', 'dribble-line'] as const;
@@ -707,18 +731,73 @@ function AppContent() {
       if (state.editingPlayerId || state.editingAnnotationId || state.pendingDeletePlayerId) return;
 
       if (e.key === 'Escape') {
+        // Priority 1: Animation Mode playback stop
         if (state.animationMode && playbackStatus !== 'idle') {
           stop();
           return;
         }
-        // Cancel arrow-key stepping session
-        if (stepQueueRef.current.length > 0 || completedStepBatchesRef.current.length > 0) {
+
+        // Priority 2: Mid-animation cancel — stop running animations, stamp ghosts, no undo
+        if (playerRunAnimRef.current.length > 0) {
           playerRunAnimRef.current = [];
+          animationQueueRef.current = [];
           stepQueueRef.current = [];
           completedStepBatchesRef.current = [];
+          restoreUndoCountRef.current = 0;
+          playAllActiveRef.current = false;
+          lastSequenceUndoCountRef.current = 0;
+          lastSequencePlayerIdRef.current = null;
+          clearTimeout(restoreToastTimer.current);
+          setRestoreToast(false);
           dispatch({ type: 'STAMP_GHOST_FADE_START', time: performance.now() });
           return;
         }
+
+        // Priority 3: Active stepping session — undo completed steps, cancel remaining
+        if (stepQueueRef.current.length > 0 || completedStepBatchesRef.current.length > 0) {
+          const totalUndos = completedStepBatchesRef.current.reduce(
+            (sum, b) => sum + b.undoCount, 0
+          );
+          const clampedUndos = Math.min(totalUndos, state.undoStack.length);
+          for (let i = 0; i < clampedUndos; i++) {
+            dispatch({ type: 'UNDO' });
+          }
+          stepQueueRef.current = [];
+          completedStepBatchesRef.current = [];
+          restoreUndoCountRef.current = 0;
+          playAllActiveRef.current = false;
+          clearTimeout(restoreToastTimer.current);
+          setRestoreToast(false);
+          return;
+        }
+
+        // Priority 4: Post-play-all restore — undo all EXECUTE_RUNs
+        if (restoreUndoCountRef.current > 0) {
+          const clampedUndos = Math.min(restoreUndoCountRef.current, state.undoStack.length);
+          for (let i = 0; i < clampedUndos; i++) {
+            dispatch({ type: 'UNDO' });
+          }
+          restoreUndoCountRef.current = 0;
+          playAllActiveRef.current = false;
+          clearTimeout(restoreToastTimer.current);
+          setRestoreToast(false);
+          return;
+        }
+
+        // Priority 5: Post-per-player restore — undo all EXECUTE_RUNs
+        if (lastSequenceUndoCountRef.current > 0) {
+          const clampedUndos = Math.min(lastSequenceUndoCountRef.current, state.undoStack.length);
+          for (let i = 0; i < clampedUndos; i++) {
+            dispatch({ type: 'UNDO' });
+          }
+          lastSequenceUndoCountRef.current = 0;
+          lastSequencePlayerIdRef.current = null;
+          clearTimeout(restoreToastTimer.current);
+          setRestoreToast(false);
+          return;
+        }
+
+        // Priority 6: Default — deselect all
         dispatch({ type: 'SELECT_PLAYER', playerId: null });
         dispatch({ type: 'SELECT_ANNOTATION', annotationId: null });
         dispatch({ type: 'CANCEL_DRAWING' });
@@ -785,6 +864,12 @@ function AppContent() {
           // Cancel any active stepping session
           stepQueueRef.current = [];
           completedStepBatchesRef.current = [];
+
+          // Clear play-all restore state when starting per-player animation
+          restoreUndoCountRef.current = 0;
+          playAllActiveRef.current = false;
+          clearTimeout(restoreToastTimer.current);
+          setRestoreToast(false);
 
           let result = buildAnimQueue();
 
@@ -1184,6 +1269,31 @@ function AppContent() {
     startAnimBatch(batch, allLineAnns);
   }, [state, buildAnimQueue, startAnimBatch, dispatch]);
 
+  // ── Show "Press Esc to restore" toast when animations complete ──
+  useEffect(() => {
+    // Only show toast if there's something to restore
+    const hasRestore = restoreUndoCountRef.current > 0 || lastSequenceUndoCountRef.current > 0;
+    if (!hasRestore) return;
+
+    // Detect completion: ghost players exist with createdAt > 0
+    const hasStampedGhosts = state.ghostPlayers.some(g => g.createdAt > 0);
+    if (!hasStampedGhosts) return;
+
+    // Don't show if actively animating or stepping
+    if (playerRunAnimRef.current.length > 0) return;
+    if (animationQueueRef.current.length > 0) return;
+    if (stepQueueRef.current.length > 0) return;
+
+    // Show toast with auto-dismiss
+    clearTimeout(restoreToastTimer.current);
+    setRestoreToast(true);
+    restoreToastTimer.current = setTimeout(() => {
+      setRestoreToast(false);
+      // Allow play-all to be triggered again after toast expires
+      playAllActiveRef.current = false;
+    }, 5000);
+  }, [state.ghostPlayers]);
+
   // Animation Mode playback handlers disabled — UI hidden
   // const totalKeyframes = state.animationSequence?.keyframes.length ?? 0;
   // const handlePrev = () => { ... };
@@ -1323,6 +1433,52 @@ function AppContent() {
           Copied to clipboard
           <style>{`
             @keyframes copyToastIn {
+              from { opacity: 0; transform: translateX(-50%) translateY(8px); }
+              to { opacity: 1; transform: translateX(-50%) translateY(0); }
+            }
+          `}</style>
+        </div>
+      )}
+
+      {/* Restore-annotations toast */}
+      {restoreToast && (
+        <div
+          style={{
+            position: 'fixed',
+            bottom: 48,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            background: 'rgba(0,0,0,0.8)',
+            color: '#fff',
+            padding: '8px 20px',
+            borderRadius: 8,
+            fontSize: 14,
+            fontWeight: 600,
+            zIndex: 1200,
+            pointerEvents: 'none',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+            animation: 'restoreToastIn 0.2s ease-out',
+          }}
+        >
+          Press{' '}
+          <kbd
+            style={{
+              background: 'rgba(255,255,255,0.15)',
+              padding: '2px 8px',
+              borderRadius: 4,
+              fontSize: 12,
+              fontWeight: 700,
+              border: '1px solid rgba(255,255,255,0.25)',
+              fontFamily: 'inherit',
+            }}
+          >
+            Esc
+          </kbd>{' '}
+          to restore annotations
+          <style>{`
+            @keyframes restoreToastIn {
               from { opacity: 0; transform: translateX(-50%) translateY(8px); }
               to { opacity: 1; transform: translateX(-50%) translateY(0); }
             }
