@@ -483,9 +483,10 @@ interface TopBarProps {
   helpActive: boolean;
   boardsActive: boolean;
   onOpenBoards: () => void;
+  onResetZoom?: () => void;
 }
 
-export function TopBar({ onPlayLines, onStepLines, onExportLines, showPanel, onTogglePanel, onOpenHelp, helpActive, boardsActive, onOpenBoards }: TopBarProps) {
+export function TopBar({ onPlayLines, onStepLines, onExportLines, showPanel, onTogglePanel, onOpenHelp, helpActive, boardsActive, onOpenBoards, onResetZoom }: TopBarProps) {
   const { state, dispatch } = useAppState();
   const theme = useThemeColors();
   const { user, loading: authLoading } = useAuth();
@@ -984,6 +985,7 @@ export function TopBar({ onPlayLines, onStepLines, onExportLines, showPanel, onT
       {showResetConfirm && (
         <ResetConfirmDialog
           onConfirm={() => {
+            onResetZoom?.();
             dispatch({ type: 'RESET', defaultFormationId: activeTeam?.default_formation_id });
             setShowResetConfirm(false);
           }}

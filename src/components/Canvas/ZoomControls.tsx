@@ -53,7 +53,7 @@ export function ZoomControls({
     color: theme.highlight,
   };
   const zoomPct = Math.round(zoomLevel * 100);
-  const isZoomed = zoomLevel > 1;
+  const isZoomed = zoomLevel > 1 || rotation !== 0;
   const isLandscape = rotation === 1 || rotation === 3;
   const firstHalfLabel = isLandscape ? 'Left ½' : 'Top ½';
   const secondHalfLabel = isLandscape ? 'Right ½' : 'Bottom ½';

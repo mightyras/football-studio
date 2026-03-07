@@ -66,6 +66,7 @@ export function useZoom() {
   const resetZoom = useCallback(() => {
     setZoomState(PRESETS['full']);
     setActivePreset('full');
+    setRotation(0);
   }, []);
 
   const handleWheel = useCallback((

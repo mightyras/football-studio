@@ -141,7 +141,8 @@ function AppContent() {
         localStorage.setItem(`football-studio-session-${prevUserId}`, JSON.stringify(sceneData));
       } catch { /* storage full — silently ignore */ }
 
-      // Full board reset
+      // Full board reset (including zoom/rotation)
+      zoom.resetZoom();
       dispatch({ type: 'RESET', defaultFormationId: activeTeam?.default_formation_id });
       dispatch({ type: 'SET_TEAM_COLOR', team: 'A', color: THEME.teamA });
       dispatch({ type: 'SET_TEAM_COLOR', team: 'B', color: THEME.teamB });
@@ -217,6 +218,11 @@ function AppContent() {
   // ── Arrow key step-through ──
   const stepQueueRef = useRef<QueuedAnimation[]>([]);
   const completedStepBatchesRef = useRef<{ batch: QueuedAnimation[]; undoCount: number }[]>([]);
+
+  // ── Replay tracking: how many EXECUTE_RUNs happened in the last Space sequence ──
+  const lastSequenceUndoCountRef = useRef(0);
+  const lastSequencePlayerIdRef = useRef<string | null>(null);
+  const replayAfterUndoRef = useRef(false);
 
   // ── Copy-to-clipboard toast ──
   const [copyToast, setCopyToast] = useState(false);
@@ -751,7 +757,21 @@ function AppContent() {
           stepQueueRef.current = [];
           completedStepBatchesRef.current = [];
 
-          const result = buildAnimQueue();
+          let result = buildAnimQueue();
+
+          // If no animations found but we know a previous sequence ran,
+          // undo those EXECUTE_RUNs to restore annotations, then auto-replay
+          // once React has processed the undo state updates.
+          if (!result && lastSequenceUndoCountRef.current > 0 && lastSequencePlayerIdRef.current) {
+            const undoCount = lastSequenceUndoCountRef.current;
+            for (let i = 0; i < undoCount; i++) {
+              dispatch({ type: 'UNDO' });
+            }
+            lastSequenceUndoCountRef.current = 0;
+            replayAfterUndoRef.current = true;
+            return;
+          }
+
           if (!result) return;
           const { queue, selectedId, isReplay, allLineAnns } = result;
 
@@ -765,6 +785,9 @@ function AppContent() {
             dispatch({ type: 'CLEAR_PLAYER_GHOSTS', playerId: player.id });
           }
 
+          // Track total EXECUTE_RUN count for replay-via-undo
+          const totalAnimCount = queue.length;
+
           // Pull first batch (same step = simultaneous)
           const firstStep = queue[0].step;
           const batch: QueuedAnimation[] = [];
@@ -774,6 +797,10 @@ function AppContent() {
 
           // Store remaining queue for PitchCanvas to auto-advance through
           animationQueueRef.current = queue;
+
+          // Track for replay: each animation triggers one EXECUTE_RUN
+          lastSequenceUndoCountRef.current = totalAnimCount;
+          lastSequencePlayerIdRef.current = selectedId;
 
           // For replay, player position hasn't updated yet — provide override
           const overrides = isReplay && existingGhost
@@ -1087,6 +1114,40 @@ function AppContent() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [dispatch, state, playbackStatus, playbackIndex, play, pause, stop, seekToKeyframe, zoom, buildAnimQueue, startAnimBatch]);
 
+  // ── Auto-replay after undo restores annotations ──
+  useEffect(() => {
+    if (!replayAfterUndoRef.current) return;
+    replayAfterUndoRef.current = false;
+
+    // State is now fresh after undo — annotations are restored.
+    // Re-trigger the animation sequence.
+    const result = buildAnimQueue();
+    if (!result) return;
+    const { queue, selectedId, allLineAnns } = result;
+
+    const player = state.players.find(p => p.id === selectedId);
+    if (!player) return;
+
+    // Clean up any leftover ghosts
+    const existingGhost = state.ghostPlayers.find(g => g.playerId === player.id);
+    if (existingGhost) {
+      dispatch({ type: 'CLEAR_PLAYER_GHOSTS', playerId: player.id });
+    }
+
+    // Pull first batch
+    const firstStep = queue[0].step;
+    const batch: QueuedAnimation[] = [];
+    while (queue.length > 0 && queue[0].step === firstStep) {
+      batch.push(queue.shift()!);
+    }
+
+    animationQueueRef.current = queue;
+    lastSequenceUndoCountRef.current = batch.length + queue.length;
+    lastSequencePlayerIdRef.current = selectedId;
+
+    startAnimBatch(batch, allLineAnns);
+  }, [state, buildAnimQueue, startAnimBatch, dispatch]);
+
   // Animation Mode playback handlers disabled — UI hidden
   // const totalKeyframes = state.animationSequence?.keyframes.length ?? 0;
   // const handlePrev = () => { ... };
@@ -1142,6 +1203,7 @@ function AppContent() {
               setShowPanel(true);
             }
           }}
+          onResetZoom={zoom.resetZoom}
         />
       </div>
       <InviteBanner />

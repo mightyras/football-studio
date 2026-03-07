@@ -153,7 +153,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       },
     );
 
-    return () => subscription.unsubscribe();
+    // Pause token auto-refresh when offline to prevent retry-loop flooding
+    const handleOffline = () => supabase.auth.stopAutoRefresh();
+    const handleOnline = () => supabase.auth.startAutoRefresh();
+    window.addEventListener('offline', handleOffline);
+    window.addEventListener('online', handleOnline);
+
+    return () => {
+      subscription.unsubscribe();
+      window.removeEventListener('offline', handleOffline);
+      window.removeEventListener('online', handleOnline);
+    };
   }, []);
 
   const signInWithEmail = useCallback(async (email: string, password: string) => {
