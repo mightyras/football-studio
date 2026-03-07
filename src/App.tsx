@@ -801,7 +801,10 @@ function AppContent() {
             return;
           }
 
-          if (!result) return;
+          if (!result) {
+            handlePlayLines();
+            return;
+          }
           const { queue, selectedId, isReplay, allLineAnns } = result;
 
           const player = state.players.find(p => p.id === selectedId);
@@ -854,7 +857,11 @@ function AppContent() {
           let replayOverrides: Map<string, { x: number; y: number }> | undefined;
           if (stepQueueRef.current.length === 0 && completedStepBatchesRef.current.length === 0) {
             const result = buildAnimQueue();
-            if (!result) return;
+            if (!result) {
+              e.preventDefault();
+              handleStepLines();
+              return;
+            }
             const { queue, selectedId, isReplay } = result;
 
             const player = state.players.find(p => p.id === selectedId);
@@ -1141,7 +1148,7 @@ function AppContent() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [dispatch, state, playbackStatus, playbackIndex, play, pause, stop, seekToKeyframe, zoom, buildAnimQueue, startAnimBatch]);
+  }, [dispatch, state, playbackStatus, playbackIndex, play, pause, stop, seekToKeyframe, zoom, buildAnimQueue, startAnimBatch, handlePlayLines, handleStepLines]);
 
   // ── Auto-replay after undo restores annotations ──
   useEffect(() => {
