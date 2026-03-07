@@ -18,10 +18,12 @@ export function PlayerEditPopover({ transform }: { transform: PitchTransform }) 
 
   const player = state.players.find(p => p.id === state.editingPlayerId);
   const numberRef = useRef<HTMLInputElement>(null);
+  const popoverRef = useRef<HTMLDivElement>(null);
 
   const [number, setNumber] = useState('');
   const [name, setName] = useState('');
   const [gkColor, setGkColor] = useState('');
+  const [flipped, setFlipped] = useState(false);
 
   useEffect(() => {
     if (player) {
@@ -35,6 +37,15 @@ export function PlayerEditPopover({ transform }: { transform: PitchTransform }) 
       setTimeout(() => numberRef.current?.select(), 0);
     }
   }, [player?.id]);
+
+  // Flip popover below player if not enough space above
+  useEffect(() => {
+    if (player && popoverRef.current) {
+      const p = transform.worldToScreen(player.x, player.y);
+      const h = popoverRef.current.offsetHeight;
+      setFlipped(p.y - h - 16 < 0);
+    }
+  }, [player?.id, player?.isGK]);
 
   if (!player) return null;
 
@@ -65,11 +76,12 @@ export function PlayerEditPopover({ transform }: { transform: PitchTransform }) 
 
   return (
     <div
+      ref={popoverRef}
       style={{
         position: 'absolute',
         left: pos.x,
-        top: pos.y - 8,
-        transform: 'translate(-50%, -100%)',
+        top: flipped ? pos.y + 8 : pos.y - 8,
+        transform: flipped ? 'translate(-50%, 0%)' : 'translate(-50%, -100%)',
         background: theme.border,
         border: `1px solid ${theme.highlight}`,
         borderRadius: 8,
@@ -87,14 +99,23 @@ export function PlayerEditPopover({ transform }: { transform: PitchTransform }) 
       <div
         style={{
           position: 'absolute',
-          bottom: -6,
           left: '50%',
-          transform: 'translateX(-50%) rotate(45deg)',
+          ...(flipped
+            ? {
+                top: -6,
+                transform: 'translateX(-50%) rotate(45deg)',
+                borderLeft: `1px solid ${theme.highlight}`,
+                borderTop: `1px solid ${theme.highlight}`,
+              }
+            : {
+                bottom: -6,
+                transform: 'translateX(-50%) rotate(45deg)',
+                borderRight: `1px solid ${theme.highlight}`,
+                borderBottom: `1px solid ${theme.highlight}`,
+              }),
           width: 10,
           height: 10,
           background: theme.border,
-          borderRight: `1px solid ${theme.highlight}`,
-          borderBottom: `1px solid ${theme.highlight}`,
         }}
       />
 
