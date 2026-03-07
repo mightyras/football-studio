@@ -3,24 +3,49 @@ import { useAppState } from '../../state/AppStateContext';
 import { useThemeColors } from '../../hooks/useThemeColors';
 import type { PitchTransform } from '../../types';
 
+/** Lighten a hex color — same formula as PlayerRenderer */
+function lightenHex(hex: string, amount: number): string {
+  const num = parseInt(hex.replace('#', ''), 16);
+  const r = Math.min(255, ((num >> 16) & 0xff) + (255 - ((num >> 16) & 0xff)) * amount);
+  const g = Math.min(255, ((num >> 8) & 0xff) + (255 - ((num >> 8) & 0xff)) * amount);
+  const b = Math.min(255, (num & 0xff) + (255 - (num & 0xff)) * amount);
+  return '#' + ((Math.round(r) << 16) | (Math.round(g) << 8) | Math.round(b)).toString(16).padStart(6, '0');
+}
+
 export function PlayerEditPopover({ transform }: { transform: PitchTransform }) {
   const { state, dispatch } = useAppState();
   const theme = useThemeColors();
 
   const player = state.players.find(p => p.id === state.editingPlayerId);
   const numberRef = useRef<HTMLInputElement>(null);
+  const popoverRef = useRef<HTMLDivElement>(null);
 
   const [number, setNumber] = useState('');
   const [name, setName] = useState('');
+  const [gkColor, setGkColor] = useState('');
+  const [flipped, setFlipped] = useState(false);
 
   useEffect(() => {
     if (player) {
       setNumber(player.number.toString());
       setName(player.name);
+      if (player.isGK) {
+        const teamColor = player.team === 'A' ? state.teamAColor : state.teamBColor;
+        setGkColor(player.gkColor ?? lightenHex(teamColor, 0.4));
+      }
       // Focus number field on open
       setTimeout(() => numberRef.current?.select(), 0);
     }
   }, [player?.id]);
+
+  // Flip popover below player if not enough space above
+  useEffect(() => {
+    if (player && popoverRef.current) {
+      const p = transform.worldToScreen(player.x, player.y);
+      const h = popoverRef.current.offsetHeight;
+      setFlipped(p.y - h - 16 < 0);
+    }
+  }, [player?.id, player?.isGK]);
 
   if (!player) return null;
 
@@ -29,7 +54,13 @@ export function PlayerEditPopover({ transform }: { transform: PitchTransform }) 
   const save = () => {
     const num = parseInt(number, 10);
     if (!isNaN(num) && num >= 0 && num <= 99) {
-      dispatch({ type: 'EDIT_PLAYER', playerId: player.id, number: num, name: name.trim() });
+      dispatch({
+        type: 'EDIT_PLAYER',
+        playerId: player.id,
+        number: num,
+        name: name.trim(),
+        ...(player.isGK ? { gkColor } : {}),
+      });
     }
     dispatch({ type: 'STOP_EDITING' });
   };
@@ -45,11 +76,12 @@ export function PlayerEditPopover({ transform }: { transform: PitchTransform }) 
 
   return (
     <div
+      ref={popoverRef}
       style={{
         position: 'absolute',
         left: pos.x,
-        top: pos.y - 8,
-        transform: 'translate(-50%, -100%)',
+        top: flipped ? pos.y + 8 : pos.y - 8,
+        transform: flipped ? 'translate(-50%, 0%)' : 'translate(-50%, -100%)',
         background: theme.border,
         border: `1px solid ${theme.highlight}`,
         borderRadius: 8,
@@ -67,14 +99,23 @@ export function PlayerEditPopover({ transform }: { transform: PitchTransform }) 
       <div
         style={{
           position: 'absolute',
-          bottom: -6,
           left: '50%',
-          transform: 'translateX(-50%) rotate(45deg)',
+          ...(flipped
+            ? {
+                top: -6,
+                transform: 'translateX(-50%) rotate(45deg)',
+                borderLeft: `1px solid ${theme.highlight}`,
+                borderTop: `1px solid ${theme.highlight}`,
+              }
+            : {
+                bottom: -6,
+                transform: 'translateX(-50%) rotate(45deg)',
+                borderRight: `1px solid ${theme.highlight}`,
+                borderBottom: `1px solid ${theme.highlight}`,
+              }),
           width: 10,
           height: 10,
           background: theme.border,
-          borderRight: `1px solid ${theme.highlight}`,
-          borderBottom: `1px solid ${theme.highlight}`,
         }}
       />
 
@@ -127,6 +168,50 @@ export function PlayerEditPopover({ transform }: { transform: PitchTransform }) 
         onFocus={e => { e.target.style.borderColor = theme.highlight; }}
         onBlur={e => { e.target.style.borderColor = theme.borderSubtle; }}
       />
+
+      {/* GK jersey color picker — only shown for goalkeepers */}
+      {player.isGK && (
+        <>
+          <label style={{ fontSize: 10, color: theme.textMuted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            Jersey Color
+          </label>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <input
+              type="color"
+              value={gkColor}
+              onChange={e => setGkColor(e.target.value)}
+              style={{
+                width: 32,
+                height: 28,
+                padding: 0,
+                border: `1px solid ${theme.borderSubtle}`,
+                borderRadius: 4,
+                background: 'transparent',
+                cursor: 'pointer',
+              }}
+            />
+            <input
+              type="text"
+              value={gkColor}
+              onChange={e => setGkColor(e.target.value)}
+              onKeyDown={handleKeyDown}
+              style={{
+                flex: 1,
+                padding: '4px 8px',
+                background: theme.inputBg,
+                border: `1px solid ${theme.borderSubtle}`,
+                borderRadius: 4,
+                color: theme.secondary,
+                fontSize: 12,
+                fontFamily: 'monospace',
+                outline: 'none',
+              }}
+              onFocus={e => { e.target.style.borderColor = theme.highlight; }}
+              onBlur={e => { e.target.style.borderColor = theme.borderSubtle; }}
+            />
+          </div>
+        </>
+      )}
 
       <button
         onClick={save}

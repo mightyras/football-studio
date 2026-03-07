@@ -7,6 +7,7 @@ export type Player = {
   y: number;
   facing: number; // radians, world-space. 0 = toward +X, PI = toward -X
   isGK?: boolean;
+  gkColor?: string; // custom GK jersey color (hex), overrides default lighten(teamColor)
 };
 
 export type PositionRole = 'GK' | 'CB' | 'LCB' | 'RCB' | 'FB' | 'WB' | 'DM' | 'CM' | 'OM' | 'CF' | 'LW' | 'RW';
