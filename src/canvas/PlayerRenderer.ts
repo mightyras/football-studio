@@ -113,7 +113,7 @@ export function drawPlayer(
   ctx.shadowColor = 'transparent';
 
   // ── Inner fill — 3D radial gradient ──
-  const baseColor = isGK ? lighten(teamColor, 0.4) : teamColor;
+  const baseColor = isGK ? (player.gkColor ?? lighten(teamColor, 0.4)) : teamColor;
   const baseRGB = parseRGB(baseColor);
   const highlightColor = `rgb(${Math.min(255, baseRGB.r + 50)}, ${Math.min(255, baseRGB.g + 50)}, ${Math.min(255, baseRGB.b + 50)})`;
   const shadowColor = darken(toHex(baseColor), 0.2);
@@ -168,7 +168,7 @@ export function drawPlayer(
       pos.x - radius, pos.y - bandHeight / 2,
       pos.x - radius, pos.y + bandHeight / 2,
     );
-    const bandColor = darken(teamColor, 0.15);
+    const bandColor = darken(toHex(baseColor), 0.15);
     const bandRGB = parseRGB(bandColor);
     bandGrad.addColorStop(0, `rgba(${bandRGB.r}, ${bandRGB.g}, ${bandRGB.b}, 0.6)`);
     bandGrad.addColorStop(0.5, `rgba(${bandRGB.r}, ${bandRGB.g}, ${bandRGB.b}, 0.8)`);

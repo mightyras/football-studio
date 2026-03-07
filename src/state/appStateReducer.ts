@@ -27,7 +27,7 @@ export type AppAction =
   | { type: 'HOVER_NOTCH'; playerId: string | null }
   | { type: 'START_DRAG'; playerId: string; offsetX: number; offsetY: number }
   | { type: 'END_DRAG' }
-  | { type: 'EDIT_PLAYER'; playerId: string; number?: number; name?: string }
+  | { type: 'EDIT_PLAYER'; playerId: string; number?: number; name?: string; gkColor?: string }
   | { type: 'START_EDITING'; playerId: string }
   | { type: 'STOP_EDITING' }
   | { type: 'SET_MOUSE_WORLD'; x: number | null; y: number | null }
@@ -723,6 +723,7 @@ export function appStateReducer(state: AppState, action: AppAction): AppState {
             ...p,
             ...(action.number !== undefined ? { number: action.number } : {}),
             ...(action.name !== undefined ? { name: action.name } : {}),
+            ...(action.gkColor !== undefined ? { gkColor: action.gkColor } : {}),
           };
         }),
       };
