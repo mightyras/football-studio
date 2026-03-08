@@ -29,7 +29,7 @@ import { ExportController, type ExportOptions } from './animation/exportControll
 import { RunAnimExportController } from './animation/runAnimExportController';
 import type { AnimationSequence, CurvedRunAnnotation, GoalCelebration, PanelTab, PassingLineAnnotation, PlayerRunAnimation, QueuedAnimation } from './types';
 import { renderSceneToBlob } from './utils/sceneRenderer';
-import { curvedRunControlPoint } from './utils/curveGeometry';
+import { curvedRunControlPoint, loftedArcControlPoint } from './utils/curveGeometry';
 import { playKickSound, playGoalNetSound } from './utils/sound';
 import { findClosestGhost } from './utils/ghostUtils';
 import { TourProvider, useTour } from './components/Tour/useTour';
@@ -420,7 +420,9 @@ function AppContent() {
         endPos: ann.end,
         curveDirection: ann.type === 'curved-run'
           ? ((ann as CurvedRunAnnotation).curveDirection ?? 'left')
-          : undefined,
+          : isLofted
+            ? ((ann as PassingLineAnnotation).curveDirection ?? 'left')
+            : undefined,
         durationMs: isOneTouch ? ONE_TOUCH_DURATION_MS : baseDuration,
         animationType,
         endPlayerId: ann.endPlayerId,
@@ -486,7 +488,9 @@ function AppContent() {
         endPos: ann.end,
         curveDirection: ann.type === 'curved-run'
           ? ((ann as CurvedRunAnnotation).curveDirection ?? 'left')
-          : undefined,
+          : isLofted
+            ? ((ann as PassingLineAnnotation).curveDirection ?? 'left')
+            : undefined,
         durationMs: isOneTouch ? ONE_TOUCH_DURATION_MS : baseDuration,
         animationType,
         endPlayerId: ann.endPlayerId,
@@ -593,9 +597,11 @@ function AppContent() {
         }
       }
 
-      // Compute control point for curved runs
+      // Compute control point for curved runs / lofted passes
       const controlPoint = item.curveDirection
-        ? curvedRunControlPoint(startPos, resolvedEndPos, item.curveDirection)
+        ? (item.isLofted
+            ? loftedArcControlPoint(startPos, resolvedEndPos, item.curveDirection)
+            : curvedRunControlPoint(startPos, resolvedEndPos, item.curveDirection))
         : item.controlPoint;
 
       // For pass/dribble: snap ball to start player

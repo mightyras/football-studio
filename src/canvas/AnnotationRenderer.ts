@@ -1,6 +1,6 @@
 import type { Annotation, DrawingInProgress, DrawSubTool, GhostPlayer, PassingLineAnnotation, PreviewGhost, RunningLineAnnotation, CurvedRunAnnotation, DribbleLineAnnotation, Player, PitchTransform, RunAnimationOverlay, WorldPoint } from '../types';
 import { THEME } from '../constants/colors';
-import { curvedRunControlPoint } from '../utils/curveGeometry';
+import { curvedRunControlPoint, loftedArcControlPoint } from '../utils/curveGeometry';
 import { findClosestGhost } from '../utils/ghostUtils';
 
 // ── Constants ──
@@ -89,24 +89,6 @@ function drawArrowhead(
   ctx.restore();
 }
 
-/**
- * Compute the control point for a lofted-pass arc.
- * The arc bows perpendicular to the line, always "upward" on screen (toward top of pitch).
- */
-function loftedArcControlPoint(start: WorldPoint, end: WorldPoint): WorldPoint {
-  const dx = end.x - start.x;
-  const dy = end.y - start.y;
-  const len = Math.sqrt(dx * dx + dy * dy);
-  if (len < 0.01) return { x: (start.x + end.x) / 2, y: (start.y + end.y) / 2 };
-  const midX = (start.x + end.x) / 2;
-  const midY = (start.y + end.y) / 2;
-  // Perpendicular offset (always positive Y direction in world = toward top of pitch)
-  const arcHeight = len * 0.18;
-  const perpX = -dy / len * arcHeight;
-  const perpY = dx / len * arcHeight;
-  return { x: midX + perpX, y: midY + perpY };
-}
-
 /** Draw a lofted pass line — dashed quadratic bezier arc with arrowhead. */
 function drawLoftedPassLine(
   ctx: CanvasRenderingContext2D,
@@ -115,8 +97,9 @@ function drawLoftedPassLine(
   end: WorldPoint,
   color: string,
   withArrow: boolean,
+  direction: 'left' | 'right' = 'left',
 ) {
-  const cpWorld = loftedArcControlPoint(start, end);
+  const cpWorld = loftedArcControlPoint(start, end, direction);
   const s = transform.worldToScreen(start.x, start.y);
   const e = transform.worldToScreen(end.x, end.y);
   const cp = transform.worldToScreen(cpWorld.x, cpWorld.y);
@@ -661,12 +644,13 @@ export function renderAnnotationsBase(
         const resolved = resolveLineEndpoints(ann, passResolvedPlayers, previewGhosts);
         const offset = offsetEndpointsFromPlayers(resolved.start, resolved.end, resolved.startSnapped, resolved.endSnapped, playerRadius);
         const isLoftedAnn = ann.passType === 'lofted';
+        const loftedDir = ann.curveDirection ?? 'left';
 
         if (isAnimating && runAnimOverlay) {
           const p = runAnimOverlay.progress;
           if (isLoftedAnn) {
             // Lofted: split the bezier arc at animation progress
-            const cpWorld = loftedArcControlPoint(offset.start, offset.end);
+            const cpWorld = loftedArcControlPoint(offset.start, offset.end, loftedDir);
             const [behind, ahead] = splitQuadraticBezier(offset.start, cpWorld, offset.end, p);
             // Behind ball → ghost opacity
             ctx.save();
@@ -688,7 +672,7 @@ export function renderAnnotationsBase(
             drawStraightLine(ctx, transform, splitPt, offset.end, ann.color, [], true);
           }
         } else if (isLoftedAnn) {
-          drawLoftedPassLine(ctx, transform, offset.start, offset.end, ann.color, true);
+          drawLoftedPassLine(ctx, transform, offset.start, offset.end, ann.color, true, loftedDir);
         } else {
           drawStraightLine(ctx, transform, offset.start, offset.end, ann.color, [], true);
         }
@@ -1192,7 +1176,7 @@ export function renderDrawingPreview(
       } else if (drawing.subTool === 'dribble-line') {
         drawWavyLine(ctx, transform, drawing.start, effectiveEnd, previewColor);
       } else if (drawing.subTool === 'lofted-pass') {
-        drawLoftedPassLine(ctx, transform, drawing.start, effectiveEnd, previewColor, true);
+        drawLoftedPassLine(ctx, transform, drawing.start, effectiveEnd, previewColor, true, shiftHeld ? 'right' : 'left');
       } else {
         drawStraightLine(ctx, transform, drawing.start, effectiveEnd, previewColor, dash, true);
       }

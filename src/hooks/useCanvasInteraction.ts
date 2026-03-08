@@ -224,7 +224,7 @@ export function useCanvasInteraction(
               endPlayerId,
               color: '#ffffff',
               animStep: nextStep,
-              ...(dp.subTool === 'lofted-pass' ? { passType: 'lofted' as const } : {}),
+              ...(dp.subTool === 'lofted-pass' ? { passType: 'lofted' as const, curveDirection: (e.shiftKey ? 'right' : 'left') as 'left' | 'right' } : {}),
               ...(dp.subTool === 'curved-run' ? { curveDirection: e.shiftKey ? 'right' : 'left' } : {}),
             };
             dispatch({ type: 'ADD_ANNOTATION', annotation: ann });

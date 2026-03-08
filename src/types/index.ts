@@ -111,7 +111,7 @@ export type QueuedAnimation = {
   playerId: string;
   endPos: WorldPoint;
   controlPoint?: WorldPoint;
-  curveDirection?: 'left' | 'right';  // for curved-run: compute control point at start time
+  curveDirection?: 'left' | 'right';  // for curved-run / lofted-pass: compute control point at start time
   durationMs: number;
   animationType: 'run' | 'pass' | 'dribble';
   endPlayerId?: string;
@@ -182,6 +182,7 @@ export type PassingLineAnnotation = {
   endPlayerId?: string;
   color: string;
   animStep?: number; // animation step (1-based), same step = simultaneous
+  curveDirection?: 'left' | 'right'; // lofted arc direction, default 'left' when undefined
 };
 
 export type RunningLineAnnotation = {

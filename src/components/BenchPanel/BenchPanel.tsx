@@ -64,7 +64,7 @@ export function BenchPanel() {
     <div
       style={{
         position: 'absolute',
-        [team === 'A' ? 'left' : 'right']: 8,
+        left: 8,
         top: '50%',
         transform: 'translateY(-50%)',
         width: 220,
