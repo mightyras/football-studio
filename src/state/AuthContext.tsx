@@ -118,7 +118,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     // Check existing session
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
       const u = session?.user ?? null;
       setUser(u);
       if (u) {
@@ -132,6 +132,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // Restore persisted flag (user reloaded before completing password setup)
         setNeedsPasswordSetup(true);
       }
+
+      // Dev-only auto-login when no session exists
+      if (
+        !u &&
+        import.meta.env.DEV &&
+        import.meta.env.VITE_DEV_AUTO_LOGIN_EMAIL &&
+        import.meta.env.VITE_DEV_AUTO_LOGIN_PASSWORD
+      ) {
+        await supabase.auth.signInWithPassword({
+          email: import.meta.env.VITE_DEV_AUTO_LOGIN_EMAIL,
+          password: import.meta.env.VITE_DEV_AUTO_LOGIN_PASSWORD,
+        });
+        // onAuthStateChange listener handles setting user/profile
+      }
+
       setLoading(false);
     });
 

@@ -24,7 +24,7 @@ import {
 } from './annotationAnimator';
 import { render } from '../canvas/renderPipeline';
 import { computeTransform } from '../hooks/usePitchTransform';
-import { curvedRunControlPoint } from '../utils/curveGeometry';
+import { curvedRunControlPoint, loftedArcControlPoint } from '../utils/curveGeometry';
 import { findClosestGhost } from '../utils/ghostUtils';
 
 export interface RunAnimExportOptions {
@@ -370,7 +370,9 @@ export class RunAnimExportController {
         curveDirection:
           ann.type === 'curved-run'
             ? ((ann as CurvedRunAnnotation).curveDirection ?? 'left')
-            : undefined,
+            : isLofted
+              ? ((ann as PassingLineAnnotation).curveDirection ?? 'left')
+              : undefined,
         durationMs: isOneTouch ? ONE_TOUCH_DURATION_MS : baseDuration,
         animationType,
         endPlayerId: ann.endPlayerId,
@@ -500,9 +502,11 @@ export class RunAnimExportController {
         }
       }
 
-      // Compute control point for curved runs
+      // Compute control point for curved runs / lofted passes
       const controlPoint = item.curveDirection
-        ? curvedRunControlPoint(startPos, resolvedEndPos, item.curveDirection)
+        ? (item.isLofted
+            ? loftedArcControlPoint(startPos, resolvedEndPos, item.curveDirection)
+            : curvedRunControlPoint(startPos, resolvedEndPos, item.curveDirection))
         : item.controlPoint;
 
       // For pass/dribble: snap ball to start position in state

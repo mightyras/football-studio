@@ -84,28 +84,45 @@ function drawBench(
   ctx.roundRect(x, y, w, h, 4);
   ctx.stroke();
 
-  // "BENCH" label
+  // "BENCH" label — when horizontal move it above the bench
+  const isVertical = h > w;
   const fontSize = Math.max(8, 1.2 * transform.scale);
   ctx.font = `bold ${fontSize}px Inter, system-ui, sans-serif`;
   ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
   ctx.textAlign = 'center';
-  ctx.textBaseline = 'top';
-  ctx.fillText('BENCH', x + w / 2, y + 3);
+  if (isVertical) {
+    ctx.textBaseline = 'top';
+    ctx.fillText('BENCH', x + w / 2, y + 3);
+  } else {
+    ctx.textBaseline = 'bottom';
+    ctx.fillText('BENCH', x + w / 2, y - 3);
+  }
 
-  // Substitute tokens
+  // Substitute tokens — layout adapts to bench orientation
   if (substitutes.length > 0) {
-    const tokenRadius = Math.max(5, 0.9 * transform.scale);
-    const spacing = Math.min((w - tokenRadius * 2) / substitutes.length, tokenRadius * 3);
-    const startX = x + w / 2 - ((substitutes.length - 1) * spacing) / 2;
-    const tokenY = y + h / 2 + fontSize * 0.3;
+    const tokenRadius = Math.max(6, 1.2 * transform.scale);
+
+    // Distribute tokens along the longer axis
+    const mainDim = isVertical ? h : w;
+    const spacing = Math.min(
+      (mainDim - tokenRadius * 2) / substitutes.length,
+      tokenRadius * 3,
+    );
+    const mainStart = (isVertical ? y + h / 2 : x + w / 2)
+      - ((substitutes.length - 1) * spacing) / 2;
+    const crossCenter = isVertical
+      ? x + w / 2
+      : y + h / 2 + fontSize * 0.3;
 
     for (let i = 0; i < substitutes.length; i++) {
       const sub = substitutes[i];
-      const cx = startX + i * spacing;
+      const mainPos = mainStart + i * spacing;
+      const cx = isVertical ? crossCenter : mainPos;
+      const cy = isVertical ? mainPos : crossCenter;
 
       // Token circle
       ctx.beginPath();
-      ctx.arc(cx, tokenY, tokenRadius, 0, Math.PI * 2);
+      ctx.arc(cx, cy, tokenRadius, 0, Math.PI * 2);
       ctx.fillStyle = teamColor;
       ctx.globalAlpha = 0.7;
       ctx.fill();
@@ -117,7 +134,7 @@ function drawBench(
       ctx.fillStyle = '#ffffff';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(sub.number.toString(), cx, tokenY);
+      ctx.fillText(sub.number.toString(), cx, cy);
     }
   }
 
