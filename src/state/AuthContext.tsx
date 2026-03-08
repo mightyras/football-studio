@@ -136,6 +136,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Dev-only auto-login when no session exists
       if (
         !u &&
+        supabase &&
         import.meta.env.DEV &&
         import.meta.env.VITE_DEV_AUTO_LOGIN_EMAIL &&
         import.meta.env.VITE_DEV_AUTO_LOGIN_PASSWORD
