@@ -253,6 +253,7 @@ export function render(
       ctx.globalAlpha = opacity;
       const teamColor = ghost.team === 'A' ? state.teamAColor : state.teamBColor;
       const outlineColor = ghost.team === 'A' ? state.teamAOutlineColor : state.teamBOutlineColor;
+      const teamSecondaryColor = ghost.team === 'A' ? state.teamASecondaryColor : state.teamBSecondaryColor;
       const labelAbove = ghost.team === 'A' ? teamAAttacksDown : teamBAttacksDown;
       drawPlayer(
         ctx,
@@ -279,6 +280,11 @@ export function render(
         labelAbove,
         false,    // showName — ghosts should not display name labels
         accent,
+        false,    // isNotchHovered
+        false,    // isFormationHighlighted
+        false,    // isFormationDimmed
+        undefined, // logoImage
+        teamSecondaryColor ?? undefined,
       );
       ctx.restore();
     }
@@ -295,6 +301,7 @@ export function render(
     for (const pg of visiblePreviewGhosts) {
       const teamColor = pg.team === 'A' ? state.teamAColor : state.teamBColor;
       const outlineColor = pg.team === 'A' ? state.teamAOutlineColor : state.teamBOutlineColor;
+      const pgSecondaryColor = pg.team === 'A' ? state.teamASecondaryColor : state.teamBSecondaryColor;
       const labelAbove = pg.team === 'A' ? teamAAttacksDown : teamBAttacksDown;
       drawPlayer(
         ctx,
@@ -321,6 +328,11 @@ export function render(
         labelAbove,
         false,    // showName — preview ghosts should not display name labels
         accent,
+        false,    // isNotchHovered
+        false,    // isFormationHighlighted
+        false,    // isFormationDimmed
+        undefined, // logoImage
+        pgSecondaryColor ?? undefined,
       );
     }
     ctx.restore();
@@ -344,6 +356,7 @@ export function render(
   for (const player of sorted) {
     const teamColor = player.team === 'A' ? state.teamAColor : state.teamBColor;
     const outlineColor = player.team === 'A' ? state.teamAOutlineColor : state.teamBOutlineColor;
+    const playerSecondaryColor = player.team === 'A' ? state.teamASecondaryColor : state.teamBSecondaryColor;
     let labelAbove: boolean;
     if (state.showOrientation) {
       // Place label opposite the orientation notch/FOV direction
@@ -382,6 +395,7 @@ export function render(
       isFormationHighlighted,
       isFormationDimmed,
       player.team === 'A' ? markerLogoImg ?? undefined : undefined,
+      playerSecondaryColor ?? undefined,
     );
   }
 

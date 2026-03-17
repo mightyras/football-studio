@@ -17,6 +17,7 @@ export type AppAction =
   | { type: 'RENAME_TEAM'; team: 'A' | 'B'; name: string }
   | { type: 'SET_TEAM_COLOR'; team: 'A' | 'B'; color: string }
   | { type: 'SET_TEAM_OUTLINE_COLOR'; team: 'A' | 'B'; color: string }
+  | { type: 'SET_TEAM_SECONDARY_COLOR'; team: 'A' | 'B'; color: string | null }
   | { type: 'SET_TEAM_DIRECTION'; direction: AttackDirection }
   | { type: 'SET_PITCH_SETTINGS'; settings: Partial<PitchSettings> }
   | { type: 'APPLY_FORMATION'; team: 'A' | 'B'; formationId: string }
@@ -285,6 +286,8 @@ export const initialState: AppState = {
   teamBColor: THEME.teamB,
   teamAOutlineColor: '#000000',
   teamBOutlineColor: '#000000',
+  teamASecondaryColor: null,
+  teamBSecondaryColor: null,
   playerRadius: 1.6,
   possession: 'auto',
   resolvedPossession: 'A',
@@ -381,6 +384,11 @@ export function appStateReducer(state: AppState, action: AppAction): AppState {
     case 'SET_TEAM_OUTLINE_COLOR': {
       const outlineKey = action.team === 'A' ? 'teamAOutlineColor' : 'teamBOutlineColor';
       return { ...state, [outlineKey]: action.color };
+    }
+
+    case 'SET_TEAM_SECONDARY_COLOR': {
+      const secKey = action.team === 'A' ? 'teamASecondaryColor' : 'teamBSecondaryColor';
+      return { ...state, [secKey]: action.color };
     }
 
     case 'SET_TEAM_DIRECTION': {
@@ -979,6 +987,8 @@ export function appStateReducer(state: AppState, action: AppAction): AppState {
         teamBColor: state.teamBColor,
         teamAOutlineColor: state.teamAOutlineColor,
         teamBOutlineColor: state.teamBOutlineColor,
+        teamASecondaryColor: state.teamASecondaryColor,
+        teamBSecondaryColor: state.teamBSecondaryColor,
         clubIdentity: state.clubIdentity,
         themeMode: state.themeMode,
         teamAFormation: resetFormationId,
@@ -1437,6 +1447,8 @@ export function appStateReducer(state: AppState, action: AppAction): AppState {
         teamBColor: d.teamBColor,
         teamAOutlineColor: d.teamAOutlineColor ?? '#000000',
         teamBOutlineColor: d.teamBOutlineColor ?? '#000000',
+        teamASecondaryColor: d.teamASecondaryColor ?? null,
+        teamBSecondaryColor: d.teamBSecondaryColor ?? null,
         teamADirection: d.teamADirection,
         teamAFormation: d.teamAFormation,
         teamBFormation: d.teamBFormation,

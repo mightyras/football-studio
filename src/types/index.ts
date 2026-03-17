@@ -441,6 +441,8 @@ export type SceneData = {
   teamBColor: string;
   teamAOutlineColor: string;
   teamBOutlineColor: string;
+  teamASecondaryColor?: string | null;
+  teamBSecondaryColor?: string | null;
   teamADirection: AttackDirection;
   teamAFormation: string | null;
   teamBFormation: string | null;
@@ -487,6 +489,8 @@ export type AppState = {
   teamBColor: string;
   teamAOutlineColor: string;
   teamBOutlineColor: string;
+  teamASecondaryColor: string | null;
+  teamBSecondaryColor: string | null;
   teamADirection: AttackDirection;
   teamAFormation: string | null;
   teamBFormation: string | null;

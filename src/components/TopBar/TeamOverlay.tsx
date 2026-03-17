@@ -114,6 +114,7 @@ export function TeamOverlay({ team, onClose }: TeamOverlayProps) {
   const name = isMyTeam ? state.teamAName : state.teamBName;
   const color = isMyTeam ? state.teamAColor : state.teamBColor;
   const outlineColor = isMyTeam ? state.teamAOutlineColor : state.teamBOutlineColor;
+  const secondaryColor = isMyTeam ? state.teamASecondaryColor : state.teamBSecondaryColor;
   const showNames = isMyTeam ? state.showPlayerNamesA : state.showPlayerNamesB;
 
   const [nameValue, setNameValue] = useState(name);
@@ -199,7 +200,9 @@ export function TeamOverlay({ team, onClose }: TeamOverlayProps) {
               width: 12,
               height: 12,
               borderRadius: '50%',
-              background: color,
+              background: secondaryColor
+                ? `linear-gradient(to right, ${color} 50%, ${secondaryColor} 50%)`
+                : color,
               border: `2px solid ${outlineColor}`,
               flexShrink: 0,
             }}
@@ -258,6 +261,61 @@ export function TeamOverlay({ team, onClose }: TeamOverlayProps) {
             value={color}
             onChange={c => dispatch({ type: 'SET_TEAM_COLOR', team, color: c })}
           />
+        )}
+      </div>
+
+      {/* Secondary Color (optional split) */}
+      <div style={{ marginBottom: 10 }}>
+        <span style={labelStyle}>Split Color</span>
+        {secondaryColor ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ flex: 1 }}>
+              {isMyTeam ? (
+                <HexColorInput
+                  value={secondaryColor}
+                  onChange={c => dispatch({ type: 'SET_TEAM_SECONDARY_COLOR', team, color: c })}
+                />
+              ) : (
+                <ColorSwatchPicker
+                  value={secondaryColor}
+                  onChange={c => dispatch({ type: 'SET_TEAM_SECONDARY_COLOR', team, color: c })}
+                />
+              )}
+            </div>
+            <button
+              onClick={() => dispatch({ type: 'SET_TEAM_SECONDARY_COLOR', team, color: null })}
+              title="Remove split color"
+              style={{
+                background: 'transparent',
+                border: `1px solid ${theme.borderSubtle}`,
+                borderRadius: 4,
+                color: theme.textMuted,
+                cursor: 'pointer',
+                fontSize: 10,
+                padding: '3px 6px',
+                fontFamily: 'inherit',
+                flexShrink: 0,
+              }}
+            >
+              Remove
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={() => dispatch({ type: 'SET_TEAM_SECONDARY_COLOR', team, color: '#1a1a1a' })}
+            style={{
+              fontSize: 11,
+              color: theme.textMuted,
+              background: 'transparent',
+              border: `1px solid ${theme.borderSubtle}`,
+              borderRadius: 4,
+              padding: '4px 10px',
+              cursor: 'pointer',
+              fontFamily: 'inherit',
+            }}
+          >
+            + Add Split Color
+          </button>
         )}
       </div>
 

@@ -40,6 +40,16 @@ function toHex(color: string): string {
   return color;
 }
 
+/** Average two CSS colors for contrast calculation */
+function blendColors(c1: string, c2: string): string {
+  const a = parseRGB(c1);
+  const b = parseRGB(c2);
+  const r = Math.round((a.r + b.r) / 2);
+  const g = Math.round((a.g + b.g) / 2);
+  const bl = Math.round((a.b + b.b) / 2);
+  return '#' + ((r << 16) | (g << 8) | bl).toString(16).padStart(6, '0');
+}
+
 /** Parse a CSS color to {r, g, b} 0–255 */
 function parseRGB(color: string): { r: number; g: number; b: number } {
   const hex = toHex(color).replace('#', '');
@@ -70,6 +80,7 @@ export function drawPlayer(
   isFormationHighlighted: boolean = false,
   isFormationDimmed: boolean = false,
   logoImage?: HTMLImageElement,
+  teamSecondaryColor?: string,
 ) {
   const pos = transform.worldToScreen(player.x, player.y);
   let radius = playerRadius * transform.scale;
@@ -130,6 +141,36 @@ export function drawPlayer(
   ctx.arc(pos.x, pos.y, radius, 0, Math.PI * 2);
   ctx.fillStyle = bodyGrad;
   ctx.fill();
+
+  // ── Secondary color vertical split (right half) ──
+  const showSplit = teamSecondaryColor && !(isGK && player.gkColor);
+  if (showSplit) {
+    const secBase = isGK ? lighten(teamSecondaryColor, 0.4) : teamSecondaryColor;
+    const secRGB = parseRGB(secBase);
+    const secHighlight = `rgb(${Math.min(255, secRGB.r + 50)}, ${Math.min(255, secRGB.g + 50)}, ${Math.min(255, secRGB.b + 50)})`;
+    const secShadow = darken(toHex(secBase), 0.2);
+
+    const secGrad = ctx.createRadialGradient(
+      pos.x - radius * 0.3, pos.y - radius * 0.3, radius * 0.05,
+      pos.x, pos.y, radius,
+    );
+    secGrad.addColorStop(0, secHighlight);
+    secGrad.addColorStop(0.7, secBase);
+    secGrad.addColorStop(1, secShadow);
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(pos.x, pos.y, radius, 0, Math.PI * 2);
+    ctx.clip();
+    ctx.beginPath();
+    ctx.rect(pos.x, pos.y - radius, radius, radius * 2);
+    ctx.clip();
+    ctx.beginPath();
+    ctx.arc(pos.x, pos.y, radius, 0, Math.PI * 2);
+    ctx.fillStyle = secGrad;
+    ctx.fill();
+    ctx.restore();
+  }
 
   // ── Team logo (under lacquer) ──
   if (logoImage) {
@@ -245,7 +286,9 @@ export function drawPlayer(
   }
 
   // ── Number — contrast-aware text with outline stroke ──
-  const fillColor = baseColor;
+  const fillColor = showSplit
+    ? blendColors(toHex(baseColor), toHex(isGK ? lighten(teamSecondaryColor!, 0.4) : teamSecondaryColor!))
+    : baseColor;
   const textColor = getContrastTextColor(toHex(fillColor));
   const numberStr = player.number.toString();
   const numberFont = `bold ${Math.max(10, radius * 0.85)}px Inter, system-ui, sans-serif`;
