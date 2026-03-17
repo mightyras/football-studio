@@ -18,7 +18,7 @@ interface MatchPlayerRowProps {
 export function MatchPlayerRow({
   number,
   name,
-  role,
+  role: _role,
   minutesPlayed,
   totalMinutes,
   positionHistory,

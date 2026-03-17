@@ -1,4 +1,4 @@
-import type { MatchPlan, MatchMinuteState } from '../types/matchManagement';
+import type { MatchPlan } from '../types/matchManagement';
 import { ROLE_LABELS } from '../types';
 import { computeMatchStateAtMinute, getTotalMinutes } from './matchComputation';
 

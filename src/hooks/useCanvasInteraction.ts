@@ -244,7 +244,7 @@ export function useCanvasInteraction(
             if (!snapPlayer && state.previewGhosts.length > 0) {
               const ghostAsPlayers: Player[] = state.previewGhosts.map(g => ({
                 id: g.playerId, team: g.team, number: g.number, name: g.name,
-                x: g.x, y: g.y, facing: g.facing, isGK: g.isGK,
+                x: g.x, y: g.y, facing: g.facing, isGK: g.isGK, role: 'CM' as const,
               }));
               snapPlayer = findPlayerAtScreen(screen.x, screen.y, ghostAsPlayers, transform, state.playerRadius);
               if (snapPlayer) startFromGhost = true;
@@ -581,6 +581,7 @@ export function useCanvasInteraction(
               x: world.x,
               y: world.y,
               facing: defaultFacing(state.activeTeam, state.teamADirection),
+              role: 'CM',
             },
           });
         }
@@ -764,7 +765,7 @@ export function useCanvasInteraction(
               (subTool === 'passing-line' || subTool === 'lofted-pass' || subTool === 'running-line' || subTool === 'curved-run' || subTool === 'dribble-line')
               && (hit || (!state.drawingInProgress && state.previewGhosts.length > 0 && findPlayerAtScreen(
                 screen.x, screen.y,
-                state.previewGhosts.map(g => ({ id: g.playerId, team: g.team, number: g.number, name: g.name, x: g.x, y: g.y, facing: g.facing, isGK: g.isGK })),
+                state.previewGhosts.map(g => ({ id: g.playerId, team: g.team, number: g.number, name: g.name, x: g.x, y: g.y, facing: g.facing, isGK: g.isGK, role: 'CM' as const })),
                 transform, state.playerRadius,
               )))
             ) {

@@ -27,7 +27,7 @@ export function MatchExportDialog({ onClose }: MatchExportDialogProps) {
   const plan = state.matchPlan;
   if (!plan) return null;
 
-  const formationName = FORMATIONS.find(f => f.id === state.teamAFormation)?.name ?? state.teamAFormation;
+  const formationName = FORMATIONS.find(f => f.id === state.teamAFormation)?.name ?? state.teamAFormation ?? 'Custom';
 
   const handleTextExport = async () => {
     setExporting('text');

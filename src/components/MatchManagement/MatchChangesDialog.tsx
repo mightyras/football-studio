@@ -6,7 +6,6 @@ import { computeMatchStateAtMinute, validateSubstitution } from '../../utils/mat
 import type {
   MatchEvent,
   MatchSubstitutionEvent,
-  MatchPositionChangeEvent,
   PlayerRoleAssignment,
 } from '../../types/matchManagement';
 import type { PositionRole, SubstitutePlayer } from '../../types';
@@ -173,7 +172,6 @@ export function MatchChangesDialog({ onClose }: MatchChangesDialogProps) {
       // Check if this is reverting to original role
       const originalPlayer = matchState.onPitch.find(p => p.playerId === playerId);
       // For subbed-in players, find their inherited role
-      const previewPlayer = preview.onPitch.find(p => p.playerId === playerId);
       const sub = pendingSubs.find(s => s.playerInId === playerId);
       const originalRole = sub
         ? matchState.onPitch.find(p => p.playerId === sub.playerOutId)?.role

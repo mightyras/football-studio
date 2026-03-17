@@ -266,6 +266,7 @@ export function render(
           y: ghost.y,
           facing: ghost.facing,
           isGK: ghost.isGK,
+          role: 'CM' as const,
         },
         teamColor,
         false,    // isSelected
@@ -307,6 +308,7 @@ export function render(
           y: pg.y,
           facing: pg.facing,
           isGK: pg.isGK,
+          role: 'CM' as const,
         },
         teamColor,
         false,    // isSelected

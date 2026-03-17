@@ -1,4 +1,4 @@
-import type { AnimationSequence, AppState, Annotation, AttackDirection, ClubIdentity, DrawSubTool, DrawingInProgress, GhostPlayer, Keyframe, PitchSettings, Player, PreviewGhost, SceneData, SubstitutePlayer, ToolType } from '../types';
+import type { AnimationSequence, AppState, Annotation, AttackDirection, ClubIdentity, DrawSubTool, DrawingInProgress, FormationPosition, GhostPlayer, Keyframe, PitchSettings, Player, PreviewGhost, SceneData, SubstitutePlayer, ToolType } from '../types';
 import { ROLE_LABELS } from '../types';
 import type { MatchEvent, MatchPlan, PlayerRoleAssignment, SubstitutionRuleMode } from '../types/matchManagement';
 import { PITCH } from '../constants/pitch';
@@ -915,6 +915,7 @@ export function appStateReducer(state: AppState, action: AppAction): AppState {
         x: player.x,
         y: player.y,
         facing: player.facing,
+        role: player.role,
         ...(player.isGK ? { isGK: true } : {}),
       };
 
