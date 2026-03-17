@@ -7,7 +7,7 @@ import { computeMatchStateAtMinute, getTotalMinutes } from '../../utils/matchCom
 import { MatchPlayerRow } from './MatchPlayerRow';
 import { MatchRuleConfig } from './MatchRuleConfig';
 import { MatchExportDialog } from './MatchExportDialog';
-import type { MatchSubstitutionEvent, MatchPositionChangeEvent } from '../../types/matchManagement';
+import type { MatchSubstitutionEvent, MatchPositionChangeEvent, MatchPlan } from '../../types/matchManagement';
 import type { SubstitutePlayer, PositionRole } from '../../types';
 import { ROLE_LABELS } from '../../types';
 
@@ -50,10 +50,12 @@ export function MatchDashboard() {
     },
   );
 
-  const allPosChanges = useMemo(
-    () => [...posChangeEvents].sort((a, b) => a.minute - b.minute),
-    [posChangeEvents],
-  );
+  // Detect implicit position changes from subs where a player returns in a different role
+  // (e.g., started as RW, subbed off at HT, subbed back on at 70' as RB)
+  const allPosChanges = useMemo(() => {
+    const implicit = getImplicitPosChangesFromSubs(plan, subEvents);
+    return [...posChangeEvents, ...implicit].sort((a, b) => a.minute - b.minute);
+  }, [plan, posChangeEvents, subEvents]);
 
   const getSubMinute = (playerId: string): number | undefined => {
     // Was this player subbed in?
@@ -422,6 +424,7 @@ export function MatchDashboard() {
               const playerInfo = findPlayerName(plan, e.playerId);
               const fromLabel = ROLE_LABELS[e.fromRole as PositionRole] || e.fromRole;
               const toLabel = ROLE_LABELS[e.toRole as PositionRole] || e.toRole;
+              const isImplicit = e.id.startsWith('implicit-sub-');
               return (
                 <div
                   key={e.id}
@@ -442,21 +445,35 @@ export function MatchDashboard() {
                   <span style={{ color: '#3b82f6' }}>
                     {fromLabel} → {toLabel}
                   </span>
-                  <button
-                    onClick={() => dispatch({ type: 'REMOVE_MATCH_EVENT', eventId: e.id })}
-                    title="Remove position change"
-                    style={{
-                      marginLeft: 'auto',
-                      background: 'none',
-                      border: 'none',
-                      color: theme.textSubtle,
-                      cursor: 'pointer',
-                      fontSize: 12,
-                      padding: '0 2px',
-                    }}
-                  >
-                    ×
-                  </button>
+                  {isImplicit ? (
+                    <span
+                      title="Position changed via substitution"
+                      style={{
+                        marginLeft: 'auto',
+                        fontSize: 8,
+                        color: theme.textSubtle,
+                        fontStyle: 'italic',
+                      }}
+                    >
+                      via sub
+                    </span>
+                  ) : (
+                    <button
+                      onClick={() => dispatch({ type: 'REMOVE_MATCH_EVENT', eventId: e.id })}
+                      title="Remove position change"
+                      style={{
+                        marginLeft: 'auto',
+                        background: 'none',
+                        border: 'none',
+                        color: theme.textSubtle,
+                        cursor: 'pointer',
+                        fontSize: 12,
+                        padding: '0 2px',
+                      }}
+                    >
+                      ×
+                    </button>
+                  )}
                 </div>
               );
             })}
@@ -651,6 +668,48 @@ function EditableBenchRow({
       </button>
     </div>
   );
+}
+
+/**
+ * Detect implicit position changes from substitutions where a player returns
+ * to the pitch in a different role than they previously played.
+ * Uses the final match state's positionHistory to find role transitions
+ * that happen via sub events (not explicit position-change events).
+ */
+function getImplicitPosChangesFromSubs(
+  plan: MatchPlan,
+  subEvents: MatchSubstitutionEvent[],
+): MatchPositionChangeEvent[] {
+  const totalMinutes = getTotalMinutes(plan);
+  const finalState = computeMatchStateAtMinute(plan, totalMinutes);
+  const result: MatchPositionChangeEvent[] = [];
+
+  for (const sub of subEvents) {
+    const history = finalState.positionHistory[sub.playerInId];
+    if (!history || history.length < 2) continue;
+
+    // Find the entry that starts at this sub's minute (the "return" entry)
+    const returnEntry = history.find(h => h.from === sub.minute);
+    if (!returnEntry) continue;
+
+    // Find the player's most recent role before this sub
+    const prevEntries = history.filter(h => h.to <= sub.minute);
+    if (prevEntries.length === 0) continue;
+    const prevEntry = prevEntries[prevEntries.length - 1];
+
+    if (prevEntry.role !== returnEntry.role) {
+      result.push({
+        type: 'position-change',
+        id: `implicit-sub-${sub.id}`,
+        minute: sub.minute,
+        playerId: sub.playerInId,
+        fromRole: prevEntry.role,
+        toRole: returnEntry.role,
+      });
+    }
+  }
+
+  return result;
 }
 
 /** Helper to find a player's name/number across lineup and bench */
