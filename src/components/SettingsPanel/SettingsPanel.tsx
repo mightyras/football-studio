@@ -391,39 +391,6 @@ export function SettingsPanel({ rotation }: { rotation: PitchRotation }) {
           )}
         </CollapsibleSection>
 
-        {/* Bench Settings */}
-        <div style={sectionStyle(theme)}>
-          <span style={labelStyle(theme)}>Bench</span>
-          <label
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 8,
-              cursor: 'pointer',
-              fontSize: 12,
-              color: theme.secondary,
-            }}
-          >
-            <input
-              type="checkbox"
-              checked={state.pitchSettings.stadiumEnabled}
-              onChange={e =>
-                dispatch({
-                  type: 'SET_PITCH_SETTINGS',
-                  settings: { stadiumEnabled: e.target.checked },
-                })
-              }
-              style={{
-                accentColor: theme.highlight,
-                width: 14,
-                height: 14,
-                cursor: 'pointer',
-              }}
-            />
-            Show benches
-          </label>
-        </div>
-
         {/* Player Settings */}
         <div style={sectionStyle(theme)}>
           <span style={labelStyle(theme)}>Players</span>

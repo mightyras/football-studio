@@ -17,10 +17,24 @@ export async function createTeamInvite(
   } = await supabase.auth.getUser();
   if (!user) return null;
 
+  const normalizedEmail = email.toLowerCase().trim();
+
+  // Check for existing pending invite to avoid duplicates
+  const { data: existing } = await supabase
+    .from('invites')
+    .select('*')
+    .eq('team_id', teamId)
+    .eq('invitee_email', normalizedEmail)
+    .eq('status', 'pending')
+    .gt('expires_at', new Date().toISOString())
+    .maybeSingle();
+
+  if (existing) return existing as Invite;
+
   const row: Record<string, unknown> = {
     team_id: teamId,
     inviter_id: user.id,
-    invitee_email: email.toLowerCase().trim(),
+    invitee_email: normalizedEmail,
     role,
   };
   if (name?.trim()) row.invitee_name = name.trim();
@@ -54,10 +68,29 @@ export async function createTeamInviteWithLink(
   } = await supabase.auth.getUser();
   if (!user) return { invite: null };
 
+  const normalizedEmail = email.toLowerCase().trim();
+
+  // Check for existing pending invite to avoid duplicates
+  const { data: existing } = await supabase
+    .from('invites')
+    .select('*')
+    .eq('team_id', teamId)
+    .eq('invitee_email', normalizedEmail)
+    .eq('status', 'pending')
+    .gt('expires_at', new Date().toISOString())
+    .maybeSingle();
+
+  // Generate invite link (creates auth user if needed)
+  const result = await generateInviteLink(email, name, teamName, teamLogoUrl);
+
+  if (existing) {
+    return { invite: existing as Invite, inviteLink: result.inviteLink };
+  }
+
   const row: Record<string, unknown> = {
     team_id: teamId,
     inviter_id: user.id,
-    invitee_email: email.toLowerCase().trim(),
+    invitee_email: normalizedEmail,
     role,
   };
   if (name?.trim()) row.invitee_name = name.trim();
@@ -69,9 +102,6 @@ export async function createTeamInviteWithLink(
     .single();
 
   if (error || !data) return { invite: null };
-
-  // Generate invite link (creates auth user if needed)
-  const result = await generateInviteLink(email, name, teamName, teamLogoUrl);
 
   return {
     invite: data as Invite,

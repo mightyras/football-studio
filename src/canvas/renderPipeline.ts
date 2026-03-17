@@ -8,6 +8,8 @@ import { renderBenches } from './BenchRenderer';
 import { renderZoneOverlay } from './ZoneOverlayRenderer';
 import { renderAnnotationsBase, renderAnnotationsText, renderSnapIndicators, renderDrawingPreview } from './AnnotationRenderer';
 import { computeStepOrder, type LineAnnotation } from '../animation/annotationAnimator';
+import { computeMatchStateAtMinute } from '../utils/matchComputation';
+import { buildEffectivePlayers } from '../utils/matchPitchSync';
 
 // ── Logo watermark (cached Image for performance) ──
 
@@ -138,7 +140,7 @@ export function render(
   }
 
   // Benches — rendered after pitch but before players
-  if (state.pitchSettings.stadiumEnabled) {
+  if (state.pitchSettings.stadiumEnabled && !state.matchManagementMode) {
     renderBenches(
       ctx, transform,
       state.substitutesA, state.substitutesB,
@@ -159,6 +161,16 @@ export function render(
   const possessionTeam = state.resolvedPossession;
   const outOfPossessionTeam = possessionTeam === 'A' ? 'B' : 'A';
 
+  // ── Match Management: compute effective players for the current minute ──
+  let effectivePlayers = state.players;
+  let matchSubbedInIds: Set<string> | null = null;
+  if (state.matchManagementMode && state.matchPlan) {
+    const matchState = computeMatchStateAtMinute(state.matchPlan, state.matchCurrentMinute);
+    const result = buildEffectivePlayers(state.players, matchState, state.matchPlan);
+    effectivePlayers = result.players;
+    matchSubbedInIds = result.subbedInIds;
+  }
+
   // Determine which teams have their attack direction pointing toward screen-bottom.
   // If so, place their name labels above the player token instead of below.
   // Team A attacks toward low world-X when teamADirection === 'up', toward high world-X when 'down'.
@@ -174,7 +186,7 @@ export function render(
 
   // Cover shadow pre-pass (drawn under everything)
   if (state.showCoverShadow) {
-    for (const player of state.players) {
+    for (const player of effectivePlayers) {
       if (player.team === outOfPossessionTeam && !player.isGK) {
         const teamColor = player.team === 'A' ? state.teamAColor : state.teamBColor;
         drawCoverShadow(ctx, transform, player, teamColor, state.playerRadius);
@@ -184,7 +196,7 @@ export function render(
 
   // FOV pre-pass (drawn below annotations and players)
   if (state.fovMode !== 'off') {
-    for (const player of state.players) {
+    for (const player of effectivePlayers) {
       if (state.fovMode === 'A' && player.team !== 'A') continue;
       if (state.fovMode === 'B' && player.team !== 'B') continue;
       const teamColor = player.team === 'A' ? state.teamAColor : state.teamBColor;
@@ -228,7 +240,7 @@ export function render(
     // Hide step badges during animation (the sequence makes the order clear)
     const showSteps = animContext.isActive ? false : state.showStepNumbers;
 
-    renderAnnotationsBase(ctx, transform, visibleAnnotations, state.players, state.selectedAnnotationId, state.playerRadius, accent, state.ghostAnnotationIds, runAnimOverlays, allGhosts, state.previewGhosts ?? [], now, effectiveSteps, showSteps);
+    renderAnnotationsBase(ctx, transform, visibleAnnotations, effectivePlayers, state.selectedAnnotationId, state.playerRadius, accent, state.ghostAnnotationIds, runAnimOverlays, allGhosts, state.previewGhosts ?? [], now, effectiveSteps, showSteps);
   }
 
   // Ghost players (semi-transparent copies at run origin, below real players)
@@ -254,6 +266,7 @@ export function render(
           y: ghost.y,
           facing: ghost.facing,
           isGK: ghost.isGK,
+          role: 'CM' as const,
         },
         teamColor,
         false,    // isSelected
@@ -295,6 +308,7 @@ export function render(
           y: pg.y,
           facing: pg.facing,
           isGK: pg.isGK,
+          role: 'CM' as const,
         },
         teamColor,
         false,    // isSelected
@@ -313,7 +327,7 @@ export function render(
   }
 
   // Sort players so selected one renders last (on top)
-  const sorted = [...state.players].sort((a, b) => {
+  const sorted = [...effectivePlayers].sort((a, b) => {
     if (a.id === state.selectedPlayerId) return 1;
     if (b.id === state.selectedPlayerId) return -1;
     return 0;
@@ -341,11 +355,12 @@ export function render(
       labelAbove = player.team === 'A' ? teamAAttacksDown : teamBAttacksDown;
     }
     const showName = player.team === 'A' ? state.showPlayerNamesA : state.showPlayerNamesB;
-    // Formation-move visual feedback
-    const isFormationHighlighted =
-      state.activeTool === 'formation-move'
-      && state.formationMoveTeam === player.team
-      && !player.isGK;
+    // Formation-move visual feedback OR match management sub indicator
+    const isFormationHighlighted = state.matchManagementMode
+      ? !!(matchSubbedInIds && matchSubbedInIds.has(player.id))
+      : (state.activeTool === 'formation-move'
+        && state.formationMoveTeam === player.team
+        && !player.isGK);
     const isFormationDimmed = false;
 
     drawPlayer(
@@ -373,7 +388,7 @@ export function render(
   // Snap indicators (subtle rings on players connected to lines, above player tokens)
   // Hidden during run animation to reduce visual clutter.
   if (!animContext.isActive) {
-    renderSnapIndicators(ctx, transform, state.annotations, state.players, state.playerRadius);
+    renderSnapIndicators(ctx, transform, state.annotations, effectivePlayers, state.playerRadius);
   }
 
   // Annotations layer 2: text (above players)
@@ -389,6 +404,6 @@ export function render(
     const mouseWorld = state.mouseWorldX != null && state.mouseWorldY != null
       ? { x: state.mouseWorldX, y: state.mouseWorldY }
       : null;
-    renderDrawingPreview(ctx, transform, state.drawingInProgress, mouseWorld, state.players, state.drawSubTool, state.playerRadius, accent, state.shiftHeld, state.previewGhosts ?? []);
+    renderDrawingPreview(ctx, transform, state.drawingInProgress, mouseWorld, effectivePlayers, state.drawSubTool, state.playerRadius, accent, state.shiftHeld, state.previewGhosts ?? []);
   }
 }

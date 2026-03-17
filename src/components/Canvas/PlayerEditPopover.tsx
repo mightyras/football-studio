@@ -1,7 +1,24 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAppState } from '../../state/AppStateContext';
 import { useThemeColors } from '../../hooks/useThemeColors';
-import type { PitchTransform } from '../../types';
+import type { PitchTransform, PositionRole } from '../../types';
+
+const POSITION_FULL_NAMES: Record<PositionRole, string> = {
+  GK: 'Goalkeeper',
+  CB: 'Centre Back',
+  LCB: 'Left Centre Back',
+  RCB: 'Right Centre Back',
+  LB: 'Left Back',
+  RB: 'Right Back',
+  FB: 'Full Back',
+  WB: 'Wing Back',
+  DM: 'Defensive Midfielder',
+  CM: 'Central Midfielder',
+  OM: 'Attacking Midfielder',
+  CF: 'Centre Forward',
+  LW: 'Left Winger',
+  RW: 'Right Winger',
+};
 
 /** Lighten a hex color — same formula as PlayerRenderer */
 function lightenHex(hex: string, amount: number): string {
@@ -144,6 +161,23 @@ export function PlayerEditPopover({ transform }: { transform: PitchTransform }) 
         onFocus={e => { e.target.style.borderColor = theme.highlight; }}
         onBlur={e => { e.target.style.borderColor = theme.borderSubtle; }}
       />
+
+      <label style={{ fontSize: 10, color: theme.textMuted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+        Position
+      </label>
+      <div
+        style={{
+          padding: '4px 8px',
+          background: 'transparent',
+          border: `1px solid ${theme.borderSubtle}`,
+          borderRadius: 4,
+          color: theme.textSubtle,
+          fontSize: 13,
+          fontFamily: 'inherit',
+        }}
+      >
+        {POSITION_FULL_NAMES[player.role] || player.role}
+      </div>
 
       <label style={{ fontSize: 10, color: theme.textMuted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
         Name

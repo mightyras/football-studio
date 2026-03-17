@@ -48,6 +48,23 @@ export function BenchPanel() {
 
   const handlePlayerClick = (playerId: string) => {
     if (!pendingSubId) return;
+
+    // If in match management mode for Team A, record as a match event instead
+    if (state.matchManagementMode && state.matchPlan && team === 'A') {
+      dispatch({
+        type: 'ADD_MATCH_EVENT',
+        event: {
+          type: 'substitution',
+          id: `sub-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          minute: state.matchCurrentMinute,
+          playerOutId: playerId,
+          playerInId: pendingSubId,
+        },
+      });
+      setPendingSubId(null);
+      return;
+    }
+
     dispatch({
       type: 'SUBSTITUTE_PLAYER',
       team,
@@ -97,6 +114,11 @@ export function BenchPanel() {
           />
           <span style={{ fontSize: 13, fontWeight: 600, color: theme.secondary }}>
             {teamName} — Bench
+            {state.matchManagementMode && (
+              <span style={{ fontSize: 10, fontWeight: 400, color: theme.textSubtle, marginLeft: 4 }}>
+                ({state.matchCurrentMinute}&prime;)
+              </span>
+            )}
           </span>
         </div>
         <button

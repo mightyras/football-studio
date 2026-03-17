@@ -57,7 +57,8 @@ export function TeamConfigPanel({ team, onClose, onUpdated }: TeamConfigPanelPro
     setTeamInvites(inv);
   }
 
-  const adminInvite = teamInvites.find(inv => inv.role === 'admin');
+  const adminInvites = teamInvites.filter(inv => inv.role === 'admin');
+  const memberInvites = teamInvites.filter(inv => inv.role !== 'admin');
   const adminMember = members.find(m => m.role === 'admin');
 
   // Once the team admin has accepted the invite, branding is locked for the super admin
@@ -460,17 +461,21 @@ export function TeamConfigPanel({ team, onClose, onUpdated }: TeamConfigPanelPro
                   <span style={{ color: '#22c55e', marginLeft: 6, fontSize: 10 }}>active</span>
                 </span>
               </div>
-            ) : adminInvite ? (
-              <div style={{ fontSize: 12, color: theme.secondary, display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                <span style={{ fontSize: 14 }}>&#x2709;</span>
-                <span>
-                  {adminInvite.invitee_name
-                    ? <>{adminInvite.invitee_name} <span style={{ color: theme.textSubtle }}>({adminInvite.invitee_email})</span></>
-                    : adminInvite.invitee_email}
-                  <span style={{ color: '#f59e0b', marginLeft: 6, fontSize: 10 }}>
-                    {adminInvite.status === 'pending' ? 'invite pending' : adminInvite.status}
-                  </span>
-                </span>
+            ) : adminInvites.length > 0 ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 8 }}>
+                {adminInvites.map(inv => (
+                  <div key={inv.id} style={{ fontSize: 12, color: theme.secondary, display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ fontSize: 14 }}>&#x2709;</span>
+                    <span>
+                      {inv.invitee_name
+                        ? <>{inv.invitee_name} <span style={{ color: theme.textSubtle }}>({inv.invitee_email})</span></>
+                        : inv.invitee_email}
+                      <span style={{ color: '#f59e0b', marginLeft: 6, fontSize: 10 }}>
+                        {inv.status === 'pending' ? 'invite pending' : inv.status}
+                      </span>
+                    </span>
+                  </div>
+                ))}
               </div>
             ) : (
               <form onSubmit={handleInviteAdmin} style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 8 }}>
@@ -588,6 +593,39 @@ export function TeamConfigPanel({ team, onClose, onUpdated }: TeamConfigPanelPro
                   </div>
                   );
                 })}
+              </div>
+            </div>
+          )}
+
+          {/* ── Pending Invites (all non-admin invites) ── */}
+          {memberInvites.length > 0 && (
+            <div>
+              <div style={{ fontSize: 12, fontWeight: 600, color: theme.textMuted, marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                Pending Invites ({memberInvites.length})
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                {memberInvites.map(inv => (
+                  <div
+                    key={inv.id}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      padding: '6px 10px',
+                      background: theme.border,
+                      borderRadius: 4,
+                      fontSize: 12,
+                      color: theme.secondary,
+                    }}
+                  >
+                    <span style={{ fontSize: 12 }}>&#x2709;</span>
+                    <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {inv.invitee_name || inv.invitee_email}
+                    </span>
+                    <span style={{ fontSize: 10, color: '#f59e0b' }}>pending</span>
+                    <span style={{ fontSize: 10, color: theme.textSubtle }}>{inv.role}</span>
+                  </div>
+                ))}
               </div>
             </div>
           )}

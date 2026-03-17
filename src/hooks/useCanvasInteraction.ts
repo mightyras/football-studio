@@ -41,6 +41,9 @@ export function useCanvasInteraction(
       const state = stateRef.current;
       if (!transform || !state) return;
 
+      // In match management mode, the pitch is view-only
+      if (state.matchManagementMode) return;
+
       const canvas = canvasRef.current;
       if (!canvas) return;
       const screen = getCanvasCoords(e);
@@ -124,6 +127,9 @@ export function useCanvasInteraction(
       const transform = transformRef.current;
       const state = stateRef.current;
       if (!transform || !state) return;
+
+      // In match management mode, the pitch is view-only
+      if (state.matchManagementMode) return;
 
       // Close edit popover if clicking elsewhere
       if (state.editingPlayerId) {
@@ -238,7 +244,7 @@ export function useCanvasInteraction(
             if (!snapPlayer && state.previewGhosts.length > 0) {
               const ghostAsPlayers: Player[] = state.previewGhosts.map(g => ({
                 id: g.playerId, team: g.team, number: g.number, name: g.name,
-                x: g.x, y: g.y, facing: g.facing, isGK: g.isGK,
+                x: g.x, y: g.y, facing: g.facing, isGK: g.isGK, role: 'CM' as const,
               }));
               snapPlayer = findPlayerAtScreen(screen.x, screen.y, ghostAsPlayers, transform, state.playerRadius);
               if (snapPlayer) startFromGhost = true;
@@ -575,6 +581,7 @@ export function useCanvasInteraction(
               x: world.x,
               y: world.y,
               facing: defaultFacing(state.activeTeam, state.teamADirection),
+              role: 'CM',
             },
           });
         }
@@ -619,6 +626,9 @@ export function useCanvasInteraction(
       const transform = transformRef.current;
       const state = stateRef.current;
       if (!transform || !state) return;
+
+      // In match management mode, the pitch is view-only
+      if (state.matchManagementMode) return;
 
       const screen = getCanvasCoords(e);
       const world = transform.screenToWorld(screen.x, screen.y);
@@ -755,7 +765,7 @@ export function useCanvasInteraction(
               (subTool === 'passing-line' || subTool === 'lofted-pass' || subTool === 'running-line' || subTool === 'curved-run' || subTool === 'dribble-line')
               && (hit || (!state.drawingInProgress && state.previewGhosts.length > 0 && findPlayerAtScreen(
                 screen.x, screen.y,
-                state.previewGhosts.map(g => ({ id: g.playerId, team: g.team, number: g.number, name: g.name, x: g.x, y: g.y, facing: g.facing, isGK: g.isGK })),
+                state.previewGhosts.map(g => ({ id: g.playerId, team: g.team, number: g.number, name: g.name, x: g.x, y: g.y, facing: g.facing, isGK: g.isGK, role: 'CM' as const })),
                 transform, state.playerRadius,
               )))
             ) {
@@ -779,6 +789,10 @@ export function useCanvasInteraction(
 
   const onPointerUp = useCallback(
     (e: React.PointerEvent<HTMLCanvasElement>) => {
+      // In match management mode, the pitch is view-only
+      const state = stateRef.current;
+      if (state?.matchManagementMode) return;
+
       if (isDragging.current) {
         isDragging.current = false;
         lastAnnRef.current = null;

@@ -116,6 +116,13 @@ const ResetPositionsIcon = () => (
   </svg>
 );
 
+const WhistleIcon = ({ active, accentColor }: { active: boolean; accentColor: string }) => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={active ? accentColor : 'currentColor'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="9" />
+    <path d="M12 7v5l3 3" />
+  </svg>
+);
+
 const GearIcon = ({ active, accentColor }: { active: boolean; accentColor: string }) => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={active ? accentColor : 'currentColor'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <circle cx="12" cy="12" r="3" />
@@ -484,9 +491,11 @@ interface TopBarProps {
   boardsActive: boolean;
   onOpenBoards: () => void;
   onResetZoom?: () => void;
+  matchActive: boolean;
+  onToggleMatch: () => void;
 }
 
-export function TopBar({ onPlayLines, onStepLines, onExportLines, showPanel, onTogglePanel, onOpenHelp, helpActive, boardsActive, onOpenBoards, onResetZoom }: TopBarProps) {
+export function TopBar({ onPlayLines, onStepLines, onExportLines, showPanel, onTogglePanel, onOpenHelp, helpActive, boardsActive, onOpenBoards, onResetZoom, matchActive, onToggleMatch }: TopBarProps) {
   const { state, dispatch } = useAppState();
   const theme = useThemeColors();
   const { user, loading: authLoading } = useAuth();
@@ -554,8 +563,15 @@ export function TopBar({ onPlayLines, onStepLines, onExportLines, showPanel, onT
         </span>
       </div>
 
-      {/* Center: Team names + formations */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+      {/* Center: Team names + formations — dimmed in match mode */}
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 6,
+        opacity: matchActive ? 0.3 : 1,
+        pointerEvents: matchActive ? 'none' : 'auto',
+        transition: 'opacity 0.2s',
+      }}>
         {/* Team A: name trigger + formation trigger */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
           <div style={{ position: 'relative' }} data-tour="team-name-a">
@@ -749,213 +765,49 @@ export function TopBar({ onPlayLines, onStepLines, onExportLines, showPanel, onT
 
       {/* Right: Display dropdown + Play/Export + Panel toggle */}
       <div data-tour="play-area" style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-        {/* Display options (Orientation / Cover Shadow) */}
-        <DisplayDropdown />
+        {/* Items before Match button — dimmed in match mode */}
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          opacity: matchActive ? 0.3 : 1,
+          pointerEvents: matchActive ? 'none' : 'auto',
+          transition: 'opacity 0.2s',
+        }}>
+          {/* Display options (Orientation / Cover Shadow) */}
+          <DisplayDropdown />
 
-        {/* Play Lines / Export (conditional) */}
-        {hasLineAnnotations && (
-          <>
-            <div style={{ width: 1, height: 18, background: theme.borderSubtle, flexShrink: 0 }} />
-            <button
-              onClick={() =>
-                dispatch({ type: 'SET_SHOW_STEP_NUMBERS', show: !state.showStepNumbers })
-              }
-              title="Toggle step number badges"
-              style={{
-                padding: '4px 10px',
-                fontSize: 11,
-                fontFamily: 'inherit',
-                border: state.showStepNumbers ? `1px solid ${theme.highlight}` : `1px solid ${theme.borderSubtle}`,
-                borderRadius: 4,
-                background: state.showStepNumbers ? hexToRgba(theme.highlight, 0.15) : 'transparent',
-                color: state.showStepNumbers ? theme.highlight : theme.textMuted,
-                cursor: 'pointer',
-                transition: 'all 0.15s',
-              }}
-            >
-              Steps
-            </button>
-            <button
-              onClick={onPlayLines}
-              title="Play line animations (Space)"
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 4,
-                padding: '4px 10px',
-                fontSize: 11,
-                fontFamily: 'inherit',
-                border: `1px solid ${theme.borderSubtle}`,
-                borderRadius: 4,
-                background: 'transparent',
-                color: theme.textMuted,
-                cursor: 'pointer',
-                transition: 'all 0.15s',
-              }}
-            >
-              <PlayIcon />
-              Play
-            </button>
-            <button
-              onClick={onStepLines}
-              title="Step through animation (→ arrow)"
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 4,
-                padding: '4px 10px',
-                fontSize: 11,
-                fontFamily: 'inherit',
-                border: `1px solid ${theme.borderSubtle}`,
-                borderRadius: 4,
-                background: 'transparent',
-                color: theme.textMuted,
-                cursor: 'pointer',
-                transition: 'all 0.15s',
-              }}
-            >
-              <StepIcon />
-              Step
-            </button>
-            <button
-              onClick={onExportLines}
-              title="Export line animations"
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 4,
-                padding: '4px 10px',
-                fontSize: 11,
-                fontFamily: 'inherit',
-                border: `1px solid ${theme.borderSubtle}`,
-                borderRadius: 4,
-                background: 'transparent',
-                color: theme.textMuted,
-                cursor: 'pointer',
-                transition: 'all 0.15s',
-              }}
-            >
-              <ExportIcon />
-              Export
-            </button>
-          </>
-        )}
-
-        {/* Separator */}
-        <div style={{ width: 1, height: 18, background: theme.borderSubtle, flexShrink: 0 }} />
-
-        {/* Help button */}
-        <button
-          onClick={onOpenHelp}
-          title="Help"
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            padding: '4px 8px',
-            fontSize: 11,
-            fontFamily: 'inherit',
-            border: helpActive ? `1px solid ${theme.highlight}` : '1px solid transparent',
-            borderRadius: 4,
-            background: helpActive ? hexToRgba(theme.highlight, 0.15) : 'transparent',
-            color: helpActive ? theme.highlight : theme.textMuted,
-            cursor: 'pointer',
-            transition: 'all 0.15s',
-          }}
-          onMouseEnter={e => {
-            if (!helpActive) {
-              e.currentTarget.style.background = theme.surfaceHover;
-              e.currentTarget.style.color = theme.secondary;
-            }
-          }}
-          onMouseLeave={e => {
-            if (!helpActive) {
-              e.currentTarget.style.background = 'transparent';
-              e.currentTarget.style.color = theme.textMuted;
-            }
-          }}
-        >
-          <HelpIcon active={helpActive} accentColor={theme.highlight} />
-        </button>
-
-        {/* Boards button */}
-        <button
-          onClick={onOpenBoards}
-          title="Boards"
-          data-tour="boards-button"
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            padding: '4px 8px',
-            fontSize: 11,
-            fontFamily: 'inherit',
-            border: boardsActive ? `1px solid ${theme.highlight}` : '1px solid transparent',
-            borderRadius: 4,
-            background: boardsActive ? hexToRgba(theme.highlight, 0.15) : 'transparent',
-            color: boardsActive ? theme.highlight : theme.textMuted,
-            cursor: 'pointer',
-            transition: 'all 0.15s',
-          }}
-          onMouseEnter={e => {
-            if (!boardsActive) {
-              e.currentTarget.style.background = theme.surfaceHover;
-              e.currentTarget.style.color = theme.secondary;
-            }
-          }}
-          onMouseLeave={e => {
-            if (!boardsActive) {
-              e.currentTarget.style.background = 'transparent';
-              e.currentTarget.style.color = theme.textMuted;
-            }
-          }}
-        >
-          <BoardsIcon active={boardsActive} accentColor={theme.highlight} />
-        </button>
-
-        {/* Panel toggle */}
-        <button
-          data-tour="settings-toggle"
-          onClick={onTogglePanel}
-          title={showPanel ? 'Hide panel' : 'Show settings'}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            padding: '4px 8px',
-            fontSize: 11,
-            fontFamily: 'inherit',
-            border: showPanel ? `1px solid ${theme.highlight}` : '1px solid transparent',
-            borderRadius: 4,
-            background: showPanel ? hexToRgba(theme.highlight, 0.15) : 'transparent',
-            color: showPanel ? theme.highlight : theme.textMuted,
-            cursor: 'pointer',
-            transition: 'all 0.15s',
-          }}
-          onMouseEnter={e => {
-            if (!showPanel) {
-              e.currentTarget.style.background = theme.surfaceHover;
-              e.currentTarget.style.color = theme.secondary;
-            }
-          }}
-          onMouseLeave={e => {
-            if (!showPanel) {
-              e.currentTarget.style.background = 'transparent';
-              e.currentTarget.style.color = theme.textMuted;
-            }
-          }}
-        >
-          <GearIcon active={showPanel} accentColor={theme.highlight} />
-        </button>
-
-        {/* Auth: Sign In / User menu */}
-        {!authLoading && (
-          <>
-            <div style={{ width: 1, height: 18, background: theme.borderSubtle, flexShrink: 0 }} />
-            {user ? (
-              <UserMenu />
-            ) : (
+          {/* Play Lines / Export (conditional) */}
+          {hasLineAnnotations && (
+            <>
+              <div style={{ width: 1, height: 18, background: theme.borderSubtle, flexShrink: 0 }} />
               <button
-                onClick={() => setShowAuthModal(true)}
+                onClick={() =>
+                  dispatch({ type: 'SET_SHOW_STEP_NUMBERS', show: !state.showStepNumbers })
+                }
+                title="Toggle step number badges"
                 style={{
-                  padding: '4px 12px',
+                  padding: '4px 10px',
+                  fontSize: 11,
+                  fontFamily: 'inherit',
+                  border: state.showStepNumbers ? `1px solid ${theme.highlight}` : `1px solid ${theme.borderSubtle}`,
+                  borderRadius: 4,
+                  background: state.showStepNumbers ? hexToRgba(theme.highlight, 0.15) : 'transparent',
+                  color: state.showStepNumbers ? theme.highlight : theme.textMuted,
+                  cursor: 'pointer',
+                  transition: 'all 0.15s',
+                }}
+              >
+                Steps
+              </button>
+              <button
+                onClick={onPlayLines}
+                title="Play line animations (Space)"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 4,
+                  padding: '4px 10px',
                   fontSize: 11,
                   fontFamily: 'inherit',
                   border: `1px solid ${theme.borderSubtle}`,
@@ -965,20 +817,239 @@ export function TopBar({ onPlayLines, onStepLines, onExportLines, showPanel, onT
                   cursor: 'pointer',
                   transition: 'all 0.15s',
                 }}
-                onMouseEnter={e => {
-                  e.currentTarget.style.borderColor = theme.highlight;
-                  e.currentTarget.style.color = theme.highlight;
-                }}
-                onMouseLeave={e => {
-                  e.currentTarget.style.borderColor = theme.borderSubtle;
-                  e.currentTarget.style.color = theme.textMuted;
+              >
+                <PlayIcon />
+                Play
+              </button>
+              <button
+                onClick={onStepLines}
+                title="Step through animation (→ arrow)"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 4,
+                  padding: '4px 10px',
+                  fontSize: 11,
+                  fontFamily: 'inherit',
+                  border: `1px solid ${theme.borderSubtle}`,
+                  borderRadius: 4,
+                  background: 'transparent',
+                  color: theme.textMuted,
+                  cursor: 'pointer',
+                  transition: 'all 0.15s',
                 }}
               >
-                Sign In
+                <StepIcon />
+                Step
               </button>
-            )}
-          </>
-        )}
+              <button
+                onClick={onExportLines}
+                title="Export line animations"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 4,
+                  padding: '4px 10px',
+                  fontSize: 11,
+                  fontFamily: 'inherit',
+                  border: `1px solid ${theme.borderSubtle}`,
+                  borderRadius: 4,
+                  background: 'transparent',
+                  color: theme.textMuted,
+                  cursor: 'pointer',
+                  transition: 'all 0.15s',
+                }}
+              >
+                <ExportIcon />
+                Export
+              </button>
+            </>
+          )}
+
+          {/* Separator */}
+          <div style={{ width: 1, height: 18, background: theme.borderSubtle, flexShrink: 0 }} />
+        </div>
+
+        {/* Match Management toggle — always active */}
+        <button
+          onClick={onToggleMatch}
+          title={matchActive ? 'Exit Match Management' : 'Match Management'}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 4,
+            padding: '4px 8px',
+            fontSize: 11,
+            fontFamily: 'inherit',
+            border: matchActive ? `1px solid ${theme.highlight}` : '1px solid transparent',
+            borderRadius: 4,
+            background: matchActive ? hexToRgba(theme.highlight, 0.15) : 'transparent',
+            color: matchActive ? theme.highlight : theme.textMuted,
+            cursor: 'pointer',
+            transition: 'all 0.15s',
+          }}
+          onMouseEnter={e => {
+            if (!matchActive) {
+              e.currentTarget.style.background = theme.surfaceHover;
+              e.currentTarget.style.color = theme.secondary;
+            }
+          }}
+          onMouseLeave={e => {
+            if (!matchActive) {
+              e.currentTarget.style.background = 'transparent';
+              e.currentTarget.style.color = theme.textMuted;
+            }
+          }}
+        >
+          <WhistleIcon active={matchActive} accentColor={theme.highlight} />
+          <span style={{ fontSize: 10 }}>Match</span>
+        </button>
+
+        {/* Items after Match button — dimmed in match mode */}
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          opacity: matchActive ? 0.3 : 1,
+          pointerEvents: matchActive ? 'none' : 'auto',
+          transition: 'opacity 0.2s',
+        }}>
+          {/* Help button */}
+          <button
+            onClick={onOpenHelp}
+            title="Help"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              padding: '4px 8px',
+              fontSize: 11,
+              fontFamily: 'inherit',
+              border: helpActive ? `1px solid ${theme.highlight}` : '1px solid transparent',
+              borderRadius: 4,
+              background: helpActive ? hexToRgba(theme.highlight, 0.15) : 'transparent',
+              color: helpActive ? theme.highlight : theme.textMuted,
+              cursor: 'pointer',
+              transition: 'all 0.15s',
+            }}
+            onMouseEnter={e => {
+              if (!helpActive) {
+                e.currentTarget.style.background = theme.surfaceHover;
+                e.currentTarget.style.color = theme.secondary;
+              }
+            }}
+            onMouseLeave={e => {
+              if (!helpActive) {
+                e.currentTarget.style.background = 'transparent';
+                e.currentTarget.style.color = theme.textMuted;
+              }
+            }}
+          >
+            <HelpIcon active={helpActive} accentColor={theme.highlight} />
+          </button>
+
+          {/* Boards button */}
+          <button
+            onClick={onOpenBoards}
+            title="Boards"
+            data-tour="boards-button"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              padding: '4px 8px',
+              fontSize: 11,
+              fontFamily: 'inherit',
+              border: boardsActive ? `1px solid ${theme.highlight}` : '1px solid transparent',
+              borderRadius: 4,
+              background: boardsActive ? hexToRgba(theme.highlight, 0.15) : 'transparent',
+              color: boardsActive ? theme.highlight : theme.textMuted,
+              cursor: 'pointer',
+              transition: 'all 0.15s',
+            }}
+            onMouseEnter={e => {
+              if (!boardsActive) {
+                e.currentTarget.style.background = theme.surfaceHover;
+                e.currentTarget.style.color = theme.secondary;
+              }
+            }}
+            onMouseLeave={e => {
+              if (!boardsActive) {
+                e.currentTarget.style.background = 'transparent';
+                e.currentTarget.style.color = theme.textMuted;
+              }
+            }}
+          >
+            <BoardsIcon active={boardsActive} accentColor={theme.highlight} />
+          </button>
+
+          {/* Panel toggle */}
+          <button
+            data-tour="settings-toggle"
+            onClick={onTogglePanel}
+            title={showPanel ? 'Hide panel' : 'Show settings'}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              padding: '4px 8px',
+              fontSize: 11,
+              fontFamily: 'inherit',
+              border: showPanel ? `1px solid ${theme.highlight}` : '1px solid transparent',
+              borderRadius: 4,
+              background: showPanel ? hexToRgba(theme.highlight, 0.15) : 'transparent',
+              color: showPanel ? theme.highlight : theme.textMuted,
+              cursor: 'pointer',
+              transition: 'all 0.15s',
+            }}
+            onMouseEnter={e => {
+              if (!showPanel) {
+                e.currentTarget.style.background = theme.surfaceHover;
+                e.currentTarget.style.color = theme.secondary;
+              }
+            }}
+            onMouseLeave={e => {
+              if (!showPanel) {
+                e.currentTarget.style.background = 'transparent';
+                e.currentTarget.style.color = theme.textMuted;
+              }
+            }}
+          >
+            <GearIcon active={showPanel} accentColor={theme.highlight} />
+          </button>
+
+          {/* Auth: Sign In / User menu */}
+          {!authLoading && (
+            <>
+              <div style={{ width: 1, height: 18, background: theme.borderSubtle, flexShrink: 0 }} />
+              {user ? (
+                <UserMenu />
+              ) : (
+                <button
+                  onClick={() => setShowAuthModal(true)}
+                  style={{
+                    padding: '4px 12px',
+                    fontSize: 11,
+                    fontFamily: 'inherit',
+                    border: `1px solid ${theme.borderSubtle}`,
+                    borderRadius: 4,
+                    background: 'transparent',
+                    color: theme.textMuted,
+                    cursor: 'pointer',
+                    transition: 'all 0.15s',
+                  }}
+                  onMouseEnter={e => {
+                    e.currentTarget.style.borderColor = theme.highlight;
+                    e.currentTarget.style.color = theme.highlight;
+                  }}
+                  onMouseLeave={e => {
+                    e.currentTarget.style.borderColor = theme.borderSubtle;
+                    e.currentTarget.style.color = theme.textMuted;
+                  }}
+                >
+                  Sign In
+                </button>
+              )}
+            </>
+          )}
+        </div>
       </div>
 
       {/* Reset confirmation dialog */}

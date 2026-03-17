@@ -4,8 +4,9 @@ import { useThemeColors } from '../../hooks/useThemeColors';
 import { useAppState } from '../../state/AppStateContext';
 import { useTeam } from '../../state/TeamContext';
 import * as teamService from '../../services/teamService';
+import * as inviteService from '../../services/inviteService';
 import { TeamConfigPanel } from './TeamConfigPanel';
-import type { Team, TeamMember } from '../../types';
+import type { Team, TeamMember, Invite } from '../../types';
 
 interface AdminDashboardProps {
   onClose: () => void;
@@ -14,6 +15,7 @@ interface AdminDashboardProps {
 type TeamRow = {
   team: Team;
   admin: { name: string; email: string } | null;
+  pendingAdminInvite: Invite | null;
   memberCount: number;
 };
 
@@ -45,8 +47,12 @@ export function AdminDashboard({ onClose }: AdminDashboardProps) {
       const teams = await teamService.fetchCreatedTeams();
       const teamRows = await Promise.all(
         teams.map(async (team) => {
-          const members = await teamService.fetchTeamMembers(team.id);
+          const [members, invites] = await Promise.all([
+            teamService.fetchTeamMembers(team.id),
+            inviteService.fetchTeamInvites(team.id),
+          ]);
           const adminMember = members.find((m: TeamMember) => m.role === 'admin');
+          const pendingAdminInvite = invites.find(inv => inv.role === 'admin') ?? null;
           return {
             team,
             admin: adminMember?.profile
@@ -55,6 +61,7 @@ export function AdminDashboard({ onClose }: AdminDashboardProps) {
                   email: adminMember.profile.email,
                 }
               : null,
+            pendingAdminInvite,
             memberCount: members.length,
           };
         }),
@@ -122,13 +129,18 @@ export function AdminDashboard({ onClose }: AdminDashboardProps) {
     const newTeam = teams.find(t => t.id === teamId);
     setRows(await Promise.all(
       teams.map(async (team) => {
-        const members = await teamService.fetchTeamMembers(team.id);
+        const [members, invites] = await Promise.all([
+          teamService.fetchTeamMembers(team.id),
+          inviteService.fetchTeamInvites(team.id),
+        ]);
         const adminMember = members.find((m: TeamMember) => m.role === 'admin');
+        const pendingAdminInvite = invites.find(inv => inv.role === 'admin') ?? null;
         return {
           team,
           admin: adminMember?.profile
             ? { name: adminMember.profile.display_name || adminMember.profile.email, email: adminMember.profile.email }
             : null,
+          pendingAdminInvite,
           memberCount: members.length,
         };
       }),
@@ -479,7 +491,7 @@ export function AdminDashboard({ onClose }: AdminDashboardProps) {
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {rows.map(({ team, admin, memberCount }) => {
+                {rows.map(({ team, admin, pendingAdminInvite, memberCount }) => {
                   // Use local clubIdentity logo as fallback for the active team
                   const logoSrc = team.logo_url
                     || (activeTeam && team.id === activeTeam.id ? state.clubIdentity.logoDataUrl : null)
@@ -551,6 +563,11 @@ export function AdminDashboard({ onClose }: AdminDashboardProps) {
                             {admin.email}
                           </span>
                         )}
+                      </div>
+                    ) : pendingAdminInvite ? (
+                      <div style={{ fontSize: 12, color: theme.textMuted }}>
+                        Admin: {pendingAdminInvite.invitee_name || pendingAdminInvite.invitee_email}
+                        <span style={{ color: '#f59e0b', marginLeft: 6, fontSize: 10 }}>(pending)</span>
                       </div>
                     ) : (
                       <div style={{ fontSize: 12, color: theme.textSubtle, fontStyle: 'italic' }}>
