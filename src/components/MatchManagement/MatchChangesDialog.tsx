@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { useAppState } from '../../state/AppStateContext';
 import { useThemeColors } from '../../hooks/useThemeColors';
 import { hexToRgba } from '../../utils/colorUtils';
-import { computeMatchStateAtMinute, validateSubstitution } from '../../utils/matchComputation';
+import { computeMatchStateAtMinute, validateSubstitution, getSubbedOffPlayerIds } from '../../utils/matchComputation';
 import type {
   MatchEvent,
   MatchSubstitutionEvent,
@@ -138,8 +138,22 @@ export function MatchChangesDialog({ onClose }: MatchChangesDialogProps) {
   const usedBenchIds = new Set(pendingSubs.map(s => s.playerInId));
   const usedPitchIds = new Set(pendingSubs.map(s => s.playerOutId));
 
+  // Under FIFA rules, players who were subbed off cannot return
+  const subbedOffIds = useMemo(
+    () => plan.ruleMode === 'fifa-standard'
+      ? getSubbedOffPlayerIds(planWithout!.events, minute)
+      : new Set<string>(),
+    [plan.ruleMode, planWithout, minute],
+  );
+
   // Available bench/pitch for next sub
-  const availableBench = matchState.bench.filter(s => !usedBenchIds.has(s.id));
+  const availableBench = matchState.bench.filter(
+    s => !usedBenchIds.has(s.id) && !subbedOffIds.has(s.id),
+  );
+  // Ineligible bench players (subbed off under FIFA rules) — shown greyed out
+  const ineligibleBench = plan.ruleMode === 'fifa-standard'
+    ? matchState.bench.filter(s => !usedBenchIds.has(s.id) && subbedOffIds.has(s.id))
+    : [];
   const availablePitch = matchState.onPitch.filter(p => !usedPitchIds.has(p.playerId));
 
   const handleSelectBench = (id: string) => {
@@ -449,6 +463,49 @@ export function MatchChangesDialog({ onClose }: MatchChangesDialogProps) {
                           </div>
                           {s.name}
                         </button>
+                      ))}
+                      {/* Ineligible bench players — subbed off under FIFA rules */}
+                      {ineligibleBench.map(s => (
+                        <div
+                          key={s.id}
+                          title="Player was already subbed off (FIFA rules)"
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 4,
+                            padding: '3px 8px',
+                            border: `1px solid ${theme.borderSubtle}`,
+                            borderRadius: 4,
+                            background: 'transparent',
+                            opacity: 0.35,
+                            fontFamily: 'inherit',
+                            fontSize: 10,
+                            color: theme.textSubtle,
+                          }}
+                        >
+                          <div
+                            style={{
+                              width: 18,
+                              height: 18,
+                              borderRadius: '50%',
+                              background: state.teamAColor,
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              fontSize: 8,
+                              fontWeight: 700,
+                              color: '#fff',
+                              flexShrink: 0,
+                              opacity: 0.5,
+                            }}
+                          >
+                            {s.number}
+                          </div>
+                          {s.name}
+                          <span style={{ fontSize: 8, fontStyle: 'italic', color: '#ef4444' }}>
+                            subbed off
+                          </span>
+                        </div>
                       ))}
                     </div>
                   ) : (

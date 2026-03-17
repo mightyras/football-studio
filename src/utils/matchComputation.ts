@@ -52,6 +52,35 @@ export function countSubsUsed(events: MatchPlan['events']): number {
 }
 
 /**
+ * Get set of player IDs who were subbed off and are currently off the pitch.
+ * Under FIFA standard rules these players cannot return.
+ * A player is "subbed off" if they appear as playerOutId more times than
+ * playerInId in substitution events up to the given minute.
+ */
+export function getSubbedOffPlayerIds(
+  events: MatchPlan['events'],
+  upToMinute: number,
+): Set<string> {
+  const outCount: Record<string, number> = {};
+  const inCount: Record<string, number> = {};
+
+  for (const e of events) {
+    if (e.type !== 'substitution' || e.minute > upToMinute) continue;
+    const sub = e as MatchSubstitutionEvent;
+    outCount[sub.playerOutId] = (outCount[sub.playerOutId] ?? 0) + 1;
+    inCount[sub.playerInId] = (inCount[sub.playerInId] ?? 0) + 1;
+  }
+
+  const result = new Set<string>();
+  for (const playerId of Object.keys(outCount)) {
+    if ((outCount[playerId] ?? 0) > (inCount[playerId] ?? 0)) {
+      result.add(playerId);
+    }
+  }
+  return result;
+}
+
+/**
  * Get the max allowed subs and windows based on rule mode and extra time.
  */
 function getLimits(plan: MatchPlan): { maxSubs: number; maxWindows: number } {
