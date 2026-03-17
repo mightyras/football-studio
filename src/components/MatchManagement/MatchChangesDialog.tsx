@@ -243,7 +243,8 @@ export function MatchChangesDialog({ onClose }: MatchChangesDialogProps) {
     onClose();
   };
 
-  const hasChanges = pendingSubs.length > 0 || pendingRoleChanges.size > 0;
+  const isClearing = existingEventsAtMinute.length > 0 && pendingSubs.length === 0 && pendingRoleChanges.size === 0;
+  const hasChanges = pendingSubs.length > 0 || pendingRoleChanges.size > 0 || isClearing;
 
   return (
     <div
@@ -748,6 +749,32 @@ export function MatchChangesDialog({ onClose }: MatchChangesDialogProps) {
                           p.role
                         )}
                       </button>
+                      {/* Reset role change button */}
+                      {hasRoleChange && (
+                        <button
+                          onClick={() => {
+                            setPendingRoleChanges(prev => {
+                              const next = new Map(prev);
+                              next.delete(p.playerId);
+                              return next;
+                            });
+                            setEditingRoleFor(null);
+                          }}
+                          title="Revert role change"
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            color: theme.textSubtle,
+                            cursor: 'pointer',
+                            fontSize: 12,
+                            padding: '0 2px',
+                            flexShrink: 0,
+                            lineHeight: 1,
+                          }}
+                        >
+                          ×
+                        </button>
+                      )}
                     </div>
 
                     {/* Inline role picker */}
@@ -838,7 +865,7 @@ export function MatchChangesDialog({ onClose }: MatchChangesDialogProps) {
               opacity: hasChanges ? 1 : 0.4,
             }}
           >
-            Confirm All
+            {isClearing ? 'Clear Changes' : 'Confirm All'}
           </button>
         </div>
       </div>
