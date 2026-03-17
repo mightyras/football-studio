@@ -8,9 +8,16 @@ export type Player = {
   facing: number; // radians, world-space. 0 = toward +X, PI = toward -X
   isGK?: boolean;
   gkColor?: string; // custom GK jersey color (hex), overrides default lighten(teamColor)
+  role: PositionRole; // positional role assigned from formation (e.g. 'LW', 'DM', 'CB')
 };
 
-export type PositionRole = 'GK' | 'CB' | 'LCB' | 'RCB' | 'FB' | 'WB' | 'DM' | 'CM' | 'OM' | 'CF' | 'LW' | 'RW';
+export type PositionRole = 'GK' | 'CB' | 'LCB' | 'RCB' | 'LB' | 'RB' | 'FB' | 'WB' | 'DM' | 'CM' | 'OM' | 'CF' | 'LW' | 'RW';
+
+/** Short display labels for each role — used on pitch tokens, dashboards, exports */
+export const ROLE_LABELS: Record<PositionRole, string> = {
+  GK: 'GK', CB: 'CB', LCB: 'LCB', RCB: 'RCB', LB: 'LB', RB: 'RB', FB: 'FB', WB: 'WB',
+  DM: 'DM', CM: 'CM', OM: 'AM', CF: 'CF', LW: 'LW', RW: 'RW',
+};
 
 export type FormationPosition = {
   x: number;
@@ -287,7 +294,7 @@ export type DrawingInProgress =
   | { type: 'ellipse'; center: WorldPoint }
   | { type: 'player-marking'; markedPlayerId: string };
 
-export type PanelTab = 'settings' | 'scenes' | 'help';
+export type PanelTab = 'settings' | 'scenes' | 'help' | 'match';
 
 export type BoardsTab = 'my' | 'team' | 'shared';
 
@@ -449,6 +456,9 @@ export type SceneData = {
   substitutesB: SubstitutePlayer[];
   animationMode: boolean;
   animationSequence: AnimationSequence | null;
+  matchManagementMode?: boolean;
+  matchPlan?: import('./matchManagement').MatchPlan | null;
+  matchCurrentMinute?: number;
 };
 
 export type SavedScene = {
@@ -518,4 +528,7 @@ export type AppState = {
   themeMode: 'light' | 'dark';
   showLogoOnMarkers: boolean;
   teamALogoUrl: string | null;
+  matchManagementMode: boolean;
+  matchPlan: import('./matchManagement').MatchPlan | null;
+  matchCurrentMinute: number;
 };

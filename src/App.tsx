@@ -13,6 +13,7 @@ import { ExportDialog } from './components/AnimationPanel/ExportDialog';
 import { DeletePlayerConfirmDialog } from './components/DeletePlayerConfirmDialog';
 // GoalCelebrationOverlay imported for future use
 // import { GoalCelebrationOverlay } from './components/GoalCelebrationOverlay';
+import { MatchTimeline } from './components/MatchManagement/MatchTimeline';
 import { InviteBanner } from './components/TeamPanel/InviteBanner';
 import { PresenceBar } from './components/CollaborationPanel/PresenceBar';
 import { AuthModal } from './components/AuthModal/AuthModal';
@@ -221,9 +222,9 @@ function AppContent() {
     dispatch({ type: 'SET_TEAM_LOGO_URL', url: activeTeam.logo_url ?? null });
   }, [activeTeam]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Right panel visibility (hidden by default)
-  const [showPanel, setShowPanel] = useState(false);
-  const [panelTab, setPanelTab] = useState<PanelTab>('settings');
+  // Right panel visibility (hidden by default, unless match management is active)
+  const [showPanel, setShowPanel] = useState(state.matchManagementMode);
+  const [panelTab, setPanelTab] = useState<PanelTab>(state.matchManagementMode ? 'match' : 'settings');
   const [saveSceneRequested, setSaveSceneRequested] = useState(false);
 
   // Animation playback hook
@@ -808,8 +809,8 @@ function AppContent() {
         dispatch({ type: 'SELECT_ANNOTATION', annotationId: null });
         dispatch({ type: 'CANCEL_DRAWING' });
       }
-      // Delete selected player or annotation
-      if (e.key === 'Delete' || e.key === 'Backspace') {
+      // Delete selected player or annotation (disabled in match management mode)
+      if ((e.key === 'Delete' || e.key === 'Backspace') && !state.matchManagementMode) {
         if (state.selectedAnnotationId) {
           dispatch({ type: 'DELETE_ANNOTATION', annotationId: state.selectedAnnotationId });
         } else if (state.selectedPlayerId) {
@@ -931,6 +932,19 @@ function AppContent() {
             : undefined;
           startAnimBatch(batch, allLineAnns, [], overrides);
         }
+        return;
+      }
+
+      // ── Match Management: arrow keys navigate timeline ──
+      if ((e.key === 'ArrowRight' || e.key === 'ArrowLeft') && state.matchManagementMode) {
+        const tag = (e.target as HTMLElement)?.tagName;
+        if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (e.target as HTMLElement)?.isContentEditable) return;
+        e.preventDefault();
+        const step = e.shiftKey ? 5 : 1;
+        const newMin = e.key === 'ArrowRight'
+          ? Math.min(state.matchCurrentMinute + step, state.matchPlan?.hasExtraTime ? 120 : 90)
+          : Math.max(state.matchCurrentMinute - step, 0);
+        dispatch({ type: 'SET_MATCH_MINUTE', minute: newMin });
         return;
       }
 
@@ -1065,6 +1079,9 @@ function AppContent() {
           return;
         }
       }
+
+      // Don't trigger tool shortcuts when match management or bench panel is active
+      if (state.matchManagementMode || state.activeBench !== null) return;
 
       if (e.key === 'v' || e.key === 'V') {
         dispatch({ type: 'SET_ACTIVE_TOOL', tool: 'select' });
@@ -1322,7 +1339,7 @@ function AppContent() {
   }
 
   return (
-    <div className={`app-layout ${showPanel ? 'app-layout--panel-open' : ''}`}>
+    <div className={`app-layout ${showPanel ? 'app-layout--panel-open' : ''} ${state.matchManagementMode ? 'app-layout--match' : ''}`}>
       <div className="topbar">
         <TopBar
           onPlayLines={handlePlayLines}
@@ -1355,6 +1372,20 @@ function AppContent() {
               setShowPanel(true);
             }
           }}
+          matchActive={state.matchManagementMode}
+          onToggleMatch={() => {
+            if (state.matchManagementMode) {
+              dispatch({ type: 'EXIT_MATCH_MANAGEMENT' });
+              if (panelTab === 'match') {
+                setPanelTab('settings');
+                setShowPanel(false);
+              }
+            } else {
+              dispatch({ type: 'ENTER_MATCH_MANAGEMENT' });
+              setPanelTab('match');
+              setShowPanel(true);
+            }
+          }}
           onResetZoom={zoom.resetZoom}
         />
       </div>
@@ -1368,6 +1399,12 @@ function AppContent() {
           <PitchCanvas playbackRef={activePlaybackRef} playerRunAnimRef={playerRunAnimRef} animationQueueRef={animationQueueRef} stepQueueRef={stepQueueRef} completedStepBatchesRef={completedStepBatchesRef} goalCelebrationRef={goalCelebrationRef} onGoalScored={handleGoalScored} zoom={zoom} />
         </Sentry.ErrorBoundary>
       </div>
+      {/* Match Management Timeline */}
+      {state.matchManagementMode && (
+        <div className="match-timeline">
+          <MatchTimeline />
+        </div>
+      )}
       {/* Animation Mode UI hidden — feature preserved in code for future use */}
       <div className="formations">
         <Sentry.ErrorBoundary fallback={<SentryFallback />}>

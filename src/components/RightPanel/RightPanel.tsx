@@ -1,6 +1,7 @@
 import { SettingsPanel } from '../SettingsPanel/SettingsPanel';
 import { ScenesPanel } from '../ScenesPanel/ScenesPanel';
 import { HelpPanel } from '../HelpPanel/HelpPanel';
+import { MatchDashboard } from '../MatchManagement/MatchDashboard';
 import { useThemeColors } from '../../hooks/useThemeColors';
 import type { PanelTab, PitchRotation } from '../../types';
 
@@ -87,7 +88,9 @@ export function RightPanel({ rotation, activeTab, onTabChange, saveRequested, on
 
       {/* Tab content */}
       <div style={{ flex: 1, overflow: 'hidden' }}>
-        {activeTab === 'settings' ? (
+        {activeTab === 'match' ? (
+          <MatchDashboard />
+        ) : activeTab === 'settings' ? (
           <SettingsPanel rotation={rotation} />
         ) : activeTab === 'scenes' ? (
           <ScenesPanel saveRequested={saveRequested} onSaveHandled={onSaveHandled} onRequestSignIn={onRequestSignIn} onStartCollaboration={onStartCollaboration} />

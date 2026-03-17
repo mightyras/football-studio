@@ -41,6 +41,9 @@ export function useCanvasInteraction(
       const state = stateRef.current;
       if (!transform || !state) return;
 
+      // In match management mode, the pitch is view-only
+      if (state.matchManagementMode) return;
+
       const canvas = canvasRef.current;
       if (!canvas) return;
       const screen = getCanvasCoords(e);
@@ -124,6 +127,9 @@ export function useCanvasInteraction(
       const transform = transformRef.current;
       const state = stateRef.current;
       if (!transform || !state) return;
+
+      // In match management mode, the pitch is view-only
+      if (state.matchManagementMode) return;
 
       // Close edit popover if clicking elsewhere
       if (state.editingPlayerId) {
@@ -620,6 +626,9 @@ export function useCanvasInteraction(
       const state = stateRef.current;
       if (!transform || !state) return;
 
+      // In match management mode, the pitch is view-only
+      if (state.matchManagementMode) return;
+
       const screen = getCanvasCoords(e);
       const world = transform.screenToWorld(screen.x, screen.y);
 
@@ -779,6 +788,10 @@ export function useCanvasInteraction(
 
   const onPointerUp = useCallback(
     (e: React.PointerEvent<HTMLCanvasElement>) => {
+      // In match management mode, the pitch is view-only
+      const state = stateRef.current;
+      if (state?.matchManagementMode) return;
+
       if (isDragging.current) {
         isDragging.current = false;
         lastAnnRef.current = null;

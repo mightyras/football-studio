@@ -216,6 +216,7 @@ export function Toolbar() {
   const theme = useThemeColors();
 
   const isDrawActive = state.activeTool === 'draw';
+  const isLocked = state.matchManagementMode;
 
   return (
     <div
@@ -228,6 +229,9 @@ export function Toolbar() {
         background: theme.surface,
         borderRight: `1px solid ${theme.border}`,
         overflowY: 'auto',
+        opacity: isLocked ? 0.3 : 1,
+        pointerEvents: isLocked ? 'none' : 'auto',
+        transition: 'opacity 0.2s',
       }}
     >
       <ToolButton

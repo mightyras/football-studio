@@ -1,4 +1,6 @@
 import type { AnimationSequence, AppState, Annotation, AttackDirection, ClubIdentity, DrawSubTool, DrawingInProgress, GhostPlayer, Keyframe, PitchSettings, Player, PreviewGhost, SceneData, SubstitutePlayer, ToolType } from '../types';
+import { ROLE_LABELS } from '../types';
+import type { MatchEvent, MatchPlan, PlayerRoleAssignment, SubstitutionRuleMode } from '../types/matchManagement';
 import { PITCH } from '../constants/pitch';
 import { THEME } from '../constants/colors';
 import { FORMATIONS } from '../constants/formations';
@@ -96,7 +98,18 @@ export type AppAction =
   | { type: 'EXECUTE_RUN'; playerId: string; x: number; y: number; facing: number; ghost: GhostPlayer; annotationId: string; ballX?: number; ballY?: number; animationType?: 'run' | 'pass' | 'dribble' }
   | { type: 'CLEAR_PLAYER_GHOSTS'; playerId: string }
   | { type: 'RESET_RUN'; playerId: string }
-  | { type: 'STAMP_GHOST_FADE_START'; time: number };
+  | { type: 'STAMP_GHOST_FADE_START'; time: number }
+  // ── Match Management ──
+  | { type: 'ENTER_MATCH_MANAGEMENT' }
+  | { type: 'EXIT_MATCH_MANAGEMENT' }
+  | { type: 'SET_MATCH_MINUTE'; minute: number }
+  | { type: 'ADD_MATCH_EVENT'; event: MatchEvent }
+  | { type: 'REMOVE_MATCH_EVENT'; eventId: string }
+  | { type: 'SET_MATCH_RULE_MODE'; mode: SubstitutionRuleMode }
+  | { type: 'SET_MATCH_EXTRA_TIME'; hasExtraTime: boolean }
+  | { type: 'UPDATE_MATCH_LINEUP'; lineup: PlayerRoleAssignment[] }
+  | { type: 'UPDATE_MATCH_BENCH'; bench: SubstitutePlayer[] }
+  | { type: 'REPLACE_MATCH_EVENTS_AT_MINUTE'; minute: number; events: MatchEvent[] };
 
 export function defaultFacing(team: 'A' | 'B', dir: AttackDirection): number {
   return defendsHighX(team, dir) ? Math.PI : 0;
@@ -146,26 +159,26 @@ function createDefaultPlayers(
 
   // Team A (uses team's default formation)
   players.push({
-    id: 'a-1', team: 'A', number: 1, name: 'GK', isGK: true,
+    id: 'a-1', team: 'A', number: 1, name: 'GK', isGK: true, role: 'GK',
     x: gkAX, y: PITCH.width / 2, facing: facingA,
   });
   teamAFormation.positions.forEach((pos, i) => {
     const world = formationToWorld(pos, 'A', teamADirection);
     players.push({
-      id: `a-${i + 2}`, team: 'A', number: pos.defaultNumber, name: pos.role,
+      id: `a-${i + 2}`, team: 'A', number: pos.defaultNumber, name: ROLE_LABELS[pos.role] || pos.role, role: pos.role,
       x: world.x, y: world.y, facing: facingA,
     });
   });
 
   // Team B (always 4-4-2)
   players.push({
-    id: 'b-1', team: 'B', number: 1, name: 'GK', isGK: true,
+    id: 'b-1', team: 'B', number: 1, name: 'GK', isGK: true, role: 'GK',
     x: gkBX, y: PITCH.width / 2, facing: facingB,
   });
   teamBFormation.positions.forEach((pos, i) => {
     const world = formationToWorld(pos, 'B', teamADirection);
     players.push({
-      id: `b-${i + 2}`, team: 'B', number: pos.defaultNumber, name: pos.role,
+      id: `b-${i + 2}`, team: 'B', number: pos.defaultNumber, name: ROLE_LABELS[pos.role] || pos.role, role: pos.role,
       x: world.x, y: world.y, facing: facingB,
     });
   });
@@ -332,6 +345,9 @@ export const initialState: AppState = {
   themeMode: 'dark' as const,
   showLogoOnMarkers: false,
   teamALogoUrl: null,
+  matchManagementMode: false,
+  matchPlan: null,
+  matchCurrentMinute: 0,
 };
 
 export function appStateReducer(state: AppState, action: AppAction): AppState {
@@ -392,7 +408,10 @@ export function appStateReducer(state: AppState, action: AppAction): AppState {
           if (!targetPos) return p;
 
           const world = formationToWorld(targetPos, team, newDir);
-          return { ...p, x: world.x, y: world.y, facing: face, name: targetPos.role, number: targetPos.defaultNumber };
+          const roleLabel = ROLE_LABELS[targetPos.role] || targetPos.role;
+        const isDefaultName = p.name === '' || p.name === p.role || p.name === (ROLE_LABELS[p.role] || p.role);
+        const newName = isDefaultName ? roleLabel : p.name;
+          return { ...p, x: world.x, y: world.y, facing: face, role: targetPos.role, name: newName };
         });
       }
 
@@ -425,18 +444,34 @@ export function appStateReducer(state: AppState, action: AppAction): AppState {
 
       const updatedPlayers = state.players.map(p => {
         if (p.team !== action.team) return p;
-        if (p.isGK) return { ...p, x: gkX, y: PITCH.width / 2, facing: face, name: 'GK' };
+        if (p.isGK) return { ...p, x: gkX, y: PITCH.width / 2, facing: face };
 
         const targetPos = mapping.get(p.id);
         if (!targetPos) return p;
 
         const world = formationToWorld(targetPos, action.team, state.teamADirection);
-        return { ...p, x: world.x, y: world.y, facing: face, name: targetPos.role, number: targetPos.defaultNumber };
+        // Update name to match the new role if it still matches the old role (i.e. hasn't been customised)
+        const roleLabel = ROLE_LABELS[targetPos.role] || targetPos.role;
+        const isDefaultName = p.name === '' || p.name === p.role || p.name === (ROLE_LABELS[p.role] || p.role);
+        const newName = isDefaultName ? roleLabel : p.name;
+        return { ...p, x: world.x, y: world.y, facing: face, role: targetPos.role, name: newName };
       });
 
       const formationKey = action.team === 'A' ? 'teamAFormation' : 'teamBFormation';
+
+      // If in match management mode and applying to Team A, sync roles to matchPlan
+      let matchPlan = state.matchPlan;
+      if (state.matchManagementMode && matchPlan && action.team === 'A') {
+        const updatedLineup = matchPlan.startingLineup.map(p => {
+          const updated = updatedPlayers.find(u => u.id === p.playerId);
+          return updated ? { ...p, role: updated.role, isGK: updated.isGK } : p;
+        });
+        matchPlan = { ...matchPlan, startingLineup: updatedLineup };
+      }
+
       return {
         ...state, ...undo, players: updatedPlayers, [formationKey]: action.formationId,
+        matchPlan,
         resolvedPossession: computePossession(updatedPlayers, state.ball, state.possession, state.resolvedPossession),
       };
     }
@@ -474,11 +509,25 @@ export function appStateReducer(state: AppState, action: AppAction): AppState {
         if (!targetPos) return p;
 
         const world = formationToWorld(targetPos, action.team, state.teamADirection);
-        return { ...p, x: world.x, y: world.y, facing: resetFace };
+        const roleLabel = ROLE_LABELS[targetPos.role] || targetPos.role;
+        const isDefaultName = p.name === '' || p.name === p.role || p.name === (ROLE_LABELS[p.role] || p.role);
+        const newName = isDefaultName ? roleLabel : p.name;
+        return { ...p, x: world.x, y: world.y, facing: resetFace, role: targetPos.role, name: newName };
       });
+
+      // If in match management mode and resetting Team A, sync roles to matchPlan
+      let resetMatchPlan = state.matchPlan;
+      if (state.matchManagementMode && resetMatchPlan && action.team === 'A') {
+        const updatedLineup = resetMatchPlan.startingLineup.map(p => {
+          const updated = resetPlayers.find(u => u.id === p.playerId);
+          return updated ? { ...p, role: updated.role, isGK: updated.isGK } : p;
+        });
+        resetMatchPlan = { ...resetMatchPlan, startingLineup: updatedLineup };
+      }
 
       return {
         ...state, ...undoReset, players: resetPlayers,
+        matchPlan: resetMatchPlan,
         resolvedPossession: computePossession(resetPlayers, state.ball, state.possession, state.resolvedPossession),
       };
     }
@@ -1407,6 +1456,10 @@ export function appStateReducer(state: AppState, action: AppAction): AppState {
         ghostPlayers: [],
         ghostAnnotationIds: [],
         previewGhosts: d.previewGhosts ?? [],
+        // Match management
+        matchManagementMode: d.matchManagementMode ?? false,
+        matchPlan: d.matchPlan ?? null,
+        matchCurrentMinute: d.matchCurrentMinute ?? 0,
         // Clear transient state
         selectedPlayerId: null,
         hoveredPlayerId: null,
@@ -1555,6 +1608,152 @@ export function appStateReducer(state: AppState, action: AppAction): AppState {
           g.createdAt === 0 ? { ...g, createdAt: action.time } : g
         ),
       };
+
+    // ── Match Management actions ──
+
+    case 'ENTER_MATCH_MANAGEMENT': {
+      // If we already have a match plan (e.g. re-entering after a quick edit),
+      // preserve it — just re-sync player names/numbers that may have changed.
+      if (state.matchPlan) {
+        const existingPlan = state.matchPlan;
+        const updatedLineup = existingPlan.startingLineup.map(entry => {
+          const current = state.players.find(p => p.id === entry.playerId);
+          if (!current) return entry;
+          return { ...entry, number: current.number, name: current.name };
+        });
+        return {
+          ...state,
+          matchManagementMode: true,
+          matchPlan: { ...existingPlan, startingLineup: updatedLineup },
+          activeTool: 'select' as const,
+          drawingInProgress: null,
+          activeBench: null,
+        };
+      }
+
+      // First time: snapshot current Team A lineup and bench as starting state
+      const teamAPlayers = state.players.filter(p => p.team === 'A');
+
+      // Use stored role; fall back to formation mapping for legacy data without role
+      let roleMap: Map<string, FormationPosition> | null = null;
+      if (teamAPlayers.some(p => !p.role && !p.isGK)) {
+        const mmFormation = state.teamAFormation
+          ? FORMATIONS.find(f => f.id === state.teamAFormation)
+          : null;
+        if (mmFormation) {
+          roleMap = matchPlayersToPositions(
+            teamAPlayers.filter(p => !p.isGK), mmFormation.positions, 'A', state.teamADirection,
+          );
+        }
+      }
+
+      const lineup: PlayerRoleAssignment[] = teamAPlayers.map(p => ({
+        playerId: p.id,
+        number: p.number,
+        name: p.name,
+        role: p.role ?? (p.isGK ? 'GK' as const : (roleMap?.get(p.id)?.role ?? 'CM')),
+        isGK: p.isGK,
+      }));
+
+      const plan: MatchPlan = {
+        id: `match-${Date.now()}`,
+        ruleMode: 'fifa-standard',
+        hasExtraTime: false,
+        halftimeMinute: 45,
+        startingLineup: lineup,
+        startingBench: structuredClone(state.substitutesA),
+        events: [],
+      };
+
+      return {
+        ...state,
+        matchManagementMode: true,
+        matchPlan: plan,
+        matchCurrentMinute: 0,
+        activeTool: 'select' as const,
+        drawingInProgress: null,
+        activeBench: null,
+      };
+    }
+
+    case 'EXIT_MATCH_MANAGEMENT':
+      return {
+        ...state,
+        matchManagementMode: false,
+        matchCurrentMinute: 0,
+      };
+
+    case 'SET_MATCH_MINUTE': {
+      if (!state.matchPlan) return state;
+      const maxMinute = state.matchPlan.hasExtraTime ? 120 : 90;
+      return {
+        ...state,
+        matchCurrentMinute: Math.max(0, Math.min(maxMinute, action.minute)),
+      };
+    }
+
+    case 'ADD_MATCH_EVENT': {
+      if (!state.matchPlan) return state;
+      const events = [...state.matchPlan.events, action.event]
+        .sort((a, b) => a.minute - b.minute);
+      return {
+        ...state,
+        matchPlan: { ...state.matchPlan, events },
+      };
+    }
+
+    case 'REMOVE_MATCH_EVENT': {
+      if (!state.matchPlan) return state;
+      return {
+        ...state,
+        matchPlan: {
+          ...state.matchPlan,
+          events: state.matchPlan.events.filter(e => e.id !== action.eventId),
+        },
+      };
+    }
+
+    case 'SET_MATCH_RULE_MODE': {
+      if (!state.matchPlan) return state;
+      return {
+        ...state,
+        matchPlan: { ...state.matchPlan, ruleMode: action.mode },
+      };
+    }
+
+    case 'SET_MATCH_EXTRA_TIME': {
+      if (!state.matchPlan) return state;
+      return {
+        ...state,
+        matchPlan: { ...state.matchPlan, hasExtraTime: action.hasExtraTime },
+      };
+    }
+
+    case 'UPDATE_MATCH_LINEUP': {
+      if (!state.matchPlan) return state;
+      return {
+        ...state,
+        matchPlan: { ...state.matchPlan, startingLineup: action.lineup },
+      };
+    }
+
+    case 'UPDATE_MATCH_BENCH': {
+      if (!state.matchPlan) return state;
+      return {
+        ...state,
+        matchPlan: { ...state.matchPlan, startingBench: action.bench },
+      };
+    }
+
+    case 'REPLACE_MATCH_EVENTS_AT_MINUTE': {
+      if (!state.matchPlan) return state;
+      const filtered = state.matchPlan.events.filter(e => e.minute !== action.minute);
+      const events = [...filtered, ...action.events].sort((a, b) => a.minute - b.minute);
+      return {
+        ...state,
+        matchPlan: { ...state.matchPlan, events },
+      };
+    }
 
     default:
       return state;

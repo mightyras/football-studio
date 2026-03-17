@@ -85,26 +85,37 @@ export function StatusBar() {
         position: 'relative',
       }}
     >
-      <div style={{ display: 'flex', gap: 24 }}>
-        <span>Tool: {state.activeTool === 'draw' ? `Draw — ${state.drawSubTool}` : TOOL_LABELS[state.activeTool]}</span>
-        <span>Team: {state.activeTeam === 'A' ? state.teamAName : state.teamBName}</span>
-      </div>
-      {helpText && (
-        <div
-          style={{
-            position: 'absolute',
-            left: '50%',
-            transform: 'translateX(-50%)',
-            color: theme.highlight,
-            whiteSpace: 'nowrap',
-          }}
-        >
-          {helpText}
+      {state.matchManagementMode ? (
+        <div style={{ display: 'flex', gap: 24 }}>
+          <span>Mode: Match Management</span>
+          <span style={{ color: theme.highlight }}>Double-click timeline to add or edit changes</span>
+        </div>
+      ) : (
+        <>
+          <div style={{ display: 'flex', gap: 24 }}>
+            <span>Tool: {state.activeTool === 'draw' ? `Draw — ${state.drawSubTool}` : TOOL_LABELS[state.activeTool]}</span>
+            <span>Team: {state.activeTeam === 'A' ? state.teamAName : state.teamBName}</span>
+          </div>
+          {helpText && (
+            <div
+              style={{
+                position: 'absolute',
+                left: '50%',
+                transform: 'translateX(-50%)',
+                color: theme.highlight,
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {helpText}
+            </div>
+          )}
+        </>
+      )}
+      {!state.matchManagementMode && (
+        <div style={{ display: 'flex', gap: 24 }}>
+          <span>{coordText}</span>
         </div>
       )}
-      <div style={{ display: 'flex', gap: 24 }}>
-        <span>{coordText}</span>
-      </div>
     </div>
   );
 }

@@ -644,7 +644,7 @@ export function PitchCanvas({ playbackRef, playerRunAnimRef, animationQueueRef, 
       {state.editingAnnotationId && (
         <AnnotationEditPopover transform={transform} />
       )}
-      {state.pitchSettings.stadiumEnabled && state.activeBench && (
+      {state.pitchSettings.stadiumEnabled && state.activeBench && !state.matchManagementMode && (
         <BenchPanel />
       )}
       <ZoomControls

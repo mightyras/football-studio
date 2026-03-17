@@ -42,6 +42,9 @@ function saveable(state: AppState): Partial<AppState> {
     themeMode: state.themeMode,
     showLogoOnMarkers: state.showLogoOnMarkers,
     teamALogoUrl: state.teamALogoUrl,
+    matchManagementMode: state.matchManagementMode,
+    matchPlan: state.matchPlan,
+    matchCurrentMinute: state.matchCurrentMinute,
   };
 }
 
@@ -75,6 +78,9 @@ export function extractSceneData(state: AppState): SceneData {
     substitutesB: state.substitutesB,
     animationMode: state.animationMode,
     animationSequence: state.animationSequence,
+    matchManagementMode: state.matchManagementMode,
+    matchPlan: state.matchPlan,
+    matchCurrentMinute: state.matchCurrentMinute,
   });
 }
 
@@ -162,6 +168,10 @@ function loadState(): AppState {
     if (merged.animationSequence === undefined) merged.animationSequence = null;
     if (merged.activeKeyframeIndex === undefined) merged.activeKeyframeIndex = null;
     if (merged.themeMode === undefined) merged.themeMode = 'dark';
+    // Migrate match management fields
+    if (merged.matchManagementMode === undefined) merged.matchManagementMode = false;
+    if (merged.matchPlan === undefined) merged.matchPlan = null;
+    if (merged.matchCurrentMinute === undefined) merged.matchCurrentMinute = 0;
     // Recompute resolved possession from loaded state
     merged.resolvedPossession = computePossession(merged.players, merged.ball, merged.possession, 'A');
 
