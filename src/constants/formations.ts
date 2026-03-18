@@ -171,6 +171,24 @@ export const FORMATIONS: Formation[] = [
     ],
   },
 
+  // ── 4-4-1-1 ──
+  {
+    id: '4-4-1-1',
+    name: '4-4-1-1',
+    positions: [
+      pos(0.18, 0.15, 'LB', 3),   // left back
+      pos(0.12, 0.38, 'LCB', 5),
+      pos(0.12, 0.62, 'RCB', 4),
+      pos(0.18, 0.85, 'RB', 2),   // right back
+      pos(0.48, 0.15, 'LW', 11),  // left winger
+      pos(0.48, 0.38, 'CM', 8),
+      pos(0.48, 0.62, 'CM', 6),
+      pos(0.48, 0.85, 'RW', 7),   // right winger
+      pos(0.66, 0.50, 'OM', 10),  // attacking midfielder
+      pos(0.82, 0.50, 'CF', 9),   // lone striker
+    ],
+  },
+
   // ── 3-5-2 flat ──
   {
     id: '3-5-2-flat',
