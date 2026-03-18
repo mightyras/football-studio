@@ -4,9 +4,11 @@ import { useAppState } from '../../state/AppStateContext';
 import { useAuth } from '../../state/AuthContext';
 import { useThemeColors } from '../../hooks/useThemeColors';
 import { useMatchAutoSave, type SyncStatus } from '../../hooks/useMatchAutoSave';
+import { useSquad } from '../../hooks/useSquad';
 import { hexToRgba } from '../../utils/colorUtils';
 import { computeMatchStateAtMinute, getTotalMinutes } from '../../utils/matchComputation';
 import { FORMATIONS } from '../../constants/formations';
+import { sortByFormationPosition } from '../../utils/formationMapping';
 import { MatchPlayerRow } from './MatchPlayerRow';
 import { MatchRuleConfig } from './MatchRuleConfig';
 import { MatchExportDialog } from './MatchExportDialog';
@@ -390,6 +392,7 @@ function ActiveMatchUI() {
   const { user } = useAuth();
   const theme = useThemeColors();
   const { syncStatus } = useMatchAutoSave();
+  const { squadByNumber } = useSquad();
   const [showConfig, setShowConfig] = useState(false);
   const [showMatchSetup, setShowMatchSetup] = useState(false);
   const [showExportDialog, setShowExportDialog] = useState(false);
@@ -442,6 +445,17 @@ function ActiveMatchUI() {
   const matchState = useMemo(
     () => computeMatchStateAtMinute(plan, minute),
     [plan, minute],
+  );
+
+  const formationPositions = useMemo(
+    () => FORMATIONS.find(f => f.id === state.teamAFormation)?.positions ?? [],
+    [state.teamAFormation],
+  );
+
+  // Sort on-pitch players by formation position: GK → back line (L→R) → mid lines (L→R) → forwards
+  const sortedOnPitch = useMemo(
+    () => sortByFormationPosition(matchState.onPitch, formationPositions),
+    [matchState.onPitch, formationPositions],
   );
 
   const subEvents = plan.events.filter(
@@ -631,7 +645,7 @@ function ActiveMatchUI() {
         >
           {minute === 0 ? 'Starting' : 'On Pitch'} ({matchState.onPitch.length})
         </div>
-        {matchState.onPitch.map(p => (
+        {sortedOnPitch.map(p => (
           <MatchPlayerRow
             key={p.playerId}
             number={p.number}
@@ -648,7 +662,15 @@ function ActiveMatchUI() {
             onEdit={minute === 0 ? ((field, value) => {
               const updatedLineup = plan.startingLineup.map(lp => {
                 if (lp.playerId !== p.playerId) return lp;
-                if (field === 'number') return { ...lp, number: parseInt(value) || lp.number };
+                if (field === 'number') {
+                  const num = parseInt(value) || lp.number;
+                  const squadName = squadByNumber.get(num);
+                  return {
+                    ...lp,
+                    number: num,
+                    ...(squadName ? { name: squadName } : {}),
+                  };
+                }
                 return { ...lp, name: value };
               });
               dispatch({ type: 'UPDATE_MATCH_LINEUP', lineup: updatedLineup });
@@ -812,7 +834,15 @@ function ActiveMatchUI() {
                 onEdit={(field, value) => {
                   const updated = plan.startingBench.map(b => {
                     if (b.id !== s.id) return b;
-                    if (field === 'number') return { ...b, number: parseInt(value) || b.number };
+                    if (field === 'number') {
+                      const num = parseInt(value) || b.number;
+                      const squadName = squadByNumber.get(num);
+                      return {
+                        ...b,
+                        number: num,
+                        ...(squadName ? { name: squadName } : {}),
+                      };
+                    }
                     return { ...b, name: value };
                   });
                   dispatch({ type: 'UPDATE_MATCH_BENCH', bench: updated });

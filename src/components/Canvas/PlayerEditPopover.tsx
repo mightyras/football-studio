@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAppState } from '../../state/AppStateContext';
 import { useThemeColors } from '../../hooks/useThemeColors';
+import { useSquad } from '../../hooks/useSquad';
 import type { PitchTransform, PositionRole } from '../../types';
 
 const POSITION_FULL_NAMES: Record<PositionRole, string> = {
@@ -32,6 +33,7 @@ function lightenHex(hex: string, amount: number): string {
 export function PlayerEditPopover({ transform }: { transform: PitchTransform }) {
   const { state, dispatch } = useAppState();
   const theme = useThemeColors();
+  const { squadByNumber } = useSquad();
 
   const player = state.players.find(p => p.id === state.editingPlayerId);
   const numberRef = useRef<HTMLInputElement>(null);
@@ -145,7 +147,14 @@ export function PlayerEditPopover({ transform }: { transform: PitchTransform }) 
         min={0}
         max={99}
         value={number}
-        onChange={e => setNumber(e.target.value)}
+        onChange={e => {
+          const val = e.target.value;
+          setNumber(val);
+          const num = parseInt(val, 10);
+          if (!isNaN(num) && squadByNumber.has(num)) {
+            setName(squadByNumber.get(num)!);
+          }
+        }}
         onKeyDown={handleKeyDown}
         style={{
           width: '100%',

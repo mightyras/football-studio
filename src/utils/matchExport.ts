@@ -1,6 +1,8 @@
 import type { MatchPlan } from '../types/matchManagement';
+import type { FormationPosition } from '../types';
 import { ROLE_LABELS } from '../types';
 import { computeMatchStateAtMinute, getTotalMinutes } from './matchComputation';
+import { sortByFormationPosition } from './formationMapping';
 
 /**
  * Generate a plain text summary of the match plan.
@@ -10,6 +12,7 @@ export function generateTextExport(
   teamName: string,
   oppositionName: string,
   formationName: string,
+  formationPositions: FormationPosition[] = [],
 ): string {
   const totalMinutes = getTotalMinutes(plan);
   const finalState = computeMatchStateAtMinute(plan, totalMinutes);
@@ -19,9 +22,10 @@ export function generateTextExport(
   lines.push(`Rule Mode: ${plan.ruleMode === 'fifa-standard' ? 'FIFA Standard' : 'Free Subs'} | Formation: ${formationName} | Duration: ${totalMinutes} min${plan.hasExtraTime ? ' (Extra Time)' : ''}`);
   lines.push('');
 
-  // Starting XI
+  // Starting XI (sorted by formation position: GK → back → mid → fwd, L→R)
+  const sortedLineup = sortByFormationPosition(plan.startingLineup, formationPositions);
   lines.push('Starting XI:');
-  for (const p of plan.startingLineup) {
+  for (const p of sortedLineup) {
     const role = ROLE_LABELS[p.role] || p.role;
     lines.push(`  #${String(p.number).padStart(2)}  ${role.padEnd(4)} ${p.name || 'Player'}`);
   }
@@ -90,6 +94,7 @@ export function generatePngExport(
   oppositionName: string,
   teamColor: string,
   formationName: string,
+  formationPositions: FormationPosition[] = [],
 ): Promise<Blob> {
   const totalMinutes = getTotalMinutes(plan);
   const finalState = computeMatchStateAtMinute(plan, totalMinutes);
@@ -171,9 +176,7 @@ export function generatePngExport(
   y += 36;
 
   ctx.font = '24px system-ui, sans-serif';
-  const sortedStarters = [...plan.startingLineup].sort((a, b) =>
-    (finalState.minutesPlayed[b.playerId] ?? 0) - (finalState.minutesPlayed[a.playerId] ?? 0),
-  );
+  const sortedStarters = sortByFormationPosition([...plan.startingLineup], formationPositions);
   for (const p of sortedStarters) {
     const role = ROLE_LABELS[p.role] || p.role;
     const mins = finalState.minutesPlayed[p.playerId] ?? 0;

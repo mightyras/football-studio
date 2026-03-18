@@ -6,6 +6,7 @@ import { useThemeColors } from '../../hooks/useThemeColors';
 import { TeamPanel } from '../TeamPanel/TeamPanel';
 import { AdminDashboard } from '../AdminPanel/AdminDashboard';
 import { TeamAdminPanel } from '../AdminPanel/TeamAdminPanel';
+import { SquadPanel } from '../SquadPanel/SquadPanel';
 import { ProfilePanel } from '../ProfilePanel/ProfilePanel';
 
 function getInitials(profile: Profile): string {
@@ -42,6 +43,7 @@ export function UserMenu() {
   const [showTeamPanel, setShowTeamPanel] = useState(false);
   const [showAdminDashboard, setShowAdminDashboard] = useState(false);
   const [showTeamAdminPanel, setShowTeamAdminPanel] = useState(false);
+  const [showSquadPanel, setShowSquadPanel] = useState(false);
   const [showProfilePanel, setShowProfilePanel] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -222,6 +224,24 @@ export function UserMenu() {
                   </button>
                 )}
 
+                {/* Team Squad — visible to team admins and super admins */}
+                {activeTeam && (activeTeam.myRole === 'admin' || isSuperAdmin) && (
+                  <button
+                    onClick={() => {
+                      setOpen(false);
+                      setShowSquadPanel(true);
+                    }}
+                    style={menuItemStyle}
+                    onMouseEnter={e => { e.currentTarget.style.background = theme.borderSubtle; }}
+                    onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span style={{ fontSize: 13 }}>&#x1F3BD;</span>
+                      <span>Team Squad</span>
+                    </div>
+                  </button>
+                )}
+
                 {/* Pending invites indicator */}
                 {hasInvites && (
                   <div
@@ -289,6 +309,12 @@ export function UserMenu() {
           team={activeTeam}
           onClose={() => setShowTeamAdminPanel(false)}
           onUpdated={refresh}
+        />
+      )}
+      {showSquadPanel && activeTeam && (
+        <SquadPanel
+          team={activeTeam}
+          onClose={() => setShowSquadPanel(false)}
         />
       )}
       {showProfilePanel && (

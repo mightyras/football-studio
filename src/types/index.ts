@@ -374,6 +374,13 @@ export type Team = {
   default_formation_id: string;
 };
 
+export type SquadPlayer = {
+  id: string;
+  team_id: string;
+  name: string;
+  jersey_number: number;
+};
+
 export type TeamMember = {
   team_id: string;
   user_id: string;

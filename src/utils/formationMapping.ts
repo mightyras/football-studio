@@ -1,4 +1,4 @@
-import type { AttackDirection, FormationPosition, Player } from '../types';
+import type { AttackDirection, FormationPosition, Player, PositionRole } from '../types';
 import { PITCH } from '../constants/pitch';
 
 /**
@@ -110,4 +110,90 @@ export function matchPlayersToPositions(
   }
 
   return result;
+}
+
+/**
+ * Sort items that have a role (and optionally a number) by their formation position:
+ *   1. GK first
+ *   2. Then by depth (x ascending — own goal to opponent goal)
+ *   3. Then left-to-right within each line (y ascending)
+ *
+ * If a role appears multiple times in the formation, players are matched
+ * to positions by their jersey number (via defaultNumber) for stable ordering.
+ */
+export function sortByFormationPosition<T extends { role: PositionRole; number?: number }>(
+  items: T[],
+  positions: FormationPosition[],
+): T[] {
+  // Build a lookup: for each role, collect positions sorted by y (left-to-right)
+  const positionsByRole = new Map<PositionRole, FormationPosition[]>();
+  for (const pos of positions) {
+    const arr = positionsByRole.get(pos.role) ?? [];
+    arr.push(pos);
+    positionsByRole.set(pos.role, arr);
+  }
+  // Sort each role's positions by y for stable left-to-right ordering
+  for (const arr of positionsByRole.values()) {
+    arr.sort((a, b) => a.y - b.y);
+  }
+
+  // For each item, find its matching formation position
+  // When multiple positions share the same role, prefer matching by defaultNumber
+  const usedPositions = new Set<FormationPosition>();
+
+  function findPosition(item: T): FormationPosition | undefined {
+    const candidates = positionsByRole.get(item.role);
+    if (!candidates || candidates.length === 0) return undefined;
+    // Try to match by jersey number first
+    if (item.number !== undefined) {
+      const byNumber = candidates.find(p => p.defaultNumber === item.number && !usedPositions.has(p));
+      if (byNumber) {
+        usedPositions.add(byNumber);
+        return byNumber;
+      }
+    }
+    // Fallback: first unused position for this role
+    const fallback = candidates.find(p => !usedPositions.has(p));
+    if (fallback) {
+      usedPositions.add(fallback);
+      return fallback;
+    }
+    return candidates[0]; // all taken, just use first
+  }
+
+  // Pair items with their positions
+  const paired = items.map(item => ({
+    item,
+    pos: findPosition(item),
+  }));
+
+  // Group positions into "lines" by x-proximity.
+  // E.g. fullbacks at x=0.18 and CBs at x=0.12 are the same defensive line.
+  const LINE_THRESHOLD = 0.10;
+  const xValues = positions.map(p => p.x).sort((a, b) => a - b);
+  const lineBreaks: number[] = []; // midpoints between lines
+  for (let i = 1; i < xValues.length; i++) {
+    if (xValues[i] - xValues[i - 1] > LINE_THRESHOLD) {
+      lineBreaks.push((xValues[i] + xValues[i - 1]) / 2);
+    }
+  }
+  function getLineIndex(x: number): number {
+    let line = 0;
+    for (const brk of lineBreaks) {
+      if (x > brk) line++;
+    }
+    return line;
+  }
+
+  // Sort: GK first, then by line (back to front), then left-to-right within each line
+  return paired
+    .sort((a, b) => {
+      if (a.item.role === 'GK' && b.item.role !== 'GK') return -1;
+      if (a.item.role !== 'GK' && b.item.role === 'GK') return 1;
+      const aLine = getLineIndex(a.pos?.x ?? 0);
+      const bLine = getLineIndex(b.pos?.x ?? 0);
+      if (aLine !== bLine) return aLine - bLine;
+      return (a.pos?.y ?? 0) - (b.pos?.y ?? 0);
+    })
+    .map(p => p.item);
 }

@@ -44,18 +44,20 @@ export function MatchExportDialog({ onClose }: MatchExportDialogProps) {
   const plan = state.matchPlan;
   if (!plan) return null;
 
-  const formationName = FORMATIONS.find(f => f.id === state.teamAFormation)?.name ?? state.teamAFormation ?? 'Custom';
+  const formation = FORMATIONS.find(f => f.id === state.teamAFormation);
+  const formationName = formation?.name ?? state.teamAFormation ?? 'Custom';
+  const formationPositions = formation?.positions ?? [];
   const filename = `match-plan-${state.teamAName.replace(/\s+/g, '-').toLowerCase()}.png`;
 
   const handleTextExport = async () => {
     setExporting('text');
     try {
-      const text = generateTextExport(plan, state.teamAName, state.teamBName, formationName);
+      const text = generateTextExport(plan, state.teamAName, state.teamBName, formationName, formationPositions);
       await navigator.clipboard.writeText(text);
       setToast('Copied to clipboard!');
       setTimeout(() => setToast(null), 2000);
     } catch {
-      const text = generateTextExport(plan, state.teamAName, state.teamBName, formationName);
+      const text = generateTextExport(plan, state.teamAName, state.teamBName, formationName, formationPositions);
       const win = window.open('', '_blank');
       if (win) {
         const escaped = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -68,7 +70,7 @@ export function MatchExportDialog({ onClose }: MatchExportDialogProps) {
   const handlePngGenerate = async () => {
     setExporting('png');
     try {
-      const blob = await generatePngExport(plan, state.teamAName, state.teamBName, state.teamAColor, formationName);
+      const blob = await generatePngExport(plan, state.teamAName, state.teamBName, state.teamAColor, formationName, formationPositions);
       pngBlobRef.current = blob;
       const url = URL.createObjectURL(blob);
       setPngPreviewUrl(url);
@@ -113,7 +115,7 @@ export function MatchExportDialog({ onClose }: MatchExportDialogProps) {
   const handlePdfExport = async () => {
     setExporting('pdf');
     try {
-      const text = generateTextExport(plan, state.teamAName, state.teamBName, formationName);
+      const text = generateTextExport(plan, state.teamAName, state.teamBName, formationName, formationPositions);
       const textForPdf = text.split('\n').slice(3).join('\n');
       const win = window.open('', '_blank');
       if (win) {
