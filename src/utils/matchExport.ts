@@ -95,14 +95,14 @@ export function generatePngExport(
   const finalState = computeMatchStateAtMinute(plan, totalMinutes);
   const subEvents = plan.events.filter(e => e.type === 'substitution');
 
-  // Pre-calculate required canvas height based on content
-  const TITLE_BLOCK = 66;        // title + subtitle + gap
-  const TIMELINE_BLOCK = 44;     // timeline bar + gap below
-  const SECTION_GAP = 10;        // gap before each section header
-  const HEADER_HEIGHT = 18;      // section header text line
-  const PLAYER_ROW = 20;         // per-player row
-  const SUB_ROW = 18;            // per-substitution row
-  const BOTTOM_PADDING = 30;
+  // Pre-calculate required canvas height based on content (2x scale for crisp rendering)
+  const TITLE_BLOCK = 132;       // title + subtitle + gap
+  const TIMELINE_BLOCK = 88;     // timeline bar + gap below
+  const SECTION_GAP = 20;        // gap before each section header
+  const HEADER_HEIGHT = 36;      // section header text line
+  const PLAYER_ROW = 40;         // per-player row
+  const SUB_ROW = 36;            // per-substitution row
+  const BOTTOM_PADDING = 60;
 
   let calcH = TITLE_BLOCK + TIMELINE_BLOCK;
   // Starting XI
@@ -116,8 +116,8 @@ export function generatePngExport(
   calcH += BOTTOM_PADDING;
 
   const canvas = document.createElement('canvas');
-  const W = 800;
-  const H = Math.max(600, calcH);
+  const W = 1600;
+  const H = Math.max(1200, calcH);
   canvas.width = W;
   canvas.height = H;
   const ctx = canvas.getContext('2d')!;
@@ -128,49 +128,49 @@ export function generatePngExport(
 
   // Title
   ctx.fillStyle = '#ffffff';
-  ctx.font = 'bold 20px system-ui, sans-serif';
-  ctx.fillText(`${teamName} vs ${oppositionName}`, 24, 36);
+  ctx.font = 'bold 40px system-ui, sans-serif';
+  ctx.fillText(`${teamName} vs ${oppositionName}`, 48, 72);
 
   ctx.fillStyle = '#888';
-  ctx.font = '12px system-ui, sans-serif';
+  ctx.font = '24px system-ui, sans-serif';
   const ruleText = plan.ruleMode === 'fifa-standard' ? 'FIFA Standard' : 'Free Subs';
-  ctx.fillText(`${ruleText} | ${formationName} | ${totalMinutes} min${plan.hasExtraTime ? ' (Extra Time)' : ''}`, 24, 56);
+  ctx.fillText(`${ruleText} | ${formationName} | ${totalMinutes} min${plan.hasExtraTime ? ' (Extra Time)' : ''}`, 48, 112);
 
   // Timeline bar
-  const tlX = 24;
-  const tlY = 76;
-  const tlW = W - 48;
-  const tlH = 20;
+  const tlX = 48;
+  const tlY = 152;
+  const tlW = W - 96;
+  const tlH = 40;
   ctx.fillStyle = '#2a2a4e';
-  roundRect(ctx, tlX, tlY, tlW, tlH, 4);
+  roundRect(ctx, tlX, tlY, tlW, tlH, 8);
   ctx.fill();
 
   // Halftime marker
   const htPct = plan.halftimeMinute / totalMinutes;
   ctx.strokeStyle = '#555';
-  ctx.lineWidth = 1;
+  ctx.lineWidth = 2;
   ctx.beginPath();
   ctx.moveTo(tlX + tlW * htPct, tlY);
   ctx.lineTo(tlX + tlW * htPct, tlY + tlH);
   ctx.stroke();
 
-  // Sub event markers (subEvents already computed above for height calc)
+  // Sub event markers
   for (const e of subEvents) {
     const pct = e.minute / totalMinutes;
     ctx.fillStyle = '#22c55e';
     ctx.beginPath();
-    ctx.arc(tlX + tlW * pct, tlY + tlH / 2, 5, 0, Math.PI * 2);
+    ctx.arc(tlX + tlW * pct, tlY + tlH / 2, 10, 0, Math.PI * 2);
     ctx.fill();
   }
 
   // Starting XI
-  let y = 120;
+  let y = 240;
   ctx.fillStyle = '#aaa';
-  ctx.font = 'bold 11px system-ui, sans-serif';
-  ctx.fillText('STARTING XI', 24, y);
-  y += 18;
+  ctx.font = 'bold 22px system-ui, sans-serif';
+  ctx.fillText('STARTING XI', 48, y);
+  y += 36;
 
-  ctx.font = '12px system-ui, sans-serif';
+  ctx.font = '24px system-ui, sans-serif';
   const sortedStarters = [...plan.startingLineup].sort((a, b) =>
     (finalState.minutesPlayed[b.playerId] ?? 0) - (finalState.minutesPlayed[a.playerId] ?? 0),
   );
@@ -180,119 +180,119 @@ export function generatePngExport(
 
     // Role badge
     ctx.fillStyle = teamColor;
-    roundRect(ctx, 24, y - 10, 30, 14, 2);
+    roundRect(ctx, 48, y - 20, 60, 28, 4);
     ctx.fill();
     ctx.fillStyle = '#fff';
-    ctx.font = 'bold 9px system-ui, sans-serif';
-    ctx.fillText(role, 28, y);
+    ctx.font = 'bold 18px system-ui, sans-serif';
+    ctx.fillText(role, 56, y);
 
     // Player info
     ctx.fillStyle = '#ddd';
-    ctx.font = '12px system-ui, sans-serif';
-    ctx.fillText(`#${p.number} ${p.name || 'Player'}`, 60, y);
+    ctx.font = '24px system-ui, sans-serif';
+    ctx.fillText(`#${p.number} ${p.name || 'Player'}`, 120, y);
 
     // Minutes bar
-    const barX = 300;
-    const barW = 200;
-    const barH = 8;
+    const barX = 600;
+    const barW = 400;
+    const barH = 16;
     ctx.fillStyle = '#2a2a4e';
-    roundRect(ctx, barX, y - 6, barW, barH, 3);
+    roundRect(ctx, barX, y - 12, barW, barH, 6);
     ctx.fill();
     const fillW = totalMinutes > 0 ? (mins / totalMinutes) * barW : 0;
     ctx.fillStyle = '#22c55e';
-    roundRect(ctx, barX, y - 6, fillW, barH, 3);
+    roundRect(ctx, barX, y - 12, fillW, barH, 6);
     ctx.fill();
 
     // Minutes text
     ctx.fillStyle = '#888';
-    ctx.font = '10px system-ui, sans-serif';
-    ctx.fillText(`${mins}'`, barX + barW + 8, y);
+    ctx.font = '20px system-ui, sans-serif';
+    ctx.fillText(`${mins}'`, barX + barW + 16, y);
 
     // Position history
     const positions = finalState.positionHistory[p.playerId] ?? [];
     const roles = [...new Set(positions.map(h => ROLE_LABELS[h.role] || h.role))].join('/');
     if (roles) {
-      ctx.fillText(roles, barX + barW + 40, y);
+      ctx.fillText(roles, barX + barW + 80, y);
     }
 
-    y += 20;
+    y += 40;
   }
 
   // Bench
-  y += 10;
+  y += 20;
   ctx.fillStyle = '#aaa';
-  ctx.font = 'bold 11px system-ui, sans-serif';
-  ctx.fillText('BENCH', 24, y);
-  y += 18;
+  ctx.font = 'bold 22px system-ui, sans-serif';
+  ctx.fillText('BENCH', 48, y);
+  y += 36;
 
-  ctx.font = '12px system-ui, sans-serif';
+  ctx.font = '24px system-ui, sans-serif';
   const sortedBench = [...plan.startingBench].sort((a, b) =>
     (finalState.minutesPlayed[b.id] ?? 0) - (finalState.minutesPlayed[a.id] ?? 0),
   );
   for (const s of sortedBench) {
     const mins = finalState.minutesPlayed[s.id] ?? 0;
     ctx.fillStyle = mins > 0 ? '#ddd' : '#666';
-    ctx.fillText(`#${s.number} ${s.name || 'Player'}`, 60, y);
+    ctx.fillText(`#${s.number} ${s.name || 'Player'}`, 120, y);
 
     if (mins > 0) {
-      const barX = 300;
-      const barW = 200;
-      const barH = 8;
+      const barX = 600;
+      const barW = 400;
+      const barH = 16;
       ctx.fillStyle = '#2a2a4e';
-      roundRect(ctx, barX, y - 6, barW, barH, 3);
+      roundRect(ctx, barX, y - 12, barW, barH, 6);
       ctx.fill();
       const fillW = totalMinutes > 0 ? (mins / totalMinutes) * barW : 0;
       ctx.fillStyle = '#22c55e';
-      roundRect(ctx, barX, y - 6, fillW, barH, 3);
+      roundRect(ctx, barX, y - 12, fillW, barH, 6);
       ctx.fill();
       ctx.fillStyle = '#888';
-      ctx.font = '10px system-ui, sans-serif';
-      ctx.fillText(`${mins}'`, barX + barW + 8, y);
+      ctx.font = '20px system-ui, sans-serif';
+      ctx.fillText(`${mins}'`, barX + barW + 16, y);
 
       // Position history for bench players who played
       const positions = finalState.positionHistory[s.id] ?? [];
       const roles = [...new Set(positions.map(h => ROLE_LABELS[h.role] || h.role))].join('/');
       if (roles) {
-        ctx.fillText(roles, barX + barW + 40, y);
+        ctx.fillText(roles, barX + barW + 80, y);
       }
 
-      ctx.font = '12px system-ui, sans-serif';
+      ctx.font = '24px system-ui, sans-serif';
     }
-    y += 20;
+    y += 40;
   }
 
   // Substitutions
   if (subEvents.length > 0) {
-    y += 10;
+    y += 20;
     ctx.fillStyle = '#aaa';
-    ctx.font = 'bold 11px system-ui, sans-serif';
-    ctx.fillText('SUBSTITUTIONS', 24, y);
-    y += 18;
+    ctx.font = 'bold 22px system-ui, sans-serif';
+    ctx.fillText('SUBSTITUTIONS', 48, y);
+    y += 36;
 
-    ctx.font = '12px system-ui, sans-serif';
+    ctx.font = '24px system-ui, sans-serif';
     for (const e of subEvents) {
       if (e.type !== 'substitution') continue;
       const inP = findPlayerName(plan, e.playerInId);
       const outP = findPlayerName(plan, e.playerOutId);
 
       ctx.fillStyle = '#888';
-      ctx.fillText(`${e.minute}'`, 24, y);
+      ctx.fillText(`${e.minute}'`, 48, y);
       ctx.fillStyle = '#22c55e';
-      ctx.fillText('IN', 60, y);
+      ctx.fillText('IN', 120, y);
       ctx.fillStyle = '#ddd';
-      ctx.fillText(`#${inP.number} ${inP.name}`, 82, y);
+      ctx.fillText(`#${inP.number} ${inP.name}`, 164, y);
       ctx.fillStyle = '#ef4444';
-      ctx.fillText('OUT', 250, y);
+      ctx.fillText('OUT', 500, y);
       ctx.fillStyle = '#ddd';
-      ctx.fillText(`#${outP.number} ${outP.name}`, 280, y);
-      y += 18;
+      ctx.fillText(`#${outP.number} ${outP.name}`, 560, y);
+      y += 36;
     }
   }
 
   // Branding footer
   ctx.fillStyle = '#555';
-  ctx.font = '10px system-ui, sans-serif';
-  ctx.fillText('Football Tactics Studio — football-tactics-studio.com', 24, H - 12);
+  ctx.font = '20px system-ui, sans-serif';
+  ctx.fillText('Football Tactics Studio — football-tactics-studio.com', 48, H - 24);
 
   return new Promise<Blob>((resolve, reject) => {
     canvas.toBlob(

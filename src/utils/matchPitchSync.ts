@@ -21,14 +21,14 @@ export function buildEffectivePlayers(
   const originalTeamA = allPlayers.filter(p => p.team === 'A');
 
   // Build a pool of canvas positions from the original Team A players.
-  // Each entry represents a physical slot on the pitch with its original role.
-  const positionPool = originalTeamA.map(p => {
-    const lineupEntry = plan.startingLineup.find(s => s.playerId === p.id);
-    return {
-      player: p,
-      originalRole: lineupEntry?.role ?? p.role,
-    };
-  });
+  // Each entry represents a physical slot on the pitch — use the canvas player's
+  // formation role (p.role) as the original role, since formation positions are
+  // the source of truth for WHERE on the pitch each slot is. This ensures that
+  // swapping players in the lineup correctly moves them on the pitch.
+  const positionPool = originalTeamA.map(p => ({
+    player: p,
+    originalRole: p.role,
+  }));
 
   const starterIds = new Set(plan.startingLineup.map(s => s.playerId));
   const subbedInIds = new Set<string>();

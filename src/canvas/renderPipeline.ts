@@ -169,6 +169,29 @@ export function render(
     const result = buildEffectivePlayers(state.players, matchState, state.matchPlan);
     effectivePlayers = result.players;
     matchSubbedInIds = result.subbedInIds;
+
+    // ── Swap animation: interpolate positions along straight line ──
+    if (state.matchSwapAnim && now) {
+      const { playerAId, playerBId, startTime } = state.matchSwapAnim;
+      const elapsed = now - startTime;
+      const duration = 400;
+      const t = Math.min(elapsed / duration, 1);
+      const eased = t * t * (3 - 2 * t); // smoothstep
+
+      const a = effectivePlayers.find(p => p.id === playerAId);
+      const b = effectivePlayers.find(p => p.id === playerBId);
+
+      if (a && b) {
+        // Each player's "old" position is the other's final position (they swapped)
+        const ax = a.x, ay = a.y, bx = b.x, by = b.y;
+        // Make mutable copies for animation
+        effectivePlayers = effectivePlayers.map(p => {
+          if (p.id === playerAId) return { ...p, x: bx + (ax - bx) * eased, y: by + (ay - by) * eased };
+          if (p.id === playerBId) return { ...p, x: ax + (bx - ax) * eased, y: ay + (by - ay) * eased };
+          return p;
+        });
+      }
+    }
   }
 
   // Determine which teams have their attack direction pointing toward screen-bottom.

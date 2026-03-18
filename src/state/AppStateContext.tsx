@@ -47,6 +47,8 @@ function saveable(state: AppState): Partial<AppState> {
     matchManagementMode: state.matchManagementMode,
     matchPlan: state.matchPlan,
     matchCurrentMinute: state.matchCurrentMinute,
+    matchPlanCloudId: state.matchPlanCloudId,
+    boardSnapshot: state.boardSnapshot,
   };
 }
 
@@ -176,6 +178,8 @@ function loadState(): AppState {
     if (merged.matchManagementMode === undefined) merged.matchManagementMode = false;
     if (merged.matchPlan === undefined) merged.matchPlan = null;
     if (merged.matchCurrentMinute === undefined) merged.matchCurrentMinute = 0;
+    if (merged.matchPlanCloudId === undefined) merged.matchPlanCloudId = null;
+    if (merged.boardSnapshot === undefined) merged.boardSnapshot = null;
     // Recompute resolved possession from loaded state
     merged.resolvedPossession = computePossession(merged.players, merged.ball, merged.possession, 'A');
 

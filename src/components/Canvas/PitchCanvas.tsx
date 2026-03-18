@@ -605,6 +605,13 @@ export function PitchCanvas({ playbackRef, playerRunAnimRef, animationQueueRef, 
         }
       }
 
+      // Clear match swap animation when done (400ms duration) — guard against repeated dispatch
+      const swapAnim = stateRef.current.matchSwapAnim;
+      if (swapAnim && now - swapAnim.startTime >= 400) {
+        stateRef.current = { ...stateRef.current, matchSwapAnim: null };
+        dispatch({ type: 'CLEAR_MATCH_SWAP_ANIM' });
+      }
+
       animId = requestAnimationFrame(frame);
     };
 

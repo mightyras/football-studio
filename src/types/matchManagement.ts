@@ -38,16 +38,37 @@ export type PlayerRoleAssignment = {
   isGK?: boolean;
 };
 
+// ── Per-Match Team Details ──
+
+/** Opponent details stored per match plan */
+export type MatchOpponent = {
+  name: string;                    // e.g. "Arsenal"
+  color: string;                   // jersey fill color
+  outlineColor: string;            // jersey outline
+  secondaryColor: string | null;   // optional split color
+};
+
+/** Own team identity stored per match plan (home/away kit) */
+export type MatchOwnKit = {
+  name: string;                    // own team name (e.g. "FC Barcelona")
+  color: string;                   // jersey fill color
+  outlineColor: string;            // jersey outline
+  secondaryColor: string | null;   // optional split color
+};
+
 // ── Match Plan ──
 
 export type MatchPlan = {
   id: string;
+  name?: string;                   // human-readable name for saved plans
   ruleMode: SubstitutionRuleMode;
   hasExtraTime: boolean;          // false = 90 min, true = 120 min (2x15 ET)
   halftimeMinute: number;         // default 45
   startingLineup: PlayerRoleAssignment[];   // own team (Team A) only
   startingBench: SubstitutePlayer[];        // own team bench
   events: MatchEvent[];           // sorted by minute
+  opponent?: MatchOpponent;        // opponent details (name + jersey)
+  ownKit?: MatchOwnKit;           // own team kit for this match
 };
 
 // ── Computed State at a Point in Time (derived, not stored) ──

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAppState } from '../../state/AppStateContext';
 import { useThemeColors } from '../../hooks/useThemeColors';
 import { hexToRgba } from '../../utils/colorUtils';
@@ -14,20 +14,38 @@ export function MatchExportDialog({ onClose }: MatchExportDialogProps) {
   const theme = useThemeColors();
   const [exporting, setExporting] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [pngPreviewUrl, setPngPreviewUrl] = useState<string | null>(null);
+  const pngBlobRef = useRef<Blob | null>(null);
 
   // Close on Escape key
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') {
+        if (pngPreviewUrl) {
+          URL.revokeObjectURL(pngPreviewUrl);
+          setPngPreviewUrl(null);
+          pngBlobRef.current = null;
+        } else {
+          onClose();
+        }
+      }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [onClose]);
+  }, [onClose, pngPreviewUrl]);
+
+  // Cleanup object URL on unmount
+  useEffect(() => {
+    return () => {
+      if (pngPreviewUrl) URL.revokeObjectURL(pngPreviewUrl);
+    };
+  }, [pngPreviewUrl]);
 
   const plan = state.matchPlan;
   if (!plan) return null;
 
   const formationName = FORMATIONS.find(f => f.id === state.teamAFormation)?.name ?? state.teamAFormation ?? 'Custom';
+  const filename = `match-plan-${state.teamAName.replace(/\s+/g, '-').toLowerCase()}.png`;
 
   const handleTextExport = async () => {
     setExporting('text');
@@ -37,7 +55,6 @@ export function MatchExportDialog({ onClose }: MatchExportDialogProps) {
       setToast('Copied to clipboard!');
       setTimeout(() => setToast(null), 2000);
     } catch {
-      // Fallback: open in new window
       const text = generateTextExport(plan, state.teamAName, state.teamBName, formationName);
       const win = window.open('', '_blank');
       if (win) {
@@ -48,18 +65,13 @@ export function MatchExportDialog({ onClose }: MatchExportDialogProps) {
     setExporting(null);
   };
 
-  const handlePngExport = async () => {
+  const handlePngGenerate = async () => {
     setExporting('png');
     try {
       const blob = await generatePngExport(plan, state.teamAName, state.teamBName, state.teamAColor, formationName);
+      pngBlobRef.current = blob;
       const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `match-plan-${state.teamAName.replace(/\s+/g, '-').toLowerCase()}.png`;
-      a.click();
-      URL.revokeObjectURL(url);
-      setToast('PNG downloaded!');
-      setTimeout(() => setToast(null), 2000);
+      setPngPreviewUrl(url);
     } catch (err) {
       console.error('PNG export failed:', err);
       setToast('Export failed');
@@ -68,16 +80,43 @@ export function MatchExportDialog({ onClose }: MatchExportDialogProps) {
     setExporting(null);
   };
 
+  const handlePngDownload = () => {
+    if (!pngPreviewUrl) return;
+    const a = document.createElement('a');
+    a.href = pngPreviewUrl;
+    a.download = filename;
+    a.click();
+    setToast('PNG downloaded!');
+    setTimeout(() => setToast(null), 2000);
+  };
+
+  const handlePngCopy = async () => {
+    if (!pngBlobRef.current) return;
+    try {
+      await navigator.clipboard.write([
+        new ClipboardItem({ 'image/png': pngBlobRef.current }),
+      ]);
+      setToast('Copied to clipboard!');
+      setTimeout(() => setToast(null), 2000);
+    } catch {
+      setToast('Copy failed — try Download instead');
+      setTimeout(() => setToast(null), 2000);
+    }
+  };
+
+  const handlePngBack = () => {
+    if (pngPreviewUrl) URL.revokeObjectURL(pngPreviewUrl);
+    setPngPreviewUrl(null);
+    pngBlobRef.current = null;
+  };
+
   const handlePdfExport = async () => {
     setExporting('pdf');
     try {
-      // Use text-based PDF (no jsPDF dependency) — generate HTML and print
       const text = generateTextExport(plan, state.teamAName, state.teamBName, formationName);
-      // Strip first 3 lines (title, config, blank) — already shown in the HTML header
       const textForPdf = text.split('\n').slice(3).join('\n');
       const win = window.open('', '_blank');
       if (win) {
-        // Escape HTML to prevent XSS from user-provided team names
         const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
         const safeTeamA = esc(state.teamAName);
         const safeTeamB = esc(state.teamBName);
@@ -117,6 +156,19 @@ export function MatchExportDialog({ onClose }: MatchExportDialogProps) {
     setExporting(null);
   };
 
+  const actionBtnStyle = {
+    flex: 1,
+    padding: '8px 0',
+    fontSize: 12,
+    fontFamily: 'inherit',
+    fontWeight: 600 as const,
+    border: `1px solid ${theme.borderSubtle}`,
+    borderRadius: 4,
+    background: 'transparent',
+    color: theme.secondary,
+    cursor: 'pointer',
+  };
+
   return (
     <div
       style={{
@@ -138,9 +190,10 @@ export function MatchExportDialog({ onClose }: MatchExportDialogProps) {
           border: `1px solid ${theme.border}`,
           borderRadius: 8,
           padding: 0,
-          width: 320,
+          width: pngPreviewUrl ? 420 : 320,
           boxShadow: '0 8px 24px rgba(0, 0, 0, 0.5)',
           overflow: 'hidden',
+          transition: 'width 0.2s',
         }}
       >
         {/* Header */}
@@ -153,9 +206,20 @@ export function MatchExportDialog({ onClose }: MatchExportDialogProps) {
             justifyContent: 'space-between',
           }}
         >
-          <span style={{ fontSize: 13, fontWeight: 600, color: theme.secondary }}>
-            Export Match Plan
-          </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            {pngPreviewUrl && (
+              <button
+                onClick={handlePngBack}
+                style={{ background: 'none', border: 'none', color: theme.textMuted, cursor: 'pointer', fontSize: 14, padding: 0 }}
+                title="Back"
+              >
+                &#8592;
+              </button>
+            )}
+            <span style={{ fontSize: 13, fontWeight: 600, color: theme.secondary }}>
+              {pngPreviewUrl ? 'Image (PNG)' : 'Share Match Plan'}
+            </span>
+          </div>
           <button
             onClick={onClose}
             style={{ background: 'none', border: 'none', color: theme.textSubtle, cursor: 'pointer', fontSize: 16, padding: '0 4px' }}
@@ -164,30 +228,54 @@ export function MatchExportDialog({ onClose }: MatchExportDialogProps) {
           </button>
         </div>
 
-        {/* Export options */}
-        <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <ExportButton
-            label="Copy as Text"
-            description="Plain text for notes, emails, or chat"
-            icon="T"
-            loading={exporting === 'text'}
-            onClick={handleTextExport}
-          />
-          <ExportButton
-            label="Download PNG"
-            description="Image for WhatsApp, messaging apps"
-            icon="I"
-            loading={exporting === 'png'}
-            onClick={handlePngExport}
-          />
-          <ExportButton
-            label="Print / PDF"
-            description="Opens print dialog for match day handouts"
-            icon="P"
-            loading={exporting === 'pdf'}
-            onClick={handlePdfExport}
-          />
-        </div>
+        {pngPreviewUrl ? (
+          /* PNG Preview mode */
+          <div style={{ padding: 16 }}>
+            <img
+              src={pngPreviewUrl}
+              alt="Match plan preview"
+              style={{
+                width: '100%',
+                borderRadius: 4,
+                border: `1px solid ${theme.borderSubtle}`,
+                marginBottom: 12,
+              }}
+            />
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={handlePngDownload} style={actionBtnStyle}>
+                Download
+              </button>
+              <button onClick={handlePngCopy} style={{ ...actionBtnStyle, background: hexToRgba(theme.highlight, 0.1), borderColor: theme.highlight, color: theme.highlight }}>
+                Copy
+              </button>
+            </div>
+          </div>
+        ) : (
+          /* Option list */
+          <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <ExportButton
+              label="Copy as Text"
+              description="Plain text for notes, emails, or chat"
+              icon="T"
+              loading={exporting === 'text'}
+              onClick={handleTextExport}
+            />
+            <ExportButton
+              label="Image (PNG)"
+              description="Image for WhatsApp, messaging apps"
+              icon="I"
+              loading={exporting === 'png'}
+              onClick={handlePngGenerate}
+            />
+            <ExportButton
+              label="Print / PDF"
+              description="Opens print dialog for match day handouts"
+              icon="P"
+              loading={exporting === 'pdf'}
+              onClick={handlePdfExport}
+            />
+          </div>
+        )}
 
         {/* Toast */}
         {toast && (

@@ -13,9 +13,7 @@ export function MatchTimeline() {
   const [showChangesDialog, setShowChangesDialog] = useState(false);
 
   const plan = state.matchPlan;
-  if (!plan) return null;
-
-  const totalMinutes = getTotalMinutes(plan);
+  const totalMinutes = plan ? getTotalMinutes(plan) : 90;
   const currentMinute = state.matchCurrentMinute;
 
   const minuteToPercent = (m: number) => (m / totalMinutes) * 100;
@@ -39,6 +37,8 @@ export function MatchTimeline() {
     },
     [handleTrackClick],
   );
+
+  if (!plan) return null;
 
   // Period markers
   const periods: Array<{ minute: number; label: string }> = [

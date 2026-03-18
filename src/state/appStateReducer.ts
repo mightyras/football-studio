@@ -1,6 +1,6 @@
 import type { AnimationSequence, AppState, Annotation, AttackDirection, ClubIdentity, DrawSubTool, DrawingInProgress, FormationPosition, GhostPlayer, Keyframe, PitchSettings, Player, PreviewGhost, SceneData, SubstitutePlayer, ToolType } from '../types';
 import { ROLE_LABELS } from '../types';
-import type { MatchEvent, MatchPlan, PlayerRoleAssignment, SubstitutionRuleMode } from '../types/matchManagement';
+import type { MatchEvent, MatchOpponent, MatchOwnKit, MatchPlan, PlayerRoleAssignment, SubstitutionRuleMode } from '../types/matchManagement';
 import { PITCH } from '../constants/pitch';
 import { THEME } from '../constants/colors';
 import { FORMATIONS } from '../constants/formations';
@@ -110,7 +110,16 @@ export type AppAction =
   | { type: 'SET_MATCH_EXTRA_TIME'; hasExtraTime: boolean }
   | { type: 'UPDATE_MATCH_LINEUP'; lineup: PlayerRoleAssignment[] }
   | { type: 'UPDATE_MATCH_BENCH'; bench: SubstitutePlayer[] }
-  | { type: 'REPLACE_MATCH_EVENTS_AT_MINUTE'; minute: number; events: MatchEvent[] };
+  | { type: 'UPDATE_MATCH_LINEUP_AND_BENCH'; lineup: PlayerRoleAssignment[]; bench: SubstitutePlayer[] }
+  | { type: 'START_MATCH_SWAP_ANIM'; playerAId: string; playerBId: string; startTime: number }
+  | { type: 'CLEAR_MATCH_SWAP_ANIM' }
+  | { type: 'REPLACE_MATCH_EVENTS_AT_MINUTE'; minute: number; events: MatchEvent[] }
+  | { type: 'NEW_MATCH_PLAN'; name?: string }
+  | { type: 'LOAD_MATCH_PLAN'; plan: MatchPlan; cloudId?: string }
+  | { type: 'SET_MATCH_PLAN_CLOUD_ID'; cloudId: string | null; planName?: string }
+  | { type: 'CLEAR_MATCH_PLAN' }
+  | { type: 'SET_MATCH_OPPONENT'; opponent: MatchOpponent }
+  | { type: 'SET_MATCH_OWN_KIT'; kit: MatchOwnKit };
 
 export function defaultFacing(team: 'A' | 'B', dir: AttackDirection): number {
   return defendsHighX(team, dir) ? Math.PI : 0;
@@ -351,6 +360,9 @@ export const initialState: AppState = {
   matchManagementMode: false,
   matchPlan: null,
   matchCurrentMinute: 0,
+  matchSwapAnim: null,
+  matchPlanCloudId: null,
+  boardSnapshot: null,
 };
 
 export function appStateReducer(state: AppState, action: AppAction): AppState {
@@ -1625,6 +1637,14 @@ export function appStateReducer(state: AppState, action: AppAction): AppState {
     // ── Match Management actions ──
 
     case 'ENTER_MATCH_MANAGEMENT': {
+      // Snapshot board state on first entry so we can restore on exit
+      const snapshot = state.boardSnapshot ?? {
+        teamAName: state.teamAName, teamAColor: state.teamAColor,
+        teamAOutlineColor: state.teamAOutlineColor, teamASecondaryColor: state.teamASecondaryColor,
+        teamBName: state.teamBName, teamBColor: state.teamBColor,
+        teamBOutlineColor: state.teamBOutlineColor, teamBSecondaryColor: state.teamBSecondaryColor,
+      };
+
       // If we already have a match plan (e.g. re-entering after a quick edit),
       // preserve it — just re-sync player names/numbers that may have changed.
       if (state.matchPlan) {
@@ -1637,6 +1657,7 @@ export function appStateReducer(state: AppState, action: AppAction): AppState {
         return {
           ...state,
           matchManagementMode: true,
+          boardSnapshot: snapshot,
           matchPlan: { ...existingPlan, startingLineup: updatedLineup },
           activeTool: 'select' as const,
           drawingInProgress: null,
@@ -1644,57 +1665,38 @@ export function appStateReducer(state: AppState, action: AppAction): AppState {
         };
       }
 
-      // First time: snapshot current Team A lineup and bench as starting state
-      const teamAPlayers = state.players.filter(p => p.team === 'A');
-
-      // Use stored role; fall back to formation mapping for legacy data without role
-      let roleMap: Map<string, FormationPosition> | null = null;
-      if (teamAPlayers.some(p => !p.role && !p.isGK)) {
-        const mmFormation = state.teamAFormation
-          ? FORMATIONS.find(f => f.id === state.teamAFormation)
-          : null;
-        if (mmFormation) {
-          roleMap = matchPlayersToPositions(
-            teamAPlayers.filter(p => !p.isGK), mmFormation.positions, 'A', state.teamADirection,
-          );
-        }
-      }
-
-      const lineup: PlayerRoleAssignment[] = teamAPlayers.map(p => ({
-        playerId: p.id,
-        number: p.number,
-        name: p.name,
-        role: p.role ?? (p.isGK ? 'GK' as const : (roleMap?.get(p.id)?.role ?? 'CM')),
-        isGK: p.isGK,
-      }));
-
-      const plan: MatchPlan = {
-        id: `match-${Date.now()}`,
-        ruleMode: 'fifa-standard',
-        hasExtraTime: false,
-        halftimeMinute: 45,
-        startingLineup: lineup,
-        startingBench: structuredClone(state.substitutesA),
-        events: [],
-      };
-
+      // First time: no match plan — go to landing screen (matchPlanCloudId is null)
       return {
         ...state,
         matchManagementMode: true,
-        matchPlan: plan,
+        boardSnapshot: snapshot,
+        matchPlan: null,
         matchCurrentMinute: 0,
+        matchPlanCloudId: null,
         activeTool: 'select' as const,
         drawingInProgress: null,
         activeBench: null,
       };
     }
 
-    case 'EXIT_MATCH_MANAGEMENT':
+    case 'EXIT_MATCH_MANAGEMENT': {
+      const snap = state.boardSnapshot;
       return {
         ...state,
         matchManagementMode: false,
+        matchPlan: null,
         matchCurrentMinute: 0,
+        matchPlanCloudId: null,
+        boardSnapshot: null,
+        // Restore board colors/names from snapshot
+        ...(snap ? {
+          teamAName: snap.teamAName, teamAColor: snap.teamAColor,
+          teamAOutlineColor: snap.teamAOutlineColor, teamASecondaryColor: snap.teamASecondaryColor,
+          teamBName: snap.teamBName, teamBColor: snap.teamBColor,
+          teamBOutlineColor: snap.teamBOutlineColor, teamBSecondaryColor: snap.teamBSecondaryColor,
+        } : {}),
       };
+    }
 
     case 'SET_MATCH_MINUTE': {
       if (!state.matchPlan) return state;
@@ -1758,6 +1760,23 @@ export function appStateReducer(state: AppState, action: AppAction): AppState {
       };
     }
 
+    case 'UPDATE_MATCH_LINEUP_AND_BENCH': {
+      if (!state.matchPlan) return state;
+      return {
+        ...state,
+        matchPlan: { ...state.matchPlan, startingLineup: action.lineup, startingBench: action.bench },
+      };
+    }
+
+    case 'START_MATCH_SWAP_ANIM':
+      return {
+        ...state,
+        matchSwapAnim: { playerAId: action.playerAId, playerBId: action.playerBId, startTime: action.startTime },
+      };
+
+    case 'CLEAR_MATCH_SWAP_ANIM':
+      return { ...state, matchSwapAnim: null };
+
     case 'REPLACE_MATCH_EVENTS_AT_MINUTE': {
       if (!state.matchPlan) return state;
       const filtered = state.matchPlan.events.filter(e => e.minute !== action.minute);
@@ -1765,6 +1784,170 @@ export function appStateReducer(state: AppState, action: AppAction): AppState {
       return {
         ...state,
         matchPlan: { ...state.matchPlan, events },
+      };
+    }
+
+    case 'NEW_MATCH_PLAN': {
+      // Reset to a fresh match plan from current board state, clearing cloudId.
+      // Also reset player positions to formation defaults and clear annotations
+      // so the match starts with a clean board.
+
+      // --- Reset Team A positions ---
+      const npFormationA = state.teamAFormation
+        ? FORMATIONS.find(f => f.id === state.teamAFormation)
+        : null;
+      const npOutfieldA = state.players.filter(p => p.team === 'A' && !p.isGK);
+      const npMappingA = npFormationA
+        ? matchPlayersToPositions(npOutfieldA, npFormationA.positions, 'A', state.teamADirection)
+        : null;
+      const npGkAX = defendsHighX('A', state.teamADirection) ? PITCH.length - 4 : 4;
+      const npFaceA = defaultFacing('A', state.teamADirection);
+
+      // --- Reset Team B positions ---
+      const npFormationB = state.teamBFormation
+        ? FORMATIONS.find(f => f.id === state.teamBFormation)
+        : null;
+      const npOutfieldB = state.players.filter(p => p.team === 'B' && !p.isGK);
+      const npMappingB = npFormationB
+        ? matchPlayersToPositions(npOutfieldB, npFormationB.positions, 'B', state.teamADirection)
+        : null;
+      const npGkBX = defendsHighX('B', state.teamADirection) ? PITCH.length - 4 : 4;
+      const npFaceB = defaultFacing('B', state.teamADirection);
+
+      const npResetPlayers = state.players.map(p => {
+        if (p.isGK) {
+          const gkX = p.team === 'A' ? npGkAX : npGkBX;
+          const gkFace = p.team === 'A' ? npFaceA : npFaceB;
+          return { ...p, x: gkX, y: PITCH.width / 2, facing: gkFace };
+        }
+        const mapping = p.team === 'A' ? npMappingA : npMappingB;
+        const face = p.team === 'A' ? npFaceA : npFaceB;
+        const targetPos = mapping?.get(p.id);
+        if (!targetPos) return { ...p, facing: face };
+        const world = formationToWorld(targetPos, p.team, state.teamADirection);
+        const roleLabel = ROLE_LABELS[targetPos.role] || targetPos.role;
+        const isDefaultName = p.name === '' || p.name === p.role || p.name === (ROLE_LABELS[p.role] || p.role);
+        const newName = isDefaultName ? roleLabel : p.name;
+        return { ...p, x: world.x, y: world.y, facing: face, role: targetPos.role, name: newName };
+      });
+
+      // Build lineup from reset players
+      const npTeamAPlayers = npResetPlayers.filter(p => p.team === 'A');
+      const npLineup: PlayerRoleAssignment[] = npTeamAPlayers.map(p => ({
+        playerId: p.id,
+        number: p.number,
+        name: p.name,
+        role: p.role ?? (p.isGK ? 'GK' as const : 'CM'),
+        isGK: p.isGK,
+      }));
+
+      const newPlan: MatchPlan = {
+        id: `match-${Date.now()}`,
+        name: action.name,
+        ruleMode: 'fifa-standard',
+        hasExtraTime: false,
+        halftimeMinute: 45,
+        startingLineup: npLineup,
+        startingBench: structuredClone(state.substitutesA),
+        events: [],
+        opponent: {
+          name: state.teamBName,
+          color: state.teamBColor,
+          outlineColor: state.teamBOutlineColor,
+          secondaryColor: state.teamBSecondaryColor,
+        },
+        ownKit: {
+          name: state.teamAName,
+          color: state.teamAColor,
+          outlineColor: state.teamAOutlineColor,
+          secondaryColor: state.teamASecondaryColor,
+        },
+      };
+
+      return {
+        ...state,
+        matchManagementMode: true,
+        matchPlan: newPlan,
+        matchCurrentMinute: 0,
+        matchPlanCloudId: null,
+        activeTool: 'select' as const,
+        drawingInProgress: null,
+        activeBench: null,
+        players: npResetPlayers,
+        annotations: [],
+        ghostPlayers: [],
+        ghostAnnotationIds: [],
+        previewGhosts: [],
+      };
+    }
+
+    case 'LOAD_MATCH_PLAN': {
+      const lp = action.plan;
+      const snap = state.boardSnapshot;
+      return {
+        ...state,
+        matchManagementMode: true,
+        matchPlan: lp,
+        matchCurrentMinute: 0,
+        matchPlanCloudId: action.cloudId ?? null,
+        activeTool: 'select' as const,
+        drawingInProgress: null,
+        activeBench: null,
+        // Apply opponent details to board (fall back to snapshot name if empty)
+        ...(lp.opponent ? {
+          teamBName: lp.opponent.name || snap?.teamBName || state.teamBName,
+          teamBColor: lp.opponent.color,
+          teamBOutlineColor: lp.opponent.outlineColor,
+          teamBSecondaryColor: lp.opponent.secondaryColor,
+        } : {}),
+        // Apply own kit to board (fall back to snapshot name if empty)
+        ...(lp.ownKit ? {
+          teamAName: lp.ownKit.name || snap?.teamAName || state.teamAName,
+          teamAColor: lp.ownKit.color,
+          teamAOutlineColor: lp.ownKit.outlineColor,
+          teamASecondaryColor: lp.ownKit.secondaryColor,
+        } : {}),
+      };
+    }
+
+    case 'SET_MATCH_PLAN_CLOUD_ID':
+      return {
+        ...state,
+        matchPlanCloudId: action.cloudId,
+        ...(action.planName && state.matchPlan ? {
+          matchPlan: { ...state.matchPlan, name: action.planName },
+        } : {}),
+      };
+
+    case 'CLEAR_MATCH_PLAN':
+      return {
+        ...state,
+        matchPlan: null,
+        matchPlanCloudId: null,
+        matchCurrentMinute: 0,
+      };
+
+    case 'SET_MATCH_OPPONENT': {
+      if (!state.matchPlan) return state;
+      return {
+        ...state,
+        matchPlan: { ...state.matchPlan, opponent: action.opponent },
+        teamBName: action.opponent.name || state.boardSnapshot?.teamBName || state.teamBName,
+        teamBColor: action.opponent.color,
+        teamBOutlineColor: action.opponent.outlineColor,
+        teamBSecondaryColor: action.opponent.secondaryColor,
+      };
+    }
+
+    case 'SET_MATCH_OWN_KIT': {
+      if (!state.matchPlan) return state;
+      return {
+        ...state,
+        matchPlan: { ...state.matchPlan, ownKit: action.kit },
+        teamAName: action.kit.name || state.boardSnapshot?.teamAName || state.teamAName,
+        teamAColor: action.kit.color,
+        teamAOutlineColor: action.kit.outlineColor,
+        teamASecondaryColor: action.kit.secondaryColor,
       };
     }
 

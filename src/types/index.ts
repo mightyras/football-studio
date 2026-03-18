@@ -461,6 +461,7 @@ export type SceneData = {
   matchManagementMode?: boolean;
   matchPlan?: import('./matchManagement').MatchPlan | null;
   matchCurrentMinute?: number;
+  matchSwapAnim?: { playerAId: string; playerBId: string; startTime: number } | null;
 };
 
 export type SavedScene = {
@@ -535,4 +536,12 @@ export type AppState = {
   matchManagementMode: boolean;
   matchPlan: import('./matchManagement').MatchPlan | null;
   matchCurrentMinute: number;
+  matchSwapAnim: { playerAId: string; playerBId: string; startTime: number } | null;
+  matchPlanCloudId: string | null;
+  boardSnapshot: {
+    teamAName: string; teamAColor: string;
+    teamAOutlineColor: string; teamASecondaryColor: string | null;
+    teamBName: string; teamBColor: string;
+    teamBOutlineColor: string; teamBSecondaryColor: string | null;
+  } | null;
 };

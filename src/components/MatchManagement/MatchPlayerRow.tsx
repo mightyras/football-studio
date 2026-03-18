@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useThemeColors } from '../../hooks/useThemeColors';
 import { hexToRgba } from '../../utils/colorUtils';
 import type { PositionRole } from '../../types';
@@ -12,7 +13,18 @@ interface MatchPlayerRowProps {
   positionHistory: Array<{ role: PositionRole; from: number; to: number }>;
   isOnPitch: boolean;
   teamColor: string;
-  subMinute?: number; // minute they were subbed in/out
+  subMinute?: number;
+  /** Enable inline editing of name/number (minute 0 only) */
+  editable?: boolean;
+  onEdit?: (field: 'number' | 'name', value: string) => void;
+  /** Brief flash animation after swap */
+  flash?: boolean;
+  /** Drag-and-drop props */
+  draggable?: boolean;
+  onDragStart?: (e: React.DragEvent) => void;
+  onDragOver?: (e: React.DragEvent) => void;
+  onDragLeave?: (e: React.DragEvent) => void;
+  onDrop?: (e: React.DragEvent) => void;
 }
 
 export function MatchPlayerRow({
@@ -25,23 +37,86 @@ export function MatchPlayerRow({
   isOnPitch,
   teamColor,
   subMinute,
+  flash,
+  editable,
+  onEdit,
+  draggable: isDraggable,
+  onDragStart,
+  onDragOver,
+  onDragLeave,
+  onDrop,
 }: MatchPlayerRowProps) {
   const theme = useThemeColors();
   const barWidth = totalMinutes > 0 ? (minutesPlayed / totalMinutes) * 100 : 0;
+  const [editing, setEditing] = useState<'number' | 'name' | null>(null);
+  const [isDragOver, setIsDragOver] = useState(false);
 
   // Get unique positions played
   const positions = [...new Set(positionHistory.map(h => h.role))];
 
   return (
     <div
+      draggable={isDraggable && !editing}
+      onDragStart={onDragStart}
+      onDragOver={e => {
+        if (onDragOver) {
+          onDragOver(e);
+          setIsDragOver(true);
+        }
+      }}
+      onDragLeave={e => {
+        if (onDragLeave) {
+          onDragLeave(e);
+          setIsDragOver(false);
+        }
+      }}
+      onDrop={e => {
+        setIsDragOver(false);
+        if (onDrop) onDrop(e);
+      }}
+      onDragEnd={e => { setIsDragOver(false); if (e.currentTarget instanceof HTMLElement) e.currentTarget.style.opacity = '1'; }}
       style={{
         display: 'flex',
         alignItems: 'center',
         gap: 8,
-        padding: '5px 12px',
+        padding: isDraggable ? '6px 10px' : '5px 12px',
+        margin: isDraggable ? '3px 8px' : undefined,
         opacity: 1,
+        cursor: isDraggable && !editing ? 'grab' : undefined,
+        background: flash
+          ? hexToRgba(theme.highlight, 0.15)
+          : isDragOver
+            ? hexToRgba(theme.highlight, 0.08)
+            : isDraggable
+              ? hexToRgba(theme.secondary, 0.04)
+              : undefined,
+        border: flash
+          ? `1px solid ${hexToRgba(theme.highlight, 0.5)}`
+          : isDragOver
+            ? `1px solid ${hexToRgba(theme.highlight, 0.4)}`
+            : isDraggable
+            ? `1px solid ${theme.borderSubtle}`
+            : '1px solid transparent',
+        borderRadius: isDraggable ? 6 : undefined,
+        transition: 'background 0.1s, border-color 0.1s',
+        animation: flash ? 'match-swap-blink 0.5s ease' : undefined,
       }}
     >
+      {/* Drag handle */}
+      {isDraggable && (
+        <span style={{
+          fontSize: 10,
+          color: theme.textSubtle,
+          cursor: 'grab',
+          userSelect: 'none',
+          flexShrink: 0,
+          width: 8,
+          opacity: 0.5,
+        }}>
+          ⠿
+        </span>
+      )}
+
       {/* Number badge */}
       <div
         style={{
@@ -58,22 +133,79 @@ export function MatchPlayerRow({
           flexShrink: 0,
         }}
       >
-        {number}
+        {editable && editing === 'number' ? (
+          <input
+            type="text"
+            autoFocus
+            defaultValue={number.toString()}
+            onBlur={e => { onEdit?.('number', e.target.value); setEditing(null); }}
+            onKeyDown={e => {
+              if (e.key === 'Enter') { onEdit?.('number', (e.target as HTMLInputElement).value); setEditing(null); }
+              if (e.key === 'Escape') setEditing(null);
+            }}
+            onClick={e => e.stopPropagation()}
+            style={{
+              width: 20,
+              background: 'transparent',
+              border: 'none',
+              color: '#ffffff',
+              fontSize: 10,
+              fontWeight: 700,
+              textAlign: 'center',
+              outline: 'none',
+            }}
+          />
+        ) : (
+          <span
+            onClick={editable ? () => setEditing('number') : undefined}
+            style={{ cursor: editable ? 'pointer' : undefined }}
+          >
+            {number}
+          </span>
+        )}
       </div>
 
       {/* Name + position */}
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div
-          style={{
-            fontSize: 11,
-            color: theme.secondary,
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-          }}
-        >
-          {name || `Player #${number}`}
-        </div>
+        {editable && editing === 'name' ? (
+          <input
+            type="text"
+            autoFocus
+            defaultValue={name}
+            placeholder="Name"
+            onBlur={e => { onEdit?.('name', e.target.value); setEditing(null); }}
+            onKeyDown={e => {
+              if (e.key === 'Enter') { onEdit?.('name', (e.target as HTMLInputElement).value); setEditing(null); }
+              if (e.key === 'Escape') setEditing(null);
+            }}
+            onClick={e => e.stopPropagation()}
+            style={{
+              width: '100%',
+              background: 'rgba(255,255,255,0.05)',
+              border: `1px solid ${theme.borderSubtle}`,
+              borderRadius: 3,
+              color: theme.secondary,
+              fontSize: 11,
+              padding: '1px 4px',
+              outline: 'none',
+              fontFamily: 'inherit',
+            }}
+          />
+        ) : (
+          <div
+            onClick={editable ? () => setEditing('name') : undefined}
+            style={{
+              fontSize: 11,
+              color: theme.secondary,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+              cursor: editable ? 'pointer' : undefined,
+            }}
+          >
+            {name || `Player #${number}`}
+          </div>
+        )}
         <div style={{ fontSize: 9, color: theme.textSubtle, display: 'flex', gap: 4 }}>
           {positions.map(pos => (
             <span
