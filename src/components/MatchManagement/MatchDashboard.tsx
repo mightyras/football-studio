@@ -731,6 +731,9 @@ function ActiveMatchUI() {
             textTransform: 'uppercase',
             letterSpacing: '0.05em',
             color: theme.textSubtle,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
           }}
           onDragOver={minute === 0 ? (e => { e.preventDefault(); e.currentTarget.style.background = hexToRgba(theme.highlight, 0.05); }) : undefined}
           onDragLeave={minute === 0 ? (e => { e.currentTarget.style.background = ''; }) : undefined}
@@ -755,6 +758,38 @@ function ActiveMatchUI() {
           }) : undefined}
         >
           Bench ({matchState.bench.length})
+          {minute === 0 && (
+            <button
+              onClick={() => {
+                const existingNums = [
+                  ...plan.startingLineup.map(p => p.number),
+                  ...plan.startingBench.map(b => b.number),
+                ];
+                let nextNum = 12;
+                while (existingNums.includes(nextNum)) nextNum++;
+                const newSub: SubstitutePlayer = {
+                  id: `sub-a-${Date.now()}`,
+                  team: 'A',
+                  number: nextNum,
+                  name: '',
+                };
+                dispatch({
+                  type: 'UPDATE_MATCH_BENCH',
+                  bench: [...plan.startingBench, newSub],
+                });
+              }}
+              style={{
+                fontSize: 11,
+                border: 'none',
+                background: 'transparent',
+                color: theme.textMuted,
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+                padding: 0,
+                textTransform: 'none' as const,
+              }}
+            >+ Add player</button>
+          )}
         </div>
         {minute === 0 ? (
           <>
@@ -790,41 +825,6 @@ function ActiveMatchUI() {
                 }}
               />
             ))}
-            <div style={{ padding: '4px 12px 6px' }}>
-              <button
-                onClick={() => {
-                  const existingNums = [
-                    ...plan.startingLineup.map(p => p.number),
-                    ...plan.startingBench.map(b => b.number),
-                  ];
-                  let nextNum = 12;
-                  while (existingNums.includes(nextNum)) nextNum++;
-                  const newSub: SubstitutePlayer = {
-                    id: `sub-a-${Date.now()}`,
-                    team: 'A',
-                    number: nextNum,
-                    name: '',
-                  };
-                  dispatch({
-                    type: 'UPDATE_MATCH_BENCH',
-                    bench: [...plan.startingBench, newSub],
-                  });
-                }}
-                style={{
-                  width: '100%',
-                  padding: '5px 0',
-                  fontSize: 12,
-                  fontFamily: 'inherit',
-                  border: `1px solid ${theme.borderSubtle}`,
-                  borderRadius: 4,
-                  background: 'transparent',
-                  color: theme.textMuted,
-                  cursor: 'pointer',
-                }}
-              >
-                + Add Substitute
-              </button>
-            </div>
           </>
         ) : (
           <>
