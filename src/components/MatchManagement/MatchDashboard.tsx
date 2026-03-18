@@ -2,7 +2,6 @@ import { useMemo, useState, useCallback, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useAppState } from '../../state/AppStateContext';
 import { useAuth } from '../../state/AuthContext';
-import { useTeam } from '../../state/TeamContext';
 import { useThemeColors } from '../../hooks/useThemeColors';
 import { useMatchAutoSave, type SyncStatus } from '../../hooks/useMatchAutoSave';
 import { hexToRgba } from '../../utils/colorUtils';
