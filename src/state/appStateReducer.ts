@@ -4,7 +4,7 @@ import type { MatchEvent, MatchOpponent, MatchOwnKit, MatchPlan, PlayerRoleAssig
 import { PITCH } from '../constants/pitch';
 import { THEME } from '../constants/colors';
 import { FORMATIONS } from '../constants/formations';
-import { defendsHighX, matchPlayersToPositions } from '../utils/formationMapping';
+import { defendsHighX, matchPlayersByRole } from '../utils/formationMapping';
 import { remoteActionFlag } from './remoteActionFlag';
 
 /** Clamp a world coordinate to the playable area (pitch + green buffer) */
@@ -416,7 +416,7 @@ export function appStateReducer(state: AppState, action: AppAction): AppState {
 
         const outfield = newPlayers.filter(p => p.team === team && !p.isGK);
         // Read current positions using OLD direction, write to NEW direction
-        const mapping = matchPlayersToPositions(outfield, formation.positions, team, oldDir);
+        const mapping = matchPlayersByRole(outfield, formation.positions, team, oldDir);
         const gkX = defendsHighX(team, newDir) ? PITCH.length - 4 : 4;
         const face = defaultFacing(team, newDir);
 
@@ -452,7 +452,7 @@ export function appStateReducer(state: AppState, action: AppAction): AppState {
       const outfield = state.players.filter(
         p => p.team === action.team && !p.isGK,
       );
-      const mapping = matchPlayersToPositions(
+      const mapping = matchPlayersByRole(
         outfield,
         formation.positions,
         action.team,
@@ -511,7 +511,7 @@ export function appStateReducer(state: AppState, action: AppAction): AppState {
       const resetOutfield = state.players.filter(
         p => p.team === action.team && !p.isGK,
       );
-      const resetMapping = matchPlayersToPositions(
+      const resetMapping = matchPlayersByRole(
         resetOutfield,
         resetFormation.positions,
         action.team,
@@ -1798,7 +1798,7 @@ export function appStateReducer(state: AppState, action: AppAction): AppState {
         : null;
       const npOutfieldA = state.players.filter(p => p.team === 'A' && !p.isGK);
       const npMappingA = npFormationA
-        ? matchPlayersToPositions(npOutfieldA, npFormationA.positions, 'A', state.teamADirection)
+        ? matchPlayersByRole(npOutfieldA, npFormationA.positions, 'A', state.teamADirection)
         : null;
       const npGkAX = defendsHighX('A', state.teamADirection) ? PITCH.length - 4 : 4;
       const npFaceA = defaultFacing('A', state.teamADirection);
@@ -1809,7 +1809,7 @@ export function appStateReducer(state: AppState, action: AppAction): AppState {
         : null;
       const npOutfieldB = state.players.filter(p => p.team === 'B' && !p.isGK);
       const npMappingB = npFormationB
-        ? matchPlayersToPositions(npOutfieldB, npFormationB.positions, 'B', state.teamADirection)
+        ? matchPlayersByRole(npOutfieldB, npFormationB.positions, 'B', state.teamADirection)
         : null;
       const npGkBX = defendsHighX('B', state.teamADirection) ? PITCH.length - 4 : 4;
       const npFaceB = defaultFacing('B', state.teamADirection);

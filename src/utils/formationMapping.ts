@@ -113,6 +113,82 @@ export function matchPlayersToPositions(
 }
 
 /**
+ * Match players to formation positions by their **current role** first,
+ * preserving manual positioning from the board.
+ *
+ * Phase 1: Match by role (player.role === position.role).
+ *   When multiple positions share the same role, prefer the one whose
+ *   defaultNumber matches the player's jersey number.
+ * Phase 2: Proximity fallback for any remaining unmatched players.
+ */
+export function matchPlayersByRole(
+  players: Player[],
+  targetPositions: FormationPosition[],
+  team: 'A' | 'B',
+  teamADirection: AttackDirection,
+): Map<string, FormationPosition> {
+  const result = new Map<string, FormationPosition>();
+  if (players.length === 0 || targetPositions.length === 0) return result;
+
+  const usedPositionIndices = new Set<number>();
+  const unmatchedPlayers: Player[] = [];
+
+  // Phase 1: Match by current role
+  for (const player of players) {
+    if (!player.role) {
+      unmatchedPlayers.push(player);
+      continue;
+    }
+    // Find all unused positions with the same role
+    const candidates = targetPositions
+      .map((pos, i) => ({ pos, i }))
+      .filter(({ pos, i }) => !usedPositionIndices.has(i) && pos.role === player.role);
+
+    if (candidates.length === 0) {
+      unmatchedPlayers.push(player);
+      continue;
+    }
+
+    // Prefer the position whose defaultNumber matches the player's jersey
+    const byNumber = candidates.find(c => c.pos.defaultNumber === player.number);
+    const chosen = byNumber ?? candidates[0];
+    result.set(player.id, chosen.pos);
+    usedPositionIndices.add(chosen.i);
+  }
+
+  // Phase 2: Proximity fallback for unmatched players
+  if (unmatchedPlayers.length > 0) {
+    const unusedPositions = targetPositions
+      .map((pos, i) => ({ pos, i }))
+      .filter(({ i }) => !usedPositionIndices.has(i));
+
+    const usedRemainder = new Set<number>();
+    for (const player of unmatchedPlayers) {
+      const norm = worldToNormalized(player.x, player.y, team, teamADirection);
+      let bestIdx = -1;
+      let bestDist = Infinity;
+      for (let j = 0; j < unusedPositions.length; j++) {
+        if (usedRemainder.has(j)) continue;
+        const pos = unusedPositions[j].pos;
+        const dx = norm.x - pos.x;
+        const dy = norm.y - pos.y;
+        const dist = dx * dx + dy * dy;
+        if (dist < bestDist) {
+          bestDist = dist;
+          bestIdx = j;
+        }
+      }
+      if (bestIdx !== -1) {
+        result.set(player.id, unusedPositions[bestIdx].pos);
+        usedRemainder.add(bestIdx);
+      }
+    }
+  }
+
+  return result;
+}
+
+/**
  * Sort items that have a role (and optionally a number) by their formation position:
  *   1. GK first
  *   2. Then by depth (x ascending — own goal to opponent goal)

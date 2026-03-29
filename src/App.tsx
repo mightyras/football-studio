@@ -225,6 +225,16 @@ function AppContent() {
   // Right panel visibility (hidden by default, unless match management is active)
   const [showPanel, setShowPanel] = useState(state.matchManagementMode);
   const [panelTab, setPanelTab] = useState<PanelTab>(state.matchManagementMode ? 'match' : 'settings');
+
+  // Auto-close the match panel when match management mode is exited
+  // (e.g. via the "Exit Match Management" button inside MatchDashboard)
+  useEffect(() => {
+    if (!state.matchManagementMode && panelTab === 'match') {
+      setPanelTab('settings');
+      setShowPanel(false);
+    }
+  }, [state.matchManagementMode, panelTab]);
+
   const [saveSceneRequested, setSaveSceneRequested] = useState(false);
 
   // Animation playback hook
