@@ -88,6 +88,7 @@ export type DerivedTheme = {
 
   // Derived from primary (UI background)
   surface: string;
+  surfaceRaised: string;
   surfaceHover: string;
   border: string;
   borderSubtle: string;
@@ -129,6 +130,7 @@ export function deriveTheme(
 
     // Surfaces — for dark primary: lighten; for light primary: darken
     surface:      dark ? lighten(primary, 7)  : darken(primary, 4),
+    surfaceRaised: dark ? lighten(primary, 10) : darken(primary, 6),
     surfaceHover: dark ? lighten(primary, 13) : darken(primary, 8),
     border:       dark ? lighten(primary, 11) : darken(primary, 10),
     borderSubtle: dark ? lighten(primary, 20) : darken(primary, 16),

@@ -493,9 +493,11 @@ interface TopBarProps {
   onResetZoom?: () => void;
   matchActive: boolean;
   onToggleMatch: () => void;
+  analyticsActive?: boolean;
+  onToggleAnalytics?: () => void;
 }
 
-export function TopBar({ onPlayLines, onStepLines, onExportLines, showPanel, onTogglePanel, onOpenHelp, helpActive, boardsActive, onOpenBoards, onResetZoom, matchActive, onToggleMatch }: TopBarProps) {
+export function TopBar({ onPlayLines, onStepLines, onExportLines, showPanel, onTogglePanel, onOpenHelp, helpActive, boardsActive, onOpenBoards, onResetZoom, matchActive, onToggleMatch, analyticsActive, onToggleAnalytics }: TopBarProps) {
   const { state, dispatch } = useAppState();
   const theme = useThemeColors();
   const { user, loading: authLoading } = useAuth();
@@ -505,6 +507,7 @@ export function TopBar({ onPlayLines, onStepLines, onExportLines, showPanel, onT
   const [openTeamOverlay, setOpenTeamOverlay] = useState<'A' | 'B' | null>(null);
   const [openFormationDropdown, setOpenFormationDropdown] = useState<'A' | 'B' | null>(null);
 
+  const dimBoard = matchActive || !!analyticsActive;
   const logoSrc = user ? (state.clubIdentity.logoDataUrl || activeTeam?.logo_url) : null;
 
   const hasLineAnnotations = state.annotations.some(
@@ -568,8 +571,8 @@ export function TopBar({ onPlayLines, onStepLines, onExportLines, showPanel, onT
         display: 'flex',
         alignItems: 'center',
         gap: 6,
-        opacity: matchActive ? 0.3 : 1,
-        pointerEvents: matchActive ? 'none' : 'auto',
+        opacity: dimBoard ? 0.3 : 1,
+        pointerEvents: dimBoard ? 'none' : 'auto',
         transition: 'opacity 0.2s',
       }}>
         {/* Team A: name trigger + formation trigger */}
@@ -904,6 +907,46 @@ export function TopBar({ onPlayLines, onStepLines, onExportLines, showPanel, onT
           <WhistleIcon active={matchActive} accentColor={theme.highlight} />
           <span style={{ fontSize: 10 }}>Match</span>
         </button>
+
+        {/* Analytics toggle */}
+        {onToggleAnalytics && (
+          <button
+            onClick={onToggleAnalytics}
+            title={analyticsActive ? 'Exit Analytics' : 'Video Analytics'}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 4,
+              padding: '4px 8px',
+              fontSize: 11,
+              fontFamily: 'inherit',
+              border: analyticsActive ? `1px solid ${theme.highlight}` : '1px solid transparent',
+              borderRadius: 4,
+              background: analyticsActive ? hexToRgba(theme.highlight, 0.15) : 'transparent',
+              color: analyticsActive ? theme.highlight : theme.textMuted,
+              cursor: 'pointer',
+              transition: 'all 0.15s',
+            }}
+            onMouseEnter={e => {
+              if (!analyticsActive) {
+                e.currentTarget.style.background = theme.surfaceHover;
+                e.currentTarget.style.color = theme.secondary;
+              }
+            }}
+            onMouseLeave={e => {
+              if (!analyticsActive) {
+                e.currentTarget.style.background = 'transparent';
+                e.currentTarget.style.color = theme.textMuted;
+              }
+            }}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polygon points="23 7 16 12 23 17 23 7" fill={analyticsActive ? theme.highlight : 'none'} />
+              <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
+            </svg>
+            <span style={{ fontSize: 10 }}>Analytics</span>
+          </button>
+        )}
 
         {/* Items after Match button — dimmed in match mode */}
         <div style={{

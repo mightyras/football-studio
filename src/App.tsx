@@ -38,6 +38,9 @@ import { TourOverlay } from './components/Tour/TourOverlay';
 import { WelcomeModal } from './components/WelcomeModal/WelcomeModal';
 import { Sentry } from './lib/sentry';
 import { useSentryUser } from './hooks/useSentryUser';
+import { AnalyticsView } from './analytics/AnalyticsView';
+
+export type AppView = 'editor' | 'analytics';
 
 function SentryFallback({ resetError }: { resetError?: () => void }) {
   return (
@@ -225,6 +228,7 @@ function AppContent() {
   // Right panel visibility (hidden by default, unless match management is active)
   const [showPanel, setShowPanel] = useState(state.matchManagementMode);
   const [panelTab, setPanelTab] = useState<PanelTab>(state.matchManagementMode ? 'match' : 'settings');
+  const [activeView, setActiveView] = useState<AppView>('editor');
 
   // Auto-close the match panel when match management mode is exited
   // (e.g. via the "Exit Match Management" button inside MatchDashboard)
@@ -1349,7 +1353,7 @@ function AppContent() {
   }
 
   return (
-    <div className={`app-layout ${showPanel ? 'app-layout--panel-open' : ''} ${state.matchManagementMode ? 'app-layout--match' : ''}`}>
+    <div className={`app-layout ${activeView === 'analytics' ? 'app-layout--analytics' : ''} ${showPanel ? 'app-layout--panel-open' : ''} ${state.matchManagementMode ? 'app-layout--match' : ''}`}>
       <div className="topbar">
         <TopBar
           onPlayLines={handlePlayLines}
@@ -1384,6 +1388,8 @@ function AppContent() {
           }}
           matchActive={state.matchManagementMode}
           onToggleMatch={() => {
+            // Exit analytics if active
+            if (activeView === 'analytics') setActiveView('editor');
             if (state.matchManagementMode) {
               dispatch({ type: 'EXIT_MATCH_MANAGEMENT' });
               if (panelTab === 'match') {
@@ -1396,9 +1402,27 @@ function AppContent() {
               setShowPanel(true);
             }
           }}
+          analyticsActive={activeView === 'analytics'}
+          onToggleAnalytics={() => {
+            // Exit match management if active
+            if (state.matchManagementMode) {
+              dispatch({ type: 'EXIT_MATCH_MANAGEMENT' });
+              if (panelTab === 'match') {
+                setPanelTab('settings');
+                setShowPanel(false);
+              }
+            }
+            setActiveView(v => v === 'analytics' ? 'editor' : 'analytics');
+          }}
           onResetZoom={zoom.resetZoom}
         />
       </div>
+      {activeView === 'analytics' ? (
+        <div className="analytics-area">
+          <AnalyticsView />
+        </div>
+      ) : (
+        <>
       <InviteBanner />
       <div className="toolbar">
         <Toolbar />
@@ -1433,6 +1457,8 @@ function AppContent() {
       <div className="statusbar">
         <StatusBar />
       </div>
+        </>
+      )}
 
       {/* Export Dialog */}
       {showExportDialog && (

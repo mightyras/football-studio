@@ -77,6 +77,24 @@
   grid-area: match-timeline;
 }
 
+/* Analytics mode: full-width center area, no toolbar or panel */
+.app-layout--analytics {
+  grid-template-columns: 1fr;
+  grid-template-rows: 48px 1fr;
+  grid-template-areas:
+    "topbar"
+    "analytics";
+}
+
+.app-layout--analytics.app-layout--panel-open {
+  grid-template-columns: 1fr;
+}
+
+.analytics-area {
+  grid-area: analytics;
+  overflow: hidden;
+}
+
 @keyframes match-swap-blink {
   0%, 100% { opacity: 1; }
   25% { opacity: 0.3; }
