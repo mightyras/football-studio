@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { THEME } from '../../constants/colors';
 
 type Props = {
   message: string;

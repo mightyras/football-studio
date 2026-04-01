@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useMemo } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { THEME } from '../../constants/colors';
 import { formatTime } from '../utils/time';
 import type { SessionClip } from '../types';

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAnalytics } from '../AnalyticsContext';
-import { fetchMySessions, deleteSession, fetchSessionClips, getClipDownloadUrl, getClipThumbnailUrl } from '../services/analysisService';
+import { fetchMySessions, deleteSession, fetchSessionClips, getClipThumbnailUrl } from '../services/analysisService';
 import type { AnalysisSessionRow } from '../services/analysisService';
 import type { SessionClip } from '../types';
 import { ConfirmDialog } from './ConfirmDialog';

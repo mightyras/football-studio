@@ -26,7 +26,7 @@ export function useStreamUrlResolver() {
       // Try to extract stream URL via Edge Function
       dispatch({ type: 'SET_STREAM_STATUS', status: 'resolving' });
       try {
-        const { data, error } = await supabase.functions.invoke('extract-stream-url', {
+        const { data, error } = await supabase!.functions.invoke('extract-stream-url', {
           body: { url: rawUrl, platform: detection.platform },
         });
 

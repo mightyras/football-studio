@@ -25,11 +25,6 @@ function AnalyticsContent() {
   const [pendingClip, setPendingClip] = useState<SessionClip | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  // Get video element ref for hooks
-  const getVideoRef = useCallback(() => ({
-    current: playerRef.current?.getVideoElement() ?? null,
-  }), []);
-
   const videoElementRef = useRef<HTMLVideoElement | null>(null);
 
   // Keep a stable ref to the video element
@@ -92,7 +87,7 @@ function AnalyticsContent() {
         dispatch({ type: 'SET_RESOLVED_STREAM_URL', url: state.streamUrl });
       } else if (detection.type === 'known-platform' && detection.platform) {
         dispatch({ type: 'SET_STREAM_STATUS', status: 'resolving' });
-        supabase.functions.invoke('extract-stream-url', {
+        supabase!.functions.invoke('extract-stream-url', {
           body: { url: state.streamUrl, platform: detection.platform },
         }).then(({ data, error }) => {
           if (!error && data?.streamUrl) {
