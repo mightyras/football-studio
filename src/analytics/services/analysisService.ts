@@ -306,6 +306,16 @@ export async function updateClipLabel(id: string, label: string): Promise<boolea
   return !error;
 }
 
+/** Update a clip's annotations. */
+export async function updateClipAnnotations(id: string, annotations: VideoAnnotation[]): Promise<boolean> {
+  if (!supabase) return false;
+  const { error } = await supabase
+    .from('analysis_clips')
+    .update({ annotations })
+    .eq('id', id);
+  return !error;
+}
+
 /** Soft-delete a clip. */
 export async function deleteClip(id: string): Promise<boolean> {
   if (!supabase) return false;

@@ -15,9 +15,11 @@ export type VideoAnnotation = {
   text?: string;
   position?: { x: number; y: number };
   fontSize?: number;
-  // Timing (Phase 2+)
+  // Timing — used for clip replay fade-in/out
   timeIn?: number;
   timeOut?: number;
+  // Wall-clock timestamp (performance.now()) when stroke was completed — used for live fade
+  drawnAt?: number;
 };
 
 export type SessionClip = {
@@ -70,6 +72,7 @@ export type AnalyticsState = {
   sessionId: string | null;
   sessionName: string | null;
   saveStatus: 'idle' | 'saving' | 'saved' | 'error';
+  holdStrokesOnPause: boolean;
 };
 
 export type AnalyticsAction =
@@ -106,6 +109,11 @@ export type AnalyticsAction =
   | { type: 'SET_SAVE_STATUS'; status: 'idle' | 'saving' | 'saved' | 'error' }
   | { type: 'SET_CLIP_CLOUD_ID'; localId: string; cloudId: string; storagePath: string; thumbnailStoragePath?: string }
   | { type: 'LOAD_SESSION'; clips: SessionClip[]; bookmarks: Bookmark[]; streamUrl: string; metadata: UrlMetadata | null; sessionId: string; sessionName: string }
+  | { type: 'CLEAR_FREEHAND_ANNOTATIONS' }
+  | { type: 'REMOVE_FADED_ANNOTATIONS'; ids: string[] }
+  | { type: 'STAMP_FREEHAND_FADE_START'; time: number; videoTime?: number }
+  | { type: 'UNSTAMP_FREEHAND_FADE' }
+  | { type: 'SET_HOLD_STROKES_ON_PAUSE'; hold: boolean }
   | { type: 'RESET' };
 
 export type UrlType = 'hls' | 'mp4' | 'known-platform' | 'unknown';

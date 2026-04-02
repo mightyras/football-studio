@@ -2,7 +2,8 @@ import { useCallback, useRef } from 'react';
 import { useAnalytics } from '../AnalyticsContext';
 import { formatTimestamp } from '../utils/time';
 import { saveClip as saveClipToDb } from '../services/analysisService';
-import type { SessionClip } from '../types';
+import { renderStrokeToCanvas, renderMarkerToCanvas, computeClipStrokeOpacity, isDotAnnotation } from '../utils/strokeRenderer';
+import type { SessionClip, VideoAnnotation } from '../types';
 
 export function useClipRecorder(
   videoRef: React.RefObject<HTMLVideoElement | null>,
@@ -18,6 +19,8 @@ export function useClipRecorder(
 
   const sessionIdRef = useRef(state.sessionId);
   sessionIdRef.current = state.sessionId;
+  const annotationsRef = useRef<VideoAnnotation[]>(state.annotations);
+  annotationsRef.current = state.annotations;
 
   const startRecording = useCallback(() => {
     const video = videoRef.current;
@@ -41,6 +44,21 @@ export function useClipRecorder(
       const drawFrame = () => {
         if (video.readyState >= 2) {
           ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+          // Composite freehand strokes and dot markers into the recording
+          const freehandAnns = annotationsRef.current.filter(a => a.type === 'freehand');
+          const dotCounters: Record<string, number> = {};
+          for (const ann of freehandAnns) {
+            if (!ann.points || ann.points.length === 0) continue;
+            const opacity = computeClipStrokeOpacity(ann, video.currentTime);
+            if (opacity <= 0.01) continue;
+            if (isDotAnnotation(ann.points)) {
+              dotCounters[ann.color] = (dotCounters[ann.color] || 0) + 1;
+              renderMarkerToCanvas(ctx, ann.points[0], ann.color, dotCounters[ann.color], opacity, canvas.width, canvas.height);
+            } else if (ann.points.length >= 2) {
+              renderStrokeToCanvas(ctx, ann.points, ann.color, ann.lineWidth, opacity, canvas.width, canvas.height);
+            }
+          }
         }
         rafRef.current = requestAnimationFrame(drawFrame);
       };
@@ -100,7 +118,7 @@ export function useClipRecorder(
           blob,
           thumbnailUrl,
           downloadUrl,
-          annotations: [...state.annotations],
+          annotations: [...annotationsRef.current],
           label: `Clip ${formatTimestamp(state.inPoint!)}–${formatTimestamp(state.outPoint!)}`,
           createdAt: Date.now(),
         };

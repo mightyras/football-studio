@@ -1,5 +1,6 @@
 import { createContext, useContext, useReducer, type Dispatch, type ReactNode } from 'react';
 import type { AnalyticsState, AnalyticsAction } from './types';
+import { PEN_TOTAL_MS } from './utils/strokeRenderer';
 
 const initialState: AnalyticsState = {
   streamUrl: null,
@@ -17,8 +18,8 @@ const initialState: AnalyticsState = {
   recordingStatus: 'idle',
   recordingElapsed: 0,
   activeTool: 'select',
-  activeColor: '#ff3333',
-  activeLineWidth: 3,
+  activeColor: '#00ff88',
+  activeLineWidth: 6,
   annotations: [],
   selectedAnnotationId: null,
   drawingInProgress: null,
@@ -29,6 +30,7 @@ const initialState: AnalyticsState = {
   sessionId: null,
   sessionName: null,
   saveStatus: 'idle',
+  holdStrokesOnPause: false,
 };
 
 function analyticsReducer(state: AnalyticsState, action: AnalyticsAction): AnalyticsState {
@@ -180,6 +182,39 @@ function analyticsReducer(state: AnalyticsState, action: AnalyticsAction): Analy
         annotations: [],
         saveStatus: 'saved',
       };
+    case 'CLEAR_FREEHAND_ANNOTATIONS':
+      return { ...state, annotations: state.annotations.filter(a => a.type !== 'freehand') };
+    case 'REMOVE_FADED_ANNOTATIONS': {
+      const idsToRemove = new Set(action.ids);
+      return { ...state, annotations: state.annotations.filter(a => !idsToRemove.has(a.id)) };
+    }
+    case 'STAMP_FREEHAND_FADE_START':
+      return {
+        ...state,
+        annotations: state.annotations.map(a => {
+          if (a.type !== 'freehand' || a.drawnAt) return a;
+          const stamped: typeof a = { ...a, drawnAt: action.time };
+          if (action.videoTime !== undefined) {
+            stamped.timeIn = action.videoTime;
+            stamped.timeOut = action.videoTime + (PEN_TOTAL_MS / 1000);
+          }
+          return stamped;
+        }),
+      };
+    case 'UNSTAMP_FREEHAND_FADE': {
+      const hasStamped = state.annotations.some(a => a.type === 'freehand' && a.drawnAt);
+      if (!hasStamped) return state;
+      return {
+        ...state,
+        annotations: state.annotations.map(a =>
+          a.type === 'freehand' && a.drawnAt
+            ? { ...a, drawnAt: undefined, timeIn: undefined, timeOut: undefined }
+            : a
+        ),
+      };
+    }
+    case 'SET_HOLD_STROKES_ON_PAUSE':
+      return { ...state, holdStrokesOnPause: action.hold };
     case 'RESET':
       return initialState;
     default:

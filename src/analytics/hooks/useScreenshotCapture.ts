@@ -2,6 +2,7 @@ import { useCallback, useRef } from 'react';
 import { useAnalytics } from '../AnalyticsContext';
 import { formatTimestamp } from '../utils/time';
 import { saveClip as saveClipToDb } from '../services/analysisService';
+import { renderStrokeToCanvas, renderMarkerToCanvas, isDotAnnotation, PEN_BASE_OPACITY } from '../utils/strokeRenderer';
 import type { SessionClip } from '../types';
 
 export function useScreenshotCapture(
@@ -26,6 +27,20 @@ export function useScreenshotCapture(
     if (!ctx) return;
 
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+    // Composite visible freehand strokes and dot markers onto the screenshot
+    const freehandAnnotations = state.annotations.filter(a => a.type === 'freehand');
+    const dotCounters: Record<string, number> = {};
+    for (const ann of freehandAnnotations) {
+      if (!ann.points || ann.points.length === 0) continue;
+      if (isDotAnnotation(ann.points)) {
+        dotCounters[ann.color] = (dotCounters[ann.color] || 0) + 1;
+        renderMarkerToCanvas(ctx, ann.points[0], ann.color, dotCounters[ann.color], PEN_BASE_OPACITY, canvas.width, canvas.height);
+      } else if (ann.points.length >= 2) {
+        renderStrokeToCanvas(ctx, ann.points, ann.color, ann.lineWidth, PEN_BASE_OPACITY, canvas.width, canvas.height);
+      }
+    }
+
     captureCanvasRef.current = canvas;
 
     canvas.toBlob((blob) => {

@@ -4,6 +4,9 @@ import { formatTime } from '../utils/time';
 import { downloadBlob } from '../utils/download';
 import { formatTimestamp } from '../utils/time';
 import { getClipDownloadUrl, deleteClip, updateClipLabel } from '../services/analysisService';
+import { renderStrokeToCanvas, renderMarkerToCanvas, computeClipStrokeOpacity, isDotAnnotation, PEN_BASE_OPACITY } from '../utils/strokeRenderer';
+import { VideoDrawingOverlay } from './VideoDrawingOverlay';
+import { DrawingToolbar } from './DrawingToolbar';
 import { ConfirmDialog } from './ConfirmDialog';
 import { THEME } from '../../constants/colors';
 
@@ -23,6 +26,9 @@ export function ClipViewer() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const clip = state.sessionClips.find(c => c.id === state.selectedClipId) ?? null;
+  const annotationCanvasRef = useRef<HTMLCanvasElement>(null);
+  const annotationRafRef = useRef<number>(0);
+  const [clipVideoTime, setClipVideoTime] = useState(0);
 
   const saveLabel = useCallback(() => {
     if (!clip) return;
@@ -33,6 +39,17 @@ export function ClipViewer() {
     }
     setEditingLabel(false);
   }, [clip, labelValue, dispatch]);
+
+  // Clear freehand annotations drawn on clip when opening/closing to isolate from main view
+  useEffect(() => {
+    // Clear any main-view freehand strokes when clip viewer opens
+    dispatch({ type: 'CLEAR_FREEHAND_ANNOTATIONS' });
+    return () => {
+      // Clear clip-drawn strokes when closing so they don't leak to the main view
+      dispatch({ type: 'CLEAR_FREEHAND_ANNOTATIONS' });
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dispatch]);
 
   // Close viewer
   const close = useCallback(() => {
@@ -60,28 +77,92 @@ export function ClipViewer() {
       if (e.key === 'Escape') { close(); e.preventDefault(); }
       if (e.key === 'ArrowLeft') { navigate(-1); e.preventDefault(); }
       if (e.key === 'ArrowRight') { navigate(1); e.preventDefault(); }
+      if (e.key === ' ' && clip.type === 'video' && videoRef.current) {
+        e.preventDefault();
+        if (videoRef.current.paused) videoRef.current.play().catch(() => {});
+        else videoRef.current.pause();
+      }
     };
     window.addEventListener('keydown', handleKey);
     return () => window.removeEventListener('keydown', handleKey);
   }, [clip, close, navigate]);
 
+  // Fix WebM duration bug — MediaRecorder WebM blobs often report Infinity or
+  // incorrect duration. We fix this by pre-seeking in a hidden video element
+  // before the visible one loads, so the user never sees a glitch.
+  const [fixedBlobUrl, setFixedBlobUrl] = useState<string | null>(null);
+  const fixedClipIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!clip || clip.type !== 'video' || !clip.blob) return;
+    if (fixedClipIdRef.current === clip.id) return;
+
+    let cancelled = false;
+    const url = URL.createObjectURL(clip.blob);
+
+    // Use a hidden video element to force Chrome to discover the real duration
+    const probe = document.createElement('video');
+    probe.preload = 'metadata';
+    probe.muted = true;
+    probe.src = url;
+
+    const onMeta = () => {
+      if (cancelled) { URL.revokeObjectURL(url); return; }
+      if (!isFinite(probe.duration) || isNaN(probe.duration)) {
+        probe.currentTime = Number.MAX_SAFE_INTEGER;
+        probe.addEventListener('seeked', () => {
+          if (cancelled) { URL.revokeObjectURL(url); return; }
+          probe.currentTime = 0;
+          fixedClipIdRef.current = clip.id;
+          setFixedBlobUrl(url);
+          probe.src = '';
+        }, { once: true });
+      } else {
+        fixedClipIdRef.current = clip.id;
+        setFixedBlobUrl(url);
+        probe.src = '';
+      }
+    };
+
+    probe.addEventListener('loadedmetadata', onMeta, { once: true });
+
+    return () => {
+      cancelled = true;
+      probe.removeEventListener('loadedmetadata', onMeta);
+      probe.src = '';
+      // Revoke previous URL when switching clips or unmounting
+      if (fixedBlobUrl) URL.revokeObjectURL(fixedBlobUrl);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clip?.id, clip?.type, clip?.blob]);
+
   // Load media URL: from local blob or from Supabase signed URL
   useEffect(() => {
     if (!clip) return;
 
-    // Local blob available — use it directly
+    // Local blob available
     if (clip.blob) {
-      const url = URL.createObjectURL(clip.blob);
-      blobUrlRef.current = url;
-      setSignedUrl(null);
-      if (clip.type === 'video' && videoRef.current) {
-        videoRef.current.src = url;
-        videoRef.current.play().catch(() => {});
+      if (clip.type === 'video') {
+        // For video blobs, wait for the duration-fixed URL
+        if (!fixedBlobUrl) return;
+        blobUrlRef.current = fixedBlobUrl;
+        setSignedUrl(null);
+        if (videoRef.current) {
+          videoRef.current.src = fixedBlobUrl;
+          videoRef.current.play().catch(() => {});
+        }
+        // Don't revoke fixedBlobUrl here — it's managed by the fix effect
+        return () => { blobUrlRef.current = null; };
+      } else {
+        // Screenshots — use directly
+        const url = URL.createObjectURL(clip.blob);
+        blobUrlRef.current = url;
+        setSignedUrl(null);
+        return () => {
+          URL.revokeObjectURL(url);
+          blobUrlRef.current = null;
+        };
       }
-      return () => {
-        URL.revokeObjectURL(url);
-        blobUrlRef.current = null;
-      };
     }
 
     // Persisted clip — fetch signed URL from Supabase Storage
@@ -105,7 +186,103 @@ export function ClipViewer() {
       });
       return () => { cancelled = true; };
     }
-  }, [clip?.id, clip?.type, clip?.blob, clip?.storagePath]);
+  }, [clip?.id, clip?.type, clip?.blob, clip?.storagePath, fixedBlobUrl]);
+
+  // Render freehand annotations on the clip overlay canvas
+  const freehandAnnotations = clip?.annotations?.filter(a => a.type === 'freehand') ?? [];
+  const hasFreehand = freehandAnnotations.length > 0;
+
+  useEffect(() => {
+    if (!clip || !hasFreehand) return;
+    const canvas = annotationCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const syncSize = () => {
+      const parent = canvas.parentElement;
+      if (!parent) return;
+      const dpr = window.devicePixelRatio || 1;
+      const w = parent.clientWidth;
+      const h = parent.clientHeight;
+      if (canvas.width !== w * dpr || canvas.height !== h * dpr) {
+        canvas.width = w * dpr;
+        canvas.height = h * dpr;
+        canvas.style.width = `${w}px`;
+        canvas.style.height = `${h}px`;
+      }
+    };
+
+    if (clip.type === 'screenshot') {
+      // Render once for screenshots
+      syncSize();
+      const dpr = window.devicePixelRatio || 1;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.save();
+      ctx.scale(dpr, dpr);
+      const rw = canvas.width / dpr;
+      const rh = canvas.height / dpr;
+      const dotCounters: Record<string, number> = {};
+      for (const ann of freehandAnnotations) {
+        if (!ann.points || ann.points.length === 0) continue;
+        if (isDotAnnotation(ann.points)) {
+          dotCounters[ann.color] = (dotCounters[ann.color] || 0) + 1;
+          renderMarkerToCanvas(ctx, ann.points[0], ann.color, dotCounters[ann.color], PEN_BASE_OPACITY, rw, rh);
+        } else if (ann.points.length >= 2) {
+          renderStrokeToCanvas(ctx, ann.points, ann.color, ann.lineWidth, PEN_BASE_OPACITY, rw, rh);
+        }
+      }
+      ctx.restore();
+      return;
+    }
+
+    // Video clip: rAF loop with time-based fading
+    let running = true;
+    const render = () => {
+      if (!running) return;
+      syncSize();
+      const dpr = window.devicePixelRatio || 1;
+      const rw = canvas.width / dpr;
+      const rh = canvas.height / dpr;
+      const currentTime = videoRef.current?.currentTime ?? 0;
+
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.save();
+      ctx.scale(dpr, dpr);
+
+      const dotCtrs: Record<string, number> = {};
+      for (const ann of freehandAnnotations) {
+        if (!ann.points || ann.points.length === 0) continue;
+        const opacity = computeClipStrokeOpacity(ann, currentTime);
+        if (opacity <= 0.01) continue;
+        if (isDotAnnotation(ann.points)) {
+          dotCtrs[ann.color] = (dotCtrs[ann.color] || 0) + 1;
+          renderMarkerToCanvas(ctx, ann.points[0], ann.color, dotCtrs[ann.color], opacity, rw, rh);
+        } else if (ann.points.length >= 2) {
+          renderStrokeToCanvas(ctx, ann.points, ann.color, ann.lineWidth, opacity, rw, rh);
+        }
+      }
+
+      ctx.restore();
+      annotationRafRef.current = requestAnimationFrame(render);
+    };
+    annotationRafRef.current = requestAnimationFrame(render);
+
+    return () => {
+      running = false;
+      cancelAnimationFrame(annotationRafRef.current);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clip?.id, hasFreehand, clip?.type]);
+
+  // Track video currentTime for the drawing overlay
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video || clip?.type !== 'video') return;
+    const onTime = () => setClipVideoTime(video.currentTime);
+    video.addEventListener('timeupdate', onTime);
+    return () => video.removeEventListener('timeupdate', onTime);
+  }, [clip?.id, clip?.type]);
 
   if (!clip) return null;
 
@@ -307,31 +484,57 @@ export function ClipViewer() {
           <div style={{ color: '#ef4444', fontSize: 14, textAlign: 'center', padding: 24 }}>{mediaError}</div>
         ) : loadingMedia ? (
           <div style={{ color: THEME.textMuted, fontSize: 14 }}>Loading media...</div>
-        ) : clip.type === 'video' ? (
-          <video
-            ref={videoRef}
-            src={blobUrlRef.current || signedUrl || undefined}
-            controls
-            autoPlay
-            style={{
-              maxWidth: '90vw',
-              maxHeight: '80vh',
-              borderRadius: 4,
-              background: '#000',
-            }}
-          />
         ) : (
-          <img
-            src={imgUrl}
-            alt={clip.label || 'Screenshot'}
-            style={{
-              maxWidth: '90vw',
-              maxHeight: '80vh',
-              borderRadius: 4,
-              background: '#000',
-              objectFit: 'contain',
-            }}
-          />
+          <div style={{ position: 'relative', display: 'inline-block' }}>
+            {clip.type === 'video' ? (
+              <video
+                ref={videoRef}
+                src={blobUrlRef.current || signedUrl || undefined}
+                controls
+                autoPlay
+                style={{
+                  maxWidth: '90vw',
+                  maxHeight: '80vh',
+                  borderRadius: 4,
+                  background: '#000',
+                  display: 'block',
+                }}
+              />
+            ) : (
+              <img
+                src={imgUrl}
+                alt={clip.label || 'Screenshot'}
+                style={{
+                  maxWidth: '90vw',
+                  maxHeight: '80vh',
+                  borderRadius: 4,
+                  background: '#000',
+                  objectFit: 'contain',
+                  display: 'block',
+                }}
+              />
+            )}
+            {/* Saved freehand annotation replay overlay */}
+            {hasFreehand && (
+              <canvas
+                ref={annotationCanvasRef}
+                style={{
+                  position: 'absolute',
+                  inset: 0,
+                  pointerEvents: 'none',
+                  borderRadius: 4,
+                }}
+              />
+            )}
+            {/* Drawing overlay + toolbar */}
+            <VideoDrawingOverlay
+              videoElement={clip.type === 'video' ? videoRef.current : null}
+              mode="clip"
+              currentVideoTime={clipVideoTime}
+              controlsHeight={clip.type === 'video' ? 70 : 0}
+            />
+            <DrawingToolbar />
+          </div>
         )}
       </div>
 

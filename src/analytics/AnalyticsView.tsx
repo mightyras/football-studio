@@ -10,6 +10,8 @@ import { ClipViewer } from './components/ClipViewer';
 import { SessionBrowser } from './components/SessionBrowser';
 import { CapturePreview } from './components/CapturePreview';
 import { SaveToast } from './components/SaveToast';
+import { VideoDrawingOverlay } from './components/VideoDrawingOverlay';
+import { DrawingToolbar } from './components/DrawingToolbar';
 import { useScreenshotCapture } from './hooks/useScreenshotCapture';
 import { useClipRecorder } from './hooks/useClipRecorder';
 import { useAnalyticsAutoSave } from './hooks/useAnalyticsAutoSave';
@@ -116,8 +118,9 @@ function AnalyticsContent() {
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Don't capture when typing in input fields
+      // Don't capture when typing in input fields or when ClipViewer is open
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      if (state.selectedClipId) return;
 
       const video = playerRef.current?.getVideoElement();
 
@@ -164,6 +167,12 @@ function AnalyticsContent() {
             });
           }
           break;
+        case 'd':
+          dispatch({
+            type: 'SET_ACTIVE_TOOL',
+            tool: state.activeTool === 'freehand' ? 'select' : 'freehand',
+          });
+          break;
         case 'arrowleft':
           if (video) {
             e.preventDefault();
@@ -181,7 +190,16 @@ function AnalyticsContent() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [state.streamStatus, state.inPoint, state.outPoint, state.recordingStatus, dispatch, startRecording, stopRecording]);
+  }, [state.streamStatus, state.inPoint, state.outPoint, state.recordingStatus, state.activeTool, state.selectedClipId, dispatch, startRecording, stopRecording]);
+
+  // Clear freehand strokes when video resumes playing (unless hold is on)
+  const prevPlayingRef = useRef(state.isPlaying);
+  useEffect(() => {
+    if (state.isPlaying && !prevPlayingRef.current && !state.holdStrokesOnPause) {
+      dispatch({ type: 'CLEAR_FREEHAND_ANNOTATIONS' });
+    }
+    prevPlayingRef.current = state.isPlaying;
+  }, [state.isPlaying, state.holdStrokesOnPause, dispatch]);
 
   const isRecording = state.recordingStatus === 'recording';
   const clipCount = state.sessionClips.length;
@@ -245,8 +263,14 @@ function AnalyticsContent() {
             border: isRecording ? '2px solid #dc2626' : '2px solid transparent',
             borderRadius: 6,
             transition: 'border-color 0.2s',
+            position: 'relative',
           }}>
             <VideoPlayer ref={playerRef} />
+            <VideoDrawingOverlay
+              videoElement={videoElementRef.current}
+              mode="live"
+            />
+            <DrawingToolbar />
           </div>
           <VideoControls playerRef={playerRef} />
           <ClipActions
@@ -378,7 +402,7 @@ function AnalyticsContent() {
           color: THEME.textMuted,
           textAlign: 'center',
         }}>
-          Space: Play/Pause &nbsp; I: Start &nbsp; O: End &nbsp; R: Record clip &nbsp; M: Bookmark &nbsp; Arrows: Seek
+          Space: Play/Pause &nbsp; I: Start &nbsp; O: End &nbsp; R: Record clip &nbsp; M: Bookmark &nbsp; D: Draw &nbsp; Arrows: Seek
         </div>
       )}
 
