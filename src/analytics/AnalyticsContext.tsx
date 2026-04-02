@@ -102,8 +102,10 @@ function analyticsReducer(state: AnalyticsState, action: AnalyticsAction): Analy
       return { ...state, selectedAnnotationId: action.id };
     case 'UPDATE_DRAWING':
       return { ...state, drawingInProgress: action.drawing };
-    case 'ADD_SESSION_CLIP':
-      return { ...state, sessionClips: [action.clip, ...state.sessionClips] };
+    case 'ADD_SESSION_CLIP': {
+      const clips = [...state.sessionClips, action.clip].sort((a, b) => a.timestamp - b.timestamp);
+      return { ...state, sessionClips: clips };
+    }
     case 'REMOVE_SESSION_CLIP': {
       const clip = state.sessionClips.find(c => c.id === action.id);
       if (clip?.thumbnailUrl) URL.revokeObjectURL(clip.thumbnailUrl);

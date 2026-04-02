@@ -42,7 +42,6 @@ export function CapturePreview({ clip, onSave, onDiscard }: Props) {
 
   return (
     <div
-      onClick={onDiscard}
       style={{
         position: 'fixed',
         inset: 0,

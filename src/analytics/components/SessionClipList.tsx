@@ -1,9 +1,9 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { useAnalytics } from '../AnalyticsContext';
 import { formatTime, formatFileSize } from '../utils/time';
 import { downloadBlob } from '../utils/download';
 import { formatTimestamp } from '../utils/time';
-import { deleteClip, updateClipLabel } from '../services/analysisService';
+import { deleteClip, updateClipLabel, getClipDownloadUrl } from '../services/analysisService';
 import { ConfirmDialog } from './ConfirmDialog';
 import { THEME } from '../../constants/colors';
 
@@ -12,6 +12,32 @@ export function SessionClipList() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
   const [deletingClipId, setDeletingClipId] = useState<string | null>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
+
+  const updateScrollState = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    setCanScrollLeft(el.scrollLeft > 0);
+    setCanScrollRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 1);
+  }, []);
+
+  useEffect(() => {
+    updateScrollState();
+    const el = scrollRef.current;
+    if (!el) return;
+    el.addEventListener('scroll', updateScrollState, { passive: true });
+    const ro = new ResizeObserver(updateScrollState);
+    ro.observe(el);
+    return () => { el.removeEventListener('scroll', updateScrollState); ro.disconnect(); };
+  }, [updateScrollState, state.sessionClips.length]);
+
+  const scroll = useCallback((dir: 'left' | 'right') => {
+    const el = scrollRef.current;
+    if (!el) return;
+    el.scrollBy({ left: dir === 'left' ? -200 : 200, behavior: 'smooth' });
+  }, []);
 
   const startEditing = useCallback((id: string, currentLabel: string) => {
     setEditingId(id);
@@ -33,13 +59,75 @@ export function SessionClipList() {
       <style>{`.clip-thumb:hover .clip-hover-label { opacity: 1 !important; }`}</style>
     <div style={{
       padding: '4px 12px 8px',
+      position: 'relative',
     }}>
-      <div style={{
-        display: 'flex',
-        gap: 8,
-        overflowX: 'auto',
-        paddingBottom: 4,
-      }}>
+      {canScrollLeft && (
+        <button
+          onClick={() => scroll('left')}
+          style={{
+            position: 'absolute',
+            left: 4,
+            top: '50%',
+            transform: 'translateY(-50%)',
+            zIndex: 10,
+            width: 28,
+            height: 28,
+            borderRadius: '50%',
+            background: THEME.surface,
+            border: `1px solid ${THEME.borderSubtle}`,
+            color: THEME.secondary,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'pointer',
+            boxShadow: '0 2px 6px rgba(0,0,0,0.4)',
+            padding: 0,
+          }}
+          aria-label="Scroll left"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="15 18 9 12 15 6" />
+          </svg>
+        </button>
+      )}
+      {canScrollRight && (
+        <button
+          onClick={() => scroll('right')}
+          style={{
+            position: 'absolute',
+            right: 4,
+            top: '50%',
+            transform: 'translateY(-50%)',
+            zIndex: 10,
+            width: 28,
+            height: 28,
+            borderRadius: '50%',
+            background: THEME.surface,
+            border: `1px solid ${THEME.borderSubtle}`,
+            color: THEME.secondary,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'pointer',
+            boxShadow: '0 2px 6px rgba(0,0,0,0.4)',
+            padding: 0,
+          }}
+          aria-label="Scroll right"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="9 18 15 12 9 6" />
+          </svg>
+        </button>
+      )}
+      <div
+        ref={scrollRef}
+        style={{
+          display: 'flex',
+          gap: 8,
+          overflowX: 'auto',
+          paddingBottom: 4,
+        }}
+      >
         {state.sessionClips.map(clip => (
           <div
             key={clip.id}
@@ -186,19 +274,28 @@ export function SessionClipList() {
                 marginTop: 4,
               }}>
                 <span style={{ fontSize: 10, color: THEME.textMuted }}>
-                  {clip.blob ? formatFileSize(clip.blob.size) : ''}
+                  {formatTime(clip.timestamp)}
+                  {clip.blob ? ` · ${formatFileSize(clip.blob.size)}` : ''}
                 </span>
                 <div style={{ display: 'flex', gap: 4 }}>
                   {/* Download */}
                   <button
-                    onClick={(e) => {
+                    onClick={async (e) => {
                       e.stopPropagation();
-                      if (!clip.blob) return;
                       const ext = clip.type === 'video' ? 'webm' : 'png';
                       const filename = clip.type === 'video'
                         ? `clip_${formatTimestamp(clip.inPoint ?? 0)}-${formatTimestamp(clip.outPoint ?? 0)}.${ext}`
                         : `screenshot_${formatTimestamp(clip.timestamp)}.${ext}`;
-                      downloadBlob(clip.blob, filename);
+                      if (clip.blob) {
+                        downloadBlob(clip.blob, filename);
+                      } else if (clip.storagePath) {
+                        const url = await getClipDownloadUrl(clip.storagePath);
+                        if (url) {
+                          const resp = await fetch(url);
+                          const blob = await resp.blob();
+                          downloadBlob(blob, filename);
+                        }
+                      }
                     }}
                     style={{
                       background: 'none',
