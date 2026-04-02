@@ -32,7 +32,6 @@ export function VideoDrawingOverlay({
   videoElement,
   mode,
   externalAnnotations,
-  currentVideoTime,
   controlsHeight = 0,
 }: Props) {
   const { state, dispatch } = useAnalytics();
