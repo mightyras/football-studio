@@ -310,6 +310,7 @@ export function ClipViewer() {
         ) : clip.type === 'video' ? (
           <video
             ref={videoRef}
+            src={blobUrlRef.current || signedUrl || undefined}
             controls
             autoPlay
             style={{
