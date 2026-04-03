@@ -15,8 +15,6 @@ export function MatchClock() {
 
   if (!clockState) return null;
 
-  const isActive = clockState.period === '1st_half' || clockState.period === '2nd_half';
-
   return (
     <div
       style={{
