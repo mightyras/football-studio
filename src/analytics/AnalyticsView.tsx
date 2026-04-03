@@ -12,13 +12,16 @@ import { CapturePreview } from './components/CapturePreview';
 import { SaveToast } from './components/SaveToast';
 import { VideoDrawingOverlay } from './components/VideoDrawingOverlay';
 import { DrawingToolbar } from './components/DrawingToolbar';
+import { BookmarkPicker } from './components/BookmarkPicker';
+import { MatchClock } from './components/MatchClock';
 import { useScreenshotCapture } from './hooks/useScreenshotCapture';
 import { useClipRecorder } from './hooks/useClipRecorder';
 import { useAnalyticsAutoSave } from './hooks/useAnalyticsAutoSave';
 import { detectUrlType } from './utils/urlDetector';
 import { supabase } from '../lib/supabase';
 import { THEME } from '../constants/colors';
-import type { SessionClip } from './types';
+import type { SessionClip, BookmarkCategory } from './types';
+import { BOOKMARK_CATEGORY_LABELS } from './types';
 
 function AnalyticsContent() {
   const playerRef = useRef<VideoPlayerHandle>(null);
@@ -28,6 +31,8 @@ function AnalyticsContent() {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const videoElementRef = useRef<HTMLVideoElement | null>(null);
+  const [showBookmarkPicker, setShowBookmarkPicker] = useState(false);
+  const bookmarkTimeRef = useRef(0);
 
   // Keep a stable ref to the video element
   useEffect(() => {
@@ -155,16 +160,9 @@ function AnalyticsContent() {
           }
           break;
         case 'm':
-          if (video && state.streamStatus === 'playing') {
-            dispatch({
-              type: 'ADD_BOOKMARK',
-              bookmark: {
-                id: crypto.randomUUID(),
-                time: video.currentTime,
-                comment: '',
-                createdAt: Date.now(),
-              },
-            });
+          if (video && state.streamStatus === 'playing' && !showBookmarkPicker) {
+            bookmarkTimeRef.current = video.currentTime;
+            setShowBookmarkPicker(true);
           }
           break;
         case 'd':
@@ -190,7 +188,7 @@ function AnalyticsContent() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [state.streamStatus, state.inPoint, state.outPoint, state.recordingStatus, state.activeTool, state.selectedClipId, dispatch, startRecording, stopRecording]);
+  }, [state.streamStatus, state.inPoint, state.outPoint, state.recordingStatus, state.activeTool, state.selectedClipId, showBookmarkPicker, dispatch, startRecording, stopRecording]);
 
   // Clear freehand strokes when video resumes playing (unless hold is on)
   const prevPlayingRef = useRef(state.isPlaying);
@@ -220,6 +218,36 @@ function AnalyticsContent() {
       video.currentTime = time;
     }
   }, []);
+
+  const handleBookmarkSelect = useCallback((selection: BookmarkCategory | 'custom') => {
+    setShowBookmarkPicker(false);
+    const time = bookmarkTimeRef.current;
+
+    if (selection === 'custom') {
+      dispatch({
+        type: 'ADD_BOOKMARK',
+        bookmark: { id: crypto.randomUUID(), time, comment: '', createdAt: Date.now() },
+      });
+      return;
+    }
+
+    // Remove existing bookmark with same category
+    const existing = state.bookmarks.find(b => b.category === selection);
+    if (existing) {
+      dispatch({ type: 'REMOVE_BOOKMARK', id: existing.id });
+    }
+
+    dispatch({
+      type: 'ADD_BOOKMARK',
+      bookmark: {
+        id: crypto.randomUUID(),
+        time,
+        comment: BOOKMARK_CATEGORY_LABELS[selection].full,
+        createdAt: Date.now(),
+        category: selection,
+      },
+    });
+  }, [state.bookmarks, dispatch]);
 
   return (
     <div style={{
@@ -270,7 +298,15 @@ function AnalyticsContent() {
               videoElement={videoElementRef.current}
               mode="live"
             />
+            <MatchClock />
             <DrawingToolbar />
+            {showBookmarkPicker && (
+              <BookmarkPicker
+                existingBookmarks={state.bookmarks}
+                onSelect={handleBookmarkSelect}
+                onDismiss={() => setShowBookmarkPicker(false)}
+              />
+            )}
           </div>
           <VideoControls playerRef={playerRef} />
           <ClipActions
@@ -402,7 +438,7 @@ function AnalyticsContent() {
           color: THEME.textMuted,
           textAlign: 'center',
         }}>
-          Space: Play/Pause &nbsp; I: Start &nbsp; O: End &nbsp; R: Record clip &nbsp; M: Bookmark &nbsp; D: Draw &nbsp; Arrows: Seek
+          Space: Play/Pause &nbsp; I: Start &nbsp; O: End &nbsp; R: Record clip &nbsp; M: Mark event &nbsp; D: Draw &nbsp; Arrows: Seek
         </div>
       )}
 

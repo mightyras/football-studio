@@ -2,6 +2,15 @@ import { useState, useCallback } from 'react';
 import { useAnalytics } from '../AnalyticsContext';
 import { formatTime } from '../utils/time';
 import { THEME } from '../../constants/colors';
+import { BOOKMARK_CATEGORY_LABELS } from '../types';
+import type { BookmarkCategory } from '../types';
+
+const CATEGORY_COLORS: Record<BookmarkCategory, string> = {
+  kickoff: '#22c55e',
+  halftime: '#f59e0b',
+  start_2nd_half: '#3b82f6',
+  end: '#ef4444',
+};
 
 type Props = {
   onSeek: (time: number) => void;
@@ -93,6 +102,22 @@ export function BookmarkList({ onSeek, onClose }: Props) {
               fontSize: 11,
             }}
           >
+            {/* Category badge */}
+            {bookmark.category && (
+              <span style={{
+                flexShrink: 0,
+                background: `${CATEGORY_COLORS[bookmark.category]}20`,
+                color: CATEGORY_COLORS[bookmark.category],
+                borderRadius: 3,
+                padding: '1px 5px',
+                fontSize: 9,
+                fontWeight: 700,
+                letterSpacing: '0.3px',
+              }}>
+                {BOOKMARK_CATEGORY_LABELS[bookmark.category].short}
+              </span>
+            )}
+
             {/* Timestamp pill */}
             <button
               onClick={() => onSeek(bookmark.time)}
@@ -105,7 +130,7 @@ export function BookmarkList({ onSeek, onClose }: Props) {
                 fontSize: 10,
                 fontFamily: 'monospace',
                 fontWeight: 600,
-                color: THEME.highlight,
+                color: bookmark.category ? CATEGORY_COLORS[bookmark.category] : THEME.highlight,
                 cursor: 'pointer',
                 minWidth: 44,
                 textAlign: 'center',

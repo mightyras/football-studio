@@ -2,7 +2,17 @@ import { useCallback } from 'react';
 import { useAnalytics } from '../AnalyticsContext';
 import { formatTime } from '../utils/time';
 import { THEME } from '../../constants/colors';
+import { BOOKMARK_CATEGORY_LABELS } from '../types';
+import type { BookmarkCategory } from '../types';
+import { getStandardBookmarks, hasAllStandardBookmarks } from '../utils/matchClock';
 import type { VideoPlayerHandle } from './VideoPlayer';
+
+const CATEGORY_COLORS: Record<BookmarkCategory, string> = {
+  kickoff: '#22c55e',
+  halftime: '#f59e0b',
+  start_2nd_half: '#3b82f6',
+  end: '#ef4444',
+};
 
 const SPEED_OPTIONS = [0.25, 0.5, 1, 1.5, 2];
 
@@ -122,9 +132,77 @@ export function VideoControls({ playerRef }: Props) {
             zIndex: 2,
           }} />
         )}
-        {/* Bookmark dots */}
+        {/* Period shading when all standard bookmarks are set */}
+        {state.duration > 0 && hasAllStandardBookmarks(state.bookmarks) && (() => {
+          const std = getStandardBookmarks(state.bookmarks);
+          const koPct = (std.kickoff!.time / state.duration) * 100;
+          const htPct = (std.halftime!.time / state.duration) * 100;
+          const s2hPct = (std.start2ndHalf!.time / state.duration) * 100;
+          const endPct = (std.end!.time / state.duration) * 100;
+          return (
+            <>
+              <div style={{
+                position: 'absolute', left: `${koPct}%`, width: `${htPct - koPct}%`,
+                height: 4, top: 8, background: 'rgba(34, 197, 94, 0.12)', borderRadius: 2,
+                pointerEvents: 'none', zIndex: 1,
+              }} />
+              <div style={{
+                position: 'absolute', left: `${s2hPct}%`, width: `${endPct - s2hPct}%`,
+                height: 4, top: 8, background: 'rgba(59, 130, 246, 0.12)', borderRadius: 2,
+                pointerEvents: 'none', zIndex: 1,
+              }} />
+            </>
+          );
+        })()}
+        {/* Bookmark markers */}
         {state.duration > 0 && state.bookmarks.map(bookmark => {
           const pct = (bookmark.time / state.duration) * 100;
+
+          // Standard bookmark: vertical line with label
+          if (bookmark.category) {
+            const color = CATEGORY_COLORS[bookmark.category];
+            const label = BOOKMARK_CATEGORY_LABELS[bookmark.category].short;
+            return (
+              <div
+                key={bookmark.id}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const video = playerRef.current?.getVideoElement();
+                  if (video) video.currentTime = bookmark.time;
+                }}
+                title={bookmark.comment || formatTime(bookmark.time)}
+                style={{
+                  position: 'absolute',
+                  left: `calc(${pct}% - 1px)`,
+                  top: 0,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  cursor: 'pointer',
+                  zIndex: 3,
+                }}
+              >
+                <span style={{
+                  fontSize: 7,
+                  fontWeight: 700,
+                  color,
+                  lineHeight: 1,
+                  marginBottom: 1,
+                  letterSpacing: '0.3px',
+                }}>
+                  {label}
+                </span>
+                <div style={{
+                  width: 2,
+                  height: 12,
+                  background: color,
+                  borderRadius: 1,
+                }} />
+              </div>
+            );
+          }
+
+          // Custom bookmark: circular dot (existing style)
           return (
             <div
               key={bookmark.id}

@@ -134,9 +134,21 @@ export type UrlMetadata = {
   rawSlug: string | null;
 };
 
+export type BookmarkCategory = 'kickoff' | 'halftime' | 'start_2nd_half' | 'end';
+
+export const BOOKMARK_CATEGORY_LABELS: Record<BookmarkCategory, { short: string; full: string }> = {
+  kickoff:        { short: 'KO',  full: 'Kickoff' },
+  halftime:       { short: 'HT',  full: 'Halftime' },
+  start_2nd_half: { short: '2H',  full: 'Start 2nd Half' },
+  end:            { short: 'FT',  full: 'Full Time' },
+};
+
+export const BOOKMARK_CATEGORY_ORDER: BookmarkCategory[] = ['kickoff', 'halftime', 'start_2nd_half', 'end'];
+
 export type Bookmark = {
   id: string;
   time: number;
   comment: string;
   createdAt: number;
+  category?: BookmarkCategory;
 };
