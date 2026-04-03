@@ -26,11 +26,12 @@ export function MatchClock() {
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
-        background: 'linear-gradient(180deg, #1a1a1a 0%, #0d0d0d 100%)',
-        border: '1px solid rgba(255, 255, 255, 0.1)',
+        background: 'rgba(0, 0, 0, 0.45)',
+        backdropFilter: 'blur(8px)',
+        WebkitBackdropFilter: 'blur(8px)',
+        border: '1px solid rgba(255, 255, 255, 0.06)',
         borderRadius: 8,
         padding: '8px 18px 6px',
-        boxShadow: '0 2px 16px rgba(0, 0, 0, 0.7), inset 0 1px 0 rgba(255, 255, 255, 0.06)',
         minWidth: 110,
       }}
     >

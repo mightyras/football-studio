@@ -1,6 +1,6 @@
 export type VideoAnnotation = {
   id: string;
-  type: 'freehand' | 'arrow' | 'circle' | 'rect' | 'text';
+  type: 'freehand' | 'arrow' | 'circle' | 'rect' | 'text' | 'spotlight';
   color: string;
   lineWidth: number;
   // Freehand: array of normalized 0-1 points
@@ -15,6 +15,8 @@ export type VideoAnnotation = {
   text?: string;
   position?: { x: number; y: number };
   fontSize?: number;
+  // Spotlight style (for type: 'spotlight')
+  spotlightStyle?: 'circle' | 'arrow';
   // Timing — used for clip replay fade-in/out
   timeIn?: number;
   timeOut?: number;
@@ -114,6 +116,7 @@ export type AnalyticsAction =
   | { type: 'STAMP_FREEHAND_FADE_START'; time: number; videoTime?: number }
   | { type: 'UNSTAMP_FREEHAND_FADE' }
   | { type: 'SET_HOLD_STROKES_ON_PAUSE'; hold: boolean }
+  | { type: 'UPDATE_STREAM_URL'; url: string }
   | { type: 'RESET' };
 
 export type UrlType = 'hls' | 'mp4' | 'known-platform' | 'unknown';

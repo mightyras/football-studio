@@ -87,7 +87,7 @@ export function BookmarkPicker({ existingBookmarks, onSelect, onDismiss }: Props
           textTransform: 'uppercase',
           letterSpacing: '0.5px',
         }}>
-          Set bookmark
+          Set event
         </div>
 
         {options.map(opt => {

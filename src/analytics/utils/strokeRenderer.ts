@@ -125,8 +125,136 @@ export function renderStrokeToCanvas(
   ctx.restore();
 }
 
+// ── Spotlight rendering ──
+
+/**
+ * Render a glowing ring spotlight — option 2.
+ * A concentric-ring "target" indicator centered on the tap position.
+ */
+export function renderSpotlightCircleToCanvas(
+  ctx: CanvasRenderingContext2D,
+  point: { x: number; y: number },
+  color: string,
+  opacity: number,
+  canvasW: number,
+  canvasH: number,
+): void {
+  if (opacity <= 0.01) return;
+
+  const cx = point.x * canvasW;
+  const cy = point.y * canvasH;
+  const radius = Math.min(canvasW, canvasH) * 0.028;
+  const ringWidth = 2.5;
+
+  ctx.save();
+
+  // Outer glow
+  ctx.shadowColor = hexToRgba(color, opacity * 0.5);
+  ctx.shadowBlur = 20;
+
+  // Main ring
+  ctx.beginPath();
+  ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+  ctx.strokeStyle = hexToRgba(color, opacity * 0.9);
+  ctx.lineWidth = ringWidth;
+  ctx.stroke();
+
+  // Inner subtle ring
+  ctx.shadowBlur = 0;
+  ctx.beginPath();
+  ctx.arc(cx, cy, radius * 0.55, 0, Math.PI * 2);
+  ctx.strokeStyle = hexToRgba(color, opacity * 0.3);
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  // Center dot
+  ctx.beginPath();
+  ctx.arc(cx, cy, 2.5, 0, Math.PI * 2);
+  ctx.fillStyle = hexToRgba(color, opacity * 0.8);
+  ctx.fill();
+
+  ctx.restore();
+}
+
+/**
+ * Render an elegant downward-pointing arrow marker — option 3.
+ * Broadcast-style chevron with thin stem and small dot at the target position.
+ * Gently bobs up and down using a sine wave driven by `now` (performance.now()).
+ */
+export function renderSpotlightArrowToCanvas(
+  ctx: CanvasRenderingContext2D,
+  point: { x: number; y: number },
+  color: string,
+  opacity: number,
+  canvasW: number,
+  canvasH: number,
+  now: number = 0,
+): void {
+  if (opacity <= 0.01) return;
+
+  const cx = point.x * canvasW;
+  const cy = point.y * canvasH;
+
+  // Gentle bobbing — 3px amplitude, ~1.2s cycle
+  const bobOffset = Math.sin(now / 1000 * Math.PI * 2 / 1.2) * 3;
+
+  // Dimensions
+  const chevronHeight = 22;
+  const chevronHalfWidth = 10;
+  const stemLength = 5;
+  const dotRadius = 3;
+  const lineWidth = 3.5;
+
+  // Dot stays fixed at target; chevron + stem bob above it
+  const chevronTipY = cy - stemLength - dotRadius + bobOffset;
+  const chevronTopY = chevronTipY - chevronHeight;
+
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+
+  // Glow
+  ctx.shadowColor = hexToRgba(color, opacity * 0.5);
+  ctx.shadowBlur = 14;
+
+  // Semi-transparent chevron fill (subtle)
+  ctx.beginPath();
+  ctx.moveTo(cx - chevronHalfWidth, chevronTopY);
+  ctx.lineTo(cx, chevronTipY);
+  ctx.lineTo(cx + chevronHalfWidth, chevronTopY);
+  ctx.closePath();
+  ctx.fillStyle = hexToRgba(color, opacity * 0.12);
+  ctx.fill();
+
+  // Chevron outline
+  ctx.beginPath();
+  ctx.moveTo(cx - chevronHalfWidth, chevronTopY);
+  ctx.lineTo(cx, chevronTipY);
+  ctx.lineTo(cx + chevronHalfWidth, chevronTopY);
+  ctx.strokeStyle = hexToRgba(color, opacity);
+  ctx.lineWidth = lineWidth;
+  ctx.stroke();
+
+  // Stem from chevron tip to dot (bobs with chevron)
+  ctx.shadowBlur = 8;
+  ctx.beginPath();
+  ctx.moveTo(cx, chevronTipY);
+  ctx.lineTo(cx, cy - dotRadius);
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  // Dot at target (stays fixed)
+  ctx.shadowBlur = 10;
+  ctx.beginPath();
+  ctx.arc(cx, cy, dotRadius, 0, Math.PI * 2);
+  ctx.fillStyle = hexToRgba(color, opacity);
+  ctx.fill();
+
+  ctx.restore();
+}
+
 /** Minimum bounding box (in normalized 0-1 coords) to distinguish a dot from a stroke */
-const DOT_THRESHOLD = 0.015;
+const DOT_THRESHOLD = 0.003;
 
 /**
  * Returns true if the points represent a "dot" (click with no meaningful drag).

@@ -3,8 +3,8 @@ import { AnalyticsProvider, useAnalytics } from './AnalyticsContext';
 import { StreamUrlBar } from './components/StreamUrlBar';
 import { VideoPlayer, type VideoPlayerHandle } from './components/VideoPlayer';
 import { VideoControls } from './components/VideoControls';
-import { ClipActions } from './components/ClipActions';
 import { SessionClipList } from './components/SessionClipList';
+import { VideoOverlayHeader } from './components/VideoOverlayHeader';
 import { BookmarkList } from './components/BookmarkList';
 import { ClipViewer } from './components/ClipViewer';
 import { SessionBrowser } from './components/SessionBrowser';
@@ -14,6 +14,7 @@ import { VideoDrawingOverlay } from './components/VideoDrawingOverlay';
 import { DrawingToolbar } from './components/DrawingToolbar';
 import { BookmarkPicker } from './components/BookmarkPicker';
 import { MatchClock } from './components/MatchClock';
+import { VideoOverlayControls } from './components/VideoOverlayControls';
 import { useScreenshotCapture } from './hooks/useScreenshotCapture';
 import { useClipRecorder } from './hooks/useClipRecorder';
 import { useAnalyticsAutoSave } from './hooks/useAnalyticsAutoSave';
@@ -272,7 +273,7 @@ function AnalyticsContent() {
           flex: 1,
           display: 'flex',
           flexDirection: 'column',
-          padding: '0 8px',
+          padding: '0 4px',
           overflow: 'hidden',
           minHeight: 0,
           minWidth: 0,
@@ -299,7 +300,14 @@ function AnalyticsContent() {
               mode="live"
             />
             <MatchClock />
+            <VideoOverlayHeader />
             <DrawingToolbar />
+            <VideoOverlayControls
+              playerRef={playerRef}
+              clipCount={clipCount}
+              clipsOpen={clipTrayOpen}
+              onToggleClips={() => setClipTrayOpen(prev => !prev)}
+            />
             {showBookmarkPicker && (
               <BookmarkPicker
                 existingBookmarks={state.bookmarks}
@@ -308,15 +316,11 @@ function AnalyticsContent() {
               />
             )}
           </div>
-          <VideoControls playerRef={playerRef} />
-          <ClipActions
+          <VideoControls
             playerRef={playerRef}
             onScreenshot={captureScreenshot}
             onStartRecording={startRecording}
             onStopRecording={stopRecording}
-            clipCount={clipCount}
-            clipsOpen={clipTrayOpen}
-            onToggleClips={() => setClipTrayOpen(prev => !prev)}
           />
 
           {/* Clips overlay — positioned at bottom of video area */}
@@ -417,7 +421,7 @@ function AnalyticsContent() {
                 fontFamily: 'inherit',
                 letterSpacing: '0.5px',
               }}
-              title="Open bookmarks panel"
+              title="Open events panel"
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="1.5" style={{ transform: 'rotate(0deg)' }}>
                 <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
@@ -427,20 +431,6 @@ function AnalyticsContent() {
           )
         )}
       </div>
-
-      {/* Bottom bar: keyboard shortcuts */}
-      {state.streamStatus === 'playing' && (
-        <div style={{
-          background: THEME.surface,
-          borderTop: `1px solid ${THEME.borderSubtle}`,
-          padding: '4px 12px',
-          fontSize: 10,
-          color: THEME.textMuted,
-          textAlign: 'center',
-        }}>
-          Space: Play/Pause &nbsp; I: Start &nbsp; O: End &nbsp; R: Record clip &nbsp; M: Mark event &nbsp; D: Draw &nbsp; Arrows: Seek
-        </div>
-      )}
 
       {/* Clip viewer overlay */}
       {state.selectedClipId && <ClipViewer />}
@@ -461,6 +451,7 @@ function AnalyticsContent() {
           onDone={() => setToastMessage(null)}
         />
       )}
+
     </div>
   );
 }

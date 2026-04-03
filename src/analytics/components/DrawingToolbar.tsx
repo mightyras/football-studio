@@ -28,18 +28,20 @@ export function DrawingToolbar() {
     <div
       style={{
         position: 'absolute',
-        top: 8,
-        right: 8,
+        top: 10,
+        right: 10,
         zIndex: 6,
         display: 'flex',
+        flexDirection: 'column',
         alignItems: 'center',
         gap: 6,
-        background: 'rgba(0, 0, 0, 0.7)',
+        background: isPenActive ? 'rgba(0, 0, 0, 0.9)' : 'rgba(0, 0, 0, 0.85)',
         backdropFilter: 'blur(8px)',
         WebkitBackdropFilter: 'blur(8px)',
-        borderRadius: 20,
-        padding: isPenActive ? '5px 10px' : '5px 8px',
-        transition: 'padding 0.15s, background 0.15s',
+        border: '1px solid rgba(255, 255, 255, 0.12)',
+        borderRadius: isPenActive ? 16 : 20,
+        padding: isPenActive ? '8px' : '5px 8px',
+        transition: 'padding 0.15s, background 0.15s, border-radius 0.15s',
         userSelect: 'none',
       }}
     >
@@ -62,25 +64,22 @@ export function DrawingToolbar() {
           transition: 'background 0.15s, color 0.15s',
         }}
       >
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M12 19l7-7 3 3-7 7-3-3z" />
-          <path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z" />
-          <path d="M2 2l7.586 7.586" />
-          <circle cx="11" cy="11" r="2" />
+        <svg width="18" height="18" viewBox="0 -960 960 960" fill="currentColor">
+          <path d="M160-120v-170l527-526q12-12 27-18t30-6q16 0 30.5 6t25.5 18l56 56q12 11 18 25.5t6 30.5q0 15-6 30t-18 27L330-120H160Zm80-80h56l393-392-28-29-29-28-392 393v56Zm560-503-57-57 57 57Zm-139 82-29-28 57 57-28-29ZM560-120q74 0 137-37t63-103q0-36-19-62t-51-45l-59 59q23 10 36 22t13 26q0 23-36.5 41.5T560-200q-17 0-28.5 11.5T520-160q0 17 11.5 28.5T560-120ZM183-426l60-60q-20-8-31.5-16.5T200-520q0-12 18-24t76-37q88-38 117-69t29-70q0-55-44-87.5T280-840q-45 0-80.5 16T145-785q-11 13-9 29t15 26q13 11 29 9t27-13q14-14 31-20t42-6q41 0 60.5 12t19.5 28q0 14-17.5 25.5T262-654q-80 35-111 63.5T120-520q0 32 17 54.5t46 39.5Z" />
         </svg>
       </button>
 
-      {/* Expanded controls — only when pen is active */}
+      {/* Expanded controls — vertical stack when pen is active */}
       {isPenActive && (
         <>
           {/* Separator */}
           <div style={{
-            width: 1,
-            height: 18,
+            height: 1,
+            width: 18,
             background: 'rgba(255,255,255,0.15)',
           }} />
 
-          {/* Color dots */}
+          {/* Color dots — vertical */}
           {PEN_COLORS.map(color => {
             const isSelected = state.activeColor === color;
             return (
@@ -111,8 +110,8 @@ export function DrawingToolbar() {
           {hasFreehandStrokes && (
             <>
               <div style={{
-                width: 1,
-                height: 18,
+                height: 1,
+                width: 18,
                 background: 'rgba(255,255,255,0.15)',
               }} />
               <button
@@ -144,8 +143,8 @@ export function DrawingToolbar() {
           {isPaused && (
             <>
               <div style={{
-                width: 1,
-                height: 18,
+                height: 1,
+                width: 18,
                 background: 'rgba(255,255,255,0.15)',
               }} />
               <button
@@ -157,9 +156,10 @@ export function DrawingToolbar() {
                 style={{
                   display: 'flex',
                   alignItems: 'center',
-                  gap: 4,
-                  padding: '3px 8px',
-                  borderRadius: 12,
+                  justifyContent: 'center',
+                  width: 24,
+                  height: 24,
+                  borderRadius: '50%',
                   background: state.holdStrokesOnPause
                     ? 'rgba(245, 158, 11, 0.25)'
                     : 'rgba(255,255,255,0.1)',
@@ -167,23 +167,19 @@ export function DrawingToolbar() {
                   color: state.holdStrokesOnPause
                     ? '#f59e0b'
                     : 'rgba(255,255,255,0.5)',
-                  fontSize: 10,
-                  fontWeight: 600,
-                  fontFamily: 'inherit',
                   cursor: 'pointer',
+                  padding: 0,
                   transition: 'background 0.15s, color 0.15s',
                 }}
               >
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                   {state.holdStrokesOnPause ? (
-                    // Pin/lock icon
                     <>
                       <rect x="6" y="11" width="12" height="11" rx="2" />
                       <path d="M12 17v-2" />
                       <path d="M8 11V7a4 4 0 0 1 8 0v4" />
                     </>
                   ) : (
-                    // Unlock icon
                     <>
                       <rect x="6" y="11" width="12" height="11" rx="2" />
                       <path d="M12 17v-2" />
@@ -191,7 +187,6 @@ export function DrawingToolbar() {
                     </>
                   )}
                 </svg>
-                Hold
               </button>
             </>
           )}

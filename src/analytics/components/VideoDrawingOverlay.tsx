@@ -3,6 +3,8 @@ import { useAnalytics } from '../AnalyticsContext';
 import {
   renderStrokeToCanvas,
   renderMarkerToCanvas,
+  renderSpotlightCircleToCanvas,
+  renderSpotlightArrowToCanvas,
   computeLiveStrokeOpacity,
   isDotAnnotation,
   PEN_BASE_OPACITY,
@@ -28,6 +30,11 @@ const POINT_DECIMATION_PX = 2;
 /** How long to wait after the last stroke before starting the fade (ms) */
 const FADE_IDLE_MS = 2000;
 
+/** Long-press threshold for creating a spotlight annotation (ms) */
+const LONG_PRESS_MS = 400;
+/** Max screen-pixel movement allowed during a long press */
+const LONG_PRESS_MOVE_PX = 8;
+
 export function VideoDrawingOverlay({
   videoElement,
   mode,
@@ -45,6 +52,12 @@ export function VideoDrawingOverlay({
   const pendingRemoveRef = useRef(false);
   const holdRef = useRef(state.holdStrokesOnPause);
   const isPlayingRef = useRef(state.isPlaying);
+
+  // Long-press detection for spotlight annotations
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const longPressTriggeredRef = useRef(false);
+  const longPressStartRef = useRef<{ sx: number; sy: number; nx: number; ny: number }>({ sx: 0, sy: 0, nx: 0, ny: 0 });
+  const spotlightStyleRef = useRef<'circle' | 'arrow'>('arrow');
 
   // Keep refs in sync with state
   drawColorRef.current = state.activeColor;
@@ -136,17 +149,61 @@ export function VideoDrawingOverlay({
 
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
     isDrawingRef.current = true;
+    longPressTriggeredRef.current = false;
 
     const rect = canvas.getBoundingClientRect();
     const x = (e.clientX - rect.left) / rect.width;
     const y = (e.clientY - rect.top) / rect.height;
     pointsRef.current = [{ x, y }];
-  }, [isPenActive]);
+
+    // Start long-press timer
+    longPressStartRef.current = { sx: e.clientX, sy: e.clientY, nx: x, ny: y };
+    if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
+    longPressTimerRef.current = setTimeout(() => {
+      if (!isDrawingRef.current) return;
+
+      longPressTriggeredRef.current = true;
+
+      const style = spotlightStyleRef.current;
+
+      const annotation: VideoAnnotation = {
+        id: crypto.randomUUID(),
+        type: 'spotlight',
+        spotlightStyle: style,
+        color: drawColorRef.current,
+        lineWidth: drawWidthRef.current,
+        points: [{ x: longPressStartRef.current.nx, y: longPressStartRef.current.ny }],
+      };
+      dispatch({ type: 'ADD_ANNOTATION', annotation });
+
+      // Restart fade timer for all strokes
+      if (!holdRef.current) {
+        if (fadeTimerRef.current) clearTimeout(fadeTimerRef.current);
+        fadeTimerRef.current = setTimeout(() => {
+          const videoTime = mode === 'clip' ? (videoElement?.currentTime ?? 0) : undefined;
+          dispatch({ type: 'STAMP_FREEHAND_FADE_START', time: performance.now(), videoTime });
+        }, FADE_IDLE_MS);
+      }
+    }, LONG_PRESS_MS);
+  }, [isPenActive, dispatch, mode, videoElement]);
 
   const handlePointerMove = useCallback((e: React.PointerEvent) => {
     if (!isDrawingRef.current) return;
     e.preventDefault();
     e.stopPropagation();
+
+    // Cancel long-press if finger moved too far
+    if (longPressTimerRef.current) {
+      const dx = e.clientX - longPressStartRef.current.sx;
+      const dy = e.clientY - longPressStartRef.current.sy;
+      if (dx * dx + dy * dy > LONG_PRESS_MOVE_PX * LONG_PRESS_MOVE_PX) {
+        clearTimeout(longPressTimerRef.current);
+        longPressTimerRef.current = undefined;
+      }
+    }
+
+    // Don't collect drawing points if long-press already triggered
+    if (longPressTriggeredRef.current) return;
 
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -159,9 +216,9 @@ export function VideoDrawingOverlay({
     const pts = pointsRef.current;
     if (pts.length > 0) {
       const last = pts[pts.length - 1];
-      const dx = (x - last.x) * rect.width;
-      const dy = (y - last.y) * rect.height;
-      if (dx * dx + dy * dy < POINT_DECIMATION_PX * POINT_DECIMATION_PX) return;
+      const pdx = (x - last.x) * rect.width;
+      const pdy = (y - last.y) * rect.height;
+      if (pdx * pdx + pdy * pdy < POINT_DECIMATION_PX * POINT_DECIMATION_PX) return;
     }
 
     pts.push({ x, y });
@@ -173,6 +230,20 @@ export function VideoDrawingOverlay({
     e.stopPropagation();
 
     isDrawingRef.current = false;
+
+    // Cancel long-press timer
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = undefined;
+    }
+
+    // If long-press already created a spotlight, skip normal stroke creation
+    if (longPressTriggeredRef.current) {
+      longPressTriggeredRef.current = false;
+      pointsRef.current = [];
+      return;
+    }
+
     const pts = pointsRef.current;
 
     if (pts.length >= 1) {
@@ -212,17 +283,17 @@ export function VideoDrawingOverlay({
 
   // ── Render loop ──
 
-  const freehandAnnotations = state.annotations.filter(a => a.type === 'freehand');
+  const drawAnnotations = state.annotations.filter(a => a.type === 'freehand' || a.type === 'spotlight');
   const allAnnotations = externalAnnotations
-    ? [...freehandAnnotations, ...externalAnnotations.filter(a => a.type === 'freehand')]
-    : freehandAnnotations;
+    ? [...drawAnnotations, ...externalAnnotations.filter(a => a.type === 'freehand' || a.type === 'spotlight')]
+    : drawAnnotations;
   const hasStrokes = allAnnotations.length > 0;
 
   // Keep a ref to annotations so the rAF loop always sees the latest
   const allAnnotationsRef = useRef(allAnnotations);
   allAnnotationsRef.current = allAnnotations;
-  const freehandAnnotationsRef = useRef(freehandAnnotations);
-  freehandAnnotationsRef.current = freehandAnnotations;
+  const drawAnnotationsRef = useRef(drawAnnotations);
+  drawAnnotationsRef.current = drawAnnotations;
 
   // Run the render loop whenever the pen is active OR there are strokes to render/fade
   const shouldRun = isPenActive || hasStrokes;
@@ -280,7 +351,13 @@ export function VideoDrawingOverlay({
           continue;
         }
 
-        if (isDotAnnotation(ann.points)) {
+        if (ann.type === 'spotlight' && ann.points.length >= 1) {
+          if (ann.spotlightStyle === 'circle') {
+            renderSpotlightCircleToCanvas(ctx, ann.points[0], ann.color, opacity, renderW, renderH);
+          } else {
+            renderSpotlightArrowToCanvas(ctx, ann.points[0], ann.color, opacity, renderW, renderH, now);
+          }
+        } else if (isDotAnnotation(ann.points)) {
           dotCounters[ann.color] = (dotCounters[ann.color] || 0) + 1;
           renderMarkerToCanvas(ctx, ann.points[0], ann.color, dotCounters[ann.color], opacity, renderW, renderH);
         } else if (ann.points.length >= 2) {
@@ -305,7 +382,7 @@ export function VideoDrawingOverlay({
 
       // Clean up fully faded annotations — dispatch once, not every frame
       if (fadedIds.length > 0 && mode === 'live' && !pendingRemoveRef.current) {
-        const stateIds = new Set(freehandAnnotationsRef.current.map(a => a.id));
+        const stateIds = new Set(drawAnnotationsRef.current.map(a => a.id));
         const toRemove = fadedIds.filter(id => stateIds.has(id));
         if (toRemove.length > 0) {
           pendingRemoveRef.current = true;
