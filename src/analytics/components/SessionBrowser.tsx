@@ -161,6 +161,11 @@ export function SessionBrowser() {
       }}>
         {sessions.map(session => {
           const isOwner = session.owner_id === user?.id;
+          const meta = session.metadata;
+          // Derive display name from team names if available, fall back to session name
+          const displayName = (meta?.homeTeam && meta?.awayTeam)
+            ? `${meta.homeTeam} - ${meta.awayTeam}`
+            : session.name;
           return (
             <div
               key={session.id}
@@ -192,8 +197,22 @@ export function SessionBrowser() {
                   whiteSpace: 'nowrap',
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
                 }}>
-                  {session.name}
+                  <span>{displayName}</span>
+                  {session.last_score && (
+                    <span style={{
+                      fontWeight: 700,
+                      fontVariantNumeric: 'tabular-nums',
+                      color: '#ffffff',
+                      fontSize: 13,
+                      flexShrink: 0,
+                    }}>
+                      {session.last_score}
+                    </span>
+                  )}
                 </div>
                 <div style={{
                   fontSize: 11,

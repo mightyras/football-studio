@@ -16,6 +16,7 @@ export type AnalysisSessionRow = {
   visibility: 'private' | 'team';
   clip_count: number;
   event_count: number;
+  last_score: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -66,6 +67,7 @@ function mapSessionRow(row: Record<string, unknown>): AnalysisSessionRow {
     visibility: (row.visibility as 'private' | 'team') ?? 'private',
     clip_count: 0, // populated separately when needed
     event_count: 0, // populated separately when needed
+    last_score: null, // populated separately when needed
     created_at: row.created_at as string,
     updated_at: row.updated_at as string,
   };
@@ -193,15 +195,16 @@ export async function fetchTeamSessions(teamId: string): Promise<AnalysisSession
   return sessions;
 }
 
-/** Populate clip_count and event_count on sessions in-place. */
+/** Populate clip_count, event_count, and last_score on sessions in-place. */
 async function populateSessionCounts(
   sb: NonNullable<typeof supabase>,
   sessions: AnalysisSessionRow[],
   sessionIds: string[],
 ) {
-  const [{ data: clipCounts }, { data: eventCounts }] = await Promise.all([
+  const [{ data: clipCounts }, { data: eventCounts }, { data: goalEvents }] = await Promise.all([
     sb.from('analysis_clips').select('session_id').is('deleted_at', null).in('session_id', sessionIds),
     sb.from('analysis_events').select('session_id').is('deleted_at', null).in('session_id', sessionIds),
+    sb.from('analysis_events').select('session_id, time, comment').is('deleted_at', null).eq('category', 'goal').in('session_id', sessionIds).order('time', { ascending: false }),
   ]);
 
   if (clipCounts) {
@@ -220,6 +223,16 @@ async function populateSessionCounts(
       map.set(sid, (map.get(sid) ?? 0) + 1);
     }
     for (const s of sessions) s.event_count = map.get(s.id) ?? 0;
+  }
+
+  // Last goal score per session (first match per session since ordered DESC by time)
+  if (goalEvents) {
+    const map = new Map<string, string>();
+    for (const row of goalEvents) {
+      const sid = row.session_id as string;
+      if (!map.has(sid)) map.set(sid, row.comment as string);
+    }
+    for (const s of sessions) s.last_score = map.get(s.id) ?? null;
   }
 }
 
