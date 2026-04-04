@@ -193,6 +193,7 @@ export function extractUrlMetadata(url: string): UrlMetadata | null {
       homeTeam: teamSlug ? teamSlugToDisplayName(teamSlug) : null,
       awayTeam: null,
       matchDate: null,
+      competition: null,
       rawSlug: teamSlug,
     };
   }
@@ -218,6 +219,7 @@ export function extractUrlMetadata(url: string): UrlMetadata | null {
       homeTeam: null,
       awayTeam: null,
       matchDate,
+      competition: null,
       rawSlug: matchId,
     };
   }
@@ -243,6 +245,7 @@ export function extractUrlMetadata(url: string): UrlMetadata | null {
           homeTeam: teamSlugToDisplayName(teams.home),
           awayTeam: teamSlugToDisplayName(teams.away),
           matchDate: null,
+          competition: null,
           rawSlug: videoSlug,
         };
       }
@@ -252,6 +255,7 @@ export function extractUrlMetadata(url: string): UrlMetadata | null {
       homeTeam: null,
       awayTeam: null,
       matchDate: null,
+      competition: null,
       rawSlug: videoSlug || null,
     };
   }
@@ -265,6 +269,7 @@ export function extractUrlMetadata(url: string): UrlMetadata | null {
       homeTeam: null,
       awayTeam: null,
       matchDate: null,
+      competition: null,
       rawSlug: gameId,
     };
   }

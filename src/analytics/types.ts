@@ -139,8 +139,20 @@ export type UrlMetadata = {
   homeTeam: string | null;
   awayTeam: string | null;
   matchDate: string | null;
+  competition: string | null;
   rawSlug: string | null;
 };
+
+export const PRESET_COMPETITIONS = [
+  'Träningsmatch',
+  'Allsvenskan',
+  'Superettan',
+  'Elitettan',
+  'Division 1',
+  'Division 2',
+  'Division 3',
+  'Division 4',
+] as const;
 
 export type BookmarkCategory = 'kickoff' | 'halftime' | 'start_2nd_half' | 'end';
 

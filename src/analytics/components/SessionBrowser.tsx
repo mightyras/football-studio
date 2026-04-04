@@ -8,6 +8,18 @@ import { useTeam } from '../../state/TeamContext';
 import { useAuth } from '../../state/AuthContext';
 import { THEME } from '../../constants/colors';
 
+function formatMatchDate(dateStr: string): string {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const date = new Date(y, m - 1, d);
+  if (isNaN(date.getTime())) return dateStr;
+  return date.toLocaleDateString(undefined, {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
+}
+
 /**
  * Shown when no stream is loaded. Lists previously saved analysis games
  * so the user can resume working on them. Shows a merged list of the
@@ -188,8 +200,27 @@ export function SessionBrowser() {
                   color: THEME.textMuted,
                   marginTop: 2,
                   display: 'flex',
+                  alignItems: 'center',
                   gap: 8,
+                  flexWrap: 'wrap',
                 }}>
+                  {session.metadata?.competition && (
+                    <span style={{
+                      background: 'rgba(245, 158, 11, 0.15)',
+                      color: 'rgba(245, 158, 11, 0.9)',
+                      borderRadius: 3,
+                      padding: '0 5px',
+                      fontSize: 11,
+                      fontWeight: 600,
+                    }}>
+                      {session.metadata.competition}
+                    </span>
+                  )}
+                  {session.metadata?.matchDate && (
+                    <span style={{ fontSize: 11, color: 'rgba(59, 130, 246, 0.8)' }}>
+                      {formatMatchDate(session.metadata.matchDate)}
+                    </span>
+                  )}
                   <span>{session.clip_count} clip{session.clip_count !== 1 ? 's' : ''}</span>
                   <span>{session.event_count} event{session.event_count !== 1 ? 's' : ''}</span>
                   <span>{new Date(session.updated_at).toLocaleDateString()}</span>
