@@ -26,7 +26,7 @@ import { render } from '../canvas/renderPipeline';
 import { computeTransform } from '../hooks/usePitchTransform';
 import { curvedRunControlPoint, loftedArcControlPoint } from '../utils/curveGeometry';
 import { findClosestGhost } from '../utils/ghostUtils';
-import { MP4FrameEncoder, supportsMP4Export, type VideoFormat } from './mp4Encoder';
+import { MP4FrameEncoder, supportsMP4Export } from './mp4Encoder';
 import type { ExportResult } from './exportController';
 
 export interface RunAnimExportOptions {
@@ -59,7 +59,7 @@ export class RunAnimExportController {
     onFrame: () => Promise<void>;
     onProgress?: (progress: number) => void;
   }): Promise<void> {
-    const { canvas, ctx, onFrame, onProgress } = opts;
+    const { ctx, onFrame, onProgress } = opts;
     const { fps, width, height } = this.options;
 
     const queueResult = this.buildFullQueue();

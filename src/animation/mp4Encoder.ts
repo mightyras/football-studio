@@ -43,7 +43,7 @@ export interface MP4EncoderOptions {
  * Caller renders to the provided canvas, then calls `addFrame()` for each frame.
  */
 export class MP4FrameEncoder {
-  private output: Output<BufferTarget>;
+  private output: Output<Mp4OutputFormat, BufferTarget>;
   private videoSource: CanvasSource;
   private fps: number;
   private disposed = false;
@@ -101,7 +101,7 @@ export interface MP4ClipEncoderOptions {
  * Captures canvas frames on each `captureFrame()` call and optionally records audio.
  */
 export class MP4ClipEncoder {
-  private output: Output<BufferTarget>;
+  private output: Output<Mp4OutputFormat, BufferTarget>;
   private videoSource: CanvasSource;
   private audioSource: MediaStreamAudioTrackSource | null = null;
   private fps: number;
