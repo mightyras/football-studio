@@ -27,6 +27,7 @@ export type VideoAnnotation = {
 export type SessionClip = {
   id: string;
   type: 'screenshot' | 'video';
+  mimeType?: string; // e.g. 'video/mp4', 'video/webm', 'image/png'
   timestamp: number;
   inPoint?: number;
   outPoint?: number;

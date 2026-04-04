@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useThemeColors } from '../../hooks/useThemeColors';
 import { hexToRgba } from '../../utils/colorUtils';
 import type { ExportOptions } from '../../animation/exportController';
+import { supportsMP4Export } from '../../animation/mp4Encoder';
 
 const RESOLUTIONS = [
   { label: '720p (1280×720)', width: 1280, height: 720 },
@@ -21,6 +22,11 @@ export function ExportDialog({ onExport, onCancel, exporting, progress }: Export
   const theme = useThemeColors();
   const [resIndex, setResIndex] = useState(0);
   const [fps, setFps] = useState(30);
+  const [formatLabel, setFormatLabel] = useState('WebM (VP9)');
+
+  useEffect(() => {
+    supportsMP4Export().then(ok => setFormatLabel(ok ? 'MP4 (H.264)' : 'WebM (VP9)'));
+  }, []);
 
   const handleExport = () => {
     const res = RESOLUTIONS[resIndex];
@@ -117,7 +123,7 @@ export function ExportDialog({ onExport, onCancel, exporting, progress }: Export
           <label style={{ display: 'block', fontSize: 11, color: theme.textMuted, marginBottom: 4 }}>
             Format
           </label>
-          <span style={{ fontSize: 12, color: theme.textSubtle }}>WebM (VP9)</span>
+          <span style={{ fontSize: 12, color: theme.textSubtle }}>{formatLabel}</span>
         </div>
 
         {/* Progress bar */}

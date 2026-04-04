@@ -292,7 +292,7 @@ export function ClipViewer() {
 
   const handleDownload = async () => {
     if (clip.blob) {
-      const ext = clip.type === 'video' ? 'webm' : 'png';
+      const ext = clip.mimeType === 'video/mp4' ? 'mp4' : clip.type === 'video' ? 'webm' : 'png';
       const filename = clip.type === 'video'
         ? `clip_${formatTimestamp(clip.inPoint ?? 0)}-${formatTimestamp(clip.outPoint ?? 0)}.${ext}`
         : `screenshot_${formatTimestamp(clip.timestamp)}.${ext}`;

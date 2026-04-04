@@ -2,6 +2,7 @@ import type { AnimationSequence, AppState } from '../types';
 import { PlaybackController } from './playbackController';
 import { render } from '../canvas/renderPipeline';
 import { computeTransform } from '../hooks/usePitchTransform';
+import { MP4FrameEncoder, supportsMP4Export, type VideoFormat } from './mp4Encoder';
 
 export interface ExportOptions {
   fps: number;      // 24, 30, or 60
@@ -10,6 +11,7 @@ export interface ExportOptions {
 }
 
 export type ExportProgressCallback = (progress: number) => void;
+export type ExportResult = { blob: Blob; format: VideoFormat };
 
 /**
  * Export an animation sequence as a WebM video.
@@ -157,5 +159,86 @@ export class ExportController {
 
       renderNextFrame();
     });
+  }
+
+  async exportMP4(onProgress?: ExportProgressCallback): Promise<Blob> {
+    const { fps, width, height } = this.options;
+
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d')!;
+
+    const transform = computeTransform(
+      width,
+      height,
+      this.baseState.pitchSettings.stadiumEnabled,
+      this.baseState.pitchSettings.zoneOverlay,
+    );
+
+    const encoder = new MP4FrameEncoder(canvas, { width, height, fps });
+    await encoder.start();
+
+    const controller = new PlaybackController(this.sequence);
+
+    let totalDurationMs = 0;
+    for (let i = 1; i < this.sequence.keyframes.length; i++) {
+      totalDurationMs += this.sequence.keyframes[i].durationMs;
+    }
+    totalDurationMs /= this.sequence.speedMultiplier;
+
+    const dtMs = 1000 / fps;
+    const totalFrames = Math.ceil(totalDurationMs / dtMs) + 1;
+
+    for (let frameIndex = 0; frameIndex <= totalFrames; frameIndex++) {
+      if (this.cancelled) {
+        encoder.dispose();
+        throw new Error('Export cancelled');
+      }
+
+      if (controller.status === 'idle' && frameIndex > 0) break;
+
+      const renderState: AppState = {
+        ...this.baseState,
+        players: controller.interpolatedPlayers,
+        ball: controller.interpolatedBall,
+        annotations: controller.interpolatedAnnotations,
+        selectedPlayerId: null,
+        hoveredPlayerId: null,
+        ballSelected: false,
+        ballHovered: false,
+        selectedAnnotationId: null,
+        drawingInProgress: null,
+      };
+
+      ctx.clearRect(0, 0, width, height);
+      render(ctx, transform, renderState, width, height);
+      await encoder.addFrame(frameIndex);
+
+      controller.stepFrame(dtMs);
+      onProgress?.(Math.min(1, frameIndex / totalFrames));
+
+      // Yield to UI thread every 4 frames
+      if (frameIndex % 4 === 0) {
+        await new Promise(r => setTimeout(r, 0));
+      }
+    }
+
+    return encoder.finalize();
+  }
+
+  /** Auto-detect best format: MP4 if supported, WebM fallback. */
+  async export(onProgress?: ExportProgressCallback): Promise<ExportResult> {
+    if (await supportsMP4Export()) {
+      try {
+        const blob = await this.exportMP4(onProgress);
+        return { blob, format: 'mp4' };
+      } catch (err) {
+        if (this.cancelled) throw err;
+        console.warn('MP4 export failed, falling back to WebM:', err);
+      }
+    }
+    const blob = await this.exportWebM(onProgress);
+    return { blob, format: 'webm' };
   }
 }

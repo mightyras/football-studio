@@ -224,6 +224,7 @@ export async function saveClip(
   sessionId: string,
   clip: {
     type: 'screenshot' | 'video';
+    mimeType?: string;
     blob: Blob;
     thumbnailBlob?: Blob | null;
     label: string;
@@ -238,14 +239,15 @@ export async function saveClip(
   if (!user) return null;
 
   const clipId = crypto.randomUUID();
-  const ext = clip.type === 'video' ? 'webm' : 'png';
+  const contentType = clip.mimeType ?? (clip.type === 'video' ? 'video/webm' : 'image/png');
+  const ext = contentType === 'video/mp4' ? 'mp4' : clip.type === 'video' ? 'webm' : 'png';
   const storagePath = `${user.id}/${clipId}.${ext}`;
 
   // Upload main media file
   const { error: uploadErr } = await supabase.storage
     .from('analysis-media')
     .upload(storagePath, clip.blob, {
-      contentType: clip.type === 'video' ? 'video/webm' : 'image/png',
+      contentType,
       upsert: false,
     });
 

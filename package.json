@@ -13,6 +13,7 @@
     "@sentry/react": "^10.42.0",
     "@supabase/supabase-js": "^2.97.0",
     "hls.js": "^1.6.15",
+    "mediabunny": "^1.40.1",
     "react": "^19.2.0",
     "react-dom": "^19.2.0"
   },

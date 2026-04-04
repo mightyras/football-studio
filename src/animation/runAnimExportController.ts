@@ -2,7 +2,7 @@
  * Deterministic export controller for run-animation sequences.
  *
  * Replays the Space-bar animation system (per-player runs, passes, dribbles)
- * frame-by-frame using virtual time. Produces a WebM video.
+ * frame-by-frame using virtual time. Produces a WebM or MP4 video.
  */
 import type {
   AppState,
@@ -26,6 +26,8 @@ import { render } from '../canvas/renderPipeline';
 import { computeTransform } from '../hooks/usePitchTransform';
 import { curvedRunControlPoint, loftedArcControlPoint } from '../utils/curveGeometry';
 import { findClosestGhost } from '../utils/ghostUtils';
+import { MP4FrameEncoder, supportsMP4Export, type VideoFormat } from './mp4Encoder';
+import type { ExportResult } from './exportController';
 
 export interface RunAnimExportOptions {
   fps: number;
@@ -47,26 +49,25 @@ export class RunAnimExportController {
     this.cancelled = true;
   }
 
-  async exportWebM(
-    onProgress?: (progress: number) => void,
-  ): Promise<Blob> {
+  /**
+   * Core rendering loop shared by both WebM and MP4 export paths.
+   * Calls `onFrame()` after each canvas render so the caller can capture it.
+   */
+  private async renderAllFrames(opts: {
+    canvas: HTMLCanvasElement;
+    ctx: CanvasRenderingContext2D;
+    onFrame: () => Promise<void>;
+    onProgress?: (progress: number) => void;
+  }): Promise<void> {
+    const { canvas, ctx, onFrame, onProgress } = opts;
     const { fps, width, height } = this.options;
 
-    // Build animation queue
     const queueResult = this.buildFullQueue();
     if (!queueResult) throw new Error('No animations to export');
     const { queue, allLineAnns } = queueResult;
 
-    // Count total batches for progress reporting
     const totalBatches = this.countBatches([...queue]);
 
-    // Create offscreen canvas
-    const canvas = document.createElement('canvas');
-    canvas.width = width;
-    canvas.height = height;
-    const ctx = canvas.getContext('2d')!;
-
-    // Compute transform for export dimensions
     const transform = computeTransform(
       width,
       height,
@@ -74,14 +75,195 @@ export class RunAnimExportController {
       this.baseState.pitchSettings.zoneOverlay,
     );
 
-    // Check captureStream support
+    const dtMs = 1000 / fps;
+
+    let exportState: AppState = {
+      ...structuredClone(this.baseState),
+      selectedPlayerId: null,
+      hoveredPlayerId: null,
+      hoveredNotchPlayerId: null,
+      ballSelected: false,
+      ballHovered: false,
+      selectedAnnotationId: null,
+      drawingInProgress: null,
+    };
+
+    const completedAnimIds = new Set<string>();
+    let completedBatches = 0;
+
+    const renderHold = async (holdState: AppState, frames: number) => {
+      for (let i = 0; i < frames; i++) {
+        if (this.cancelled) throw new Error('Export cancelled');
+        ctx.clearRect(0, 0, width, height);
+        render(ctx, transform, holdState, width, height);
+        await onFrame();
+        await new Promise((r) => setTimeout(r, 0));
+      }
+    };
+
+    // Initial hold (0.5s)
+    const holdFrames = Math.ceil(500 / dtMs);
+    await renderHold(exportState, holdFrames);
+
+    // Process each batch
+    const finishedAnims: PlayerRunAnimation[] = [];
+
+    while (queue.length > 0) {
+      if (this.cancelled) throw new Error('Export cancelled');
+
+      const nextStep = queue[0].step;
+      const batch: QueuedAnimation[] = [];
+      while (queue.length > 0 && queue[0].step === nextStep) {
+        batch.push(queue.shift()!);
+      }
+
+      const anims = this.createBatchAnims(
+        batch,
+        exportState,
+        allLineAnns,
+        finishedAnims,
+        0,
+      );
+
+      const batchDurationMs = Math.max(
+        ...anims.map((a) => a.startTime + a.durationMs),
+      );
+      const batchTotalFrames = Math.ceil(batchDurationMs / dtMs) + 1;
+
+      for (let f = 0; f <= batchTotalFrames; f++) {
+        if (this.cancelled) throw new Error('Export cancelled');
+
+        const virtualNow = f * dtMs;
+        let renderState = { ...exportState };
+
+        if (completedAnimIds.size > 0) {
+          const extraGhostIds = [...completedAnimIds].filter(
+            (id) => !renderState.ghostAnnotationIds.includes(id),
+          );
+          if (extraGhostIds.length > 0) {
+            renderState = {
+              ...renderState,
+              ghostAnnotationIds: [
+                ...renderState.ghostAnnotationIds,
+                ...extraGhostIds,
+              ],
+            };
+          }
+        }
+
+        const overlays: RunAnimationOverlay[] = [];
+
+        for (const anim of anims) {
+          const frame = computeRunFrame(anim, virtualNow);
+          const animType = anim.animationType ?? 'run';
+
+          if (animType !== 'pass') {
+            renderState = {
+              ...renderState,
+              players: renderState.players.map((p) =>
+                p.id === frame.playerId
+                  ? { ...p, x: frame.x, y: frame.y, facing: frame.facing }
+                  : p,
+              ),
+            };
+          }
+
+          if (frame.ballX != null && frame.ballY != null) {
+            renderState = {
+              ...renderState,
+              ball: {
+                ...renderState.ball,
+                x: frame.ballX,
+                y: frame.ballY,
+              },
+            };
+          }
+
+          const player = exportState.players.find(
+            (p) => p.id === frame.playerId,
+          );
+          if (player) {
+            overlays.push({
+              annotationId: anim.annotationId,
+              playerId: frame.playerId,
+              progress: frame.easedProgress,
+              ghostPlayer: {
+                playerId: player.id,
+                team: player.team,
+                number: player.number,
+                name: player.name,
+                x: anim.startPos.x,
+                y: anim.startPos.y,
+                facing: player.facing,
+                isGK: player.isGK,
+                createdAt: 0,
+              },
+              ballPos:
+                frame.ballX != null && frame.ballY != null
+                  ? { x: frame.ballX, y: frame.ballY }
+                  : undefined,
+              animationType: animType,
+              isLofted: anim.isLofted,
+              ballElevation: frame.ballElevation,
+            });
+          }
+        }
+
+        ctx.clearRect(0, 0, width, height);
+        render(ctx, transform, renderState, width, height, overlays);
+        await onFrame();
+        await new Promise((r) => setTimeout(r, 0));
+      }
+
+      exportState = this.applyBatchCompletion(exportState, anims);
+      for (const anim of anims) {
+        completedAnimIds.add(anim.annotationId);
+      }
+
+      finishedAnims.length = 0;
+      finishedAnims.push(...anims);
+
+      completedBatches++;
+      onProgress?.(Math.min(0.95, completedBatches / totalBatches));
+    }
+
+    // Final hold (1s)
+    let finalState = { ...exportState };
+    if (completedAnimIds.size > 0) {
+      const extraGhostIds = [...completedAnimIds].filter(
+        (id) => !finalState.ghostAnnotationIds.includes(id),
+      );
+      if (extraGhostIds.length > 0) {
+        finalState = {
+          ...finalState,
+          ghostAnnotationIds: [
+            ...finalState.ghostAnnotationIds,
+            ...extraGhostIds,
+          ],
+        };
+      }
+    }
+    await renderHold(finalState, Math.ceil(1000 / dtMs));
+
+    onProgress?.(1);
+  }
+
+  async exportWebM(
+    onProgress?: (progress: number) => void,
+  ): Promise<Blob> {
+    const { width, height } = this.options;
+
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d')!;
+
     if (!canvas.captureStream) {
       throw new Error(
         'Your browser does not support canvas.captureStream(). Try Chrome or Firefox.',
       );
     }
 
-    // Set up MediaRecorder
     const stream = canvas.captureStream(0);
     let mimeType = 'video/webm;codecs=vp9';
     if (!MediaRecorder.isTypeSupported(mimeType)) {
@@ -98,23 +280,9 @@ export class RunAnimExportController {
       if (e.data.size > 0) chunks.push(e.data);
     };
 
-    const dtMs = 1000 / fps;
-
-    // Clone state — export must not modify real state
-    let exportState: AppState = {
-      ...structuredClone(this.baseState),
-      selectedPlayerId: null,
-      hoveredPlayerId: null,
-      hoveredNotchPlayerId: null,
-      ballSelected: false,
-      ballHovered: false,
-      selectedAnnotationId: null,
-      drawingInProgress: null,
-    };
-
-    // Track completed annotation IDs for ghost rendering
-    const completedAnimIds = new Set<string>();
-    let completedBatches = 0;
+    const track = stream.getVideoTracks()[0];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const requestFrame = () => (track as any).requestFrame?.();
 
     return new Promise<Blob>((resolve, reject) => {
       mediaRecorder.onstop = () => {
@@ -127,196 +295,63 @@ export class RunAnimExportController {
 
       mediaRecorder.start();
 
-      const track = stream.getVideoTracks()[0];
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const requestFrame = () => (track as any).requestFrame?.();
-
-      // Render initial hold frames (~0.5s)
-      const renderHold = async (holdState: AppState, frames: number) => {
-        for (let i = 0; i < frames; i++) {
-          if (this.cancelled) {
-            mediaRecorder.stop();
-            reject(new Error('Export cancelled'));
-            return false;
-          }
-          ctx.clearRect(0, 0, width, height);
-          render(ctx, transform, holdState, width, height);
-          requestFrame();
-          await new Promise((r) => setTimeout(r, 0));
-        }
-        return true;
-      };
-
-      const processQueue = async () => {
-        // Initial hold (0.5s)
-        const holdFrames = Math.ceil(500 / dtMs);
-        if (!(await renderHold(exportState, holdFrames))) return;
-
-        // Process each batch
-        const finishedAnims: PlayerRunAnimation[] = [];
-
-        while (queue.length > 0) {
-          if (this.cancelled) {
-            mediaRecorder.stop();
-            reject(new Error('Export cancelled'));
-            return;
-          }
-
-          // Pull next batch
-          const nextStep = queue[0].step;
-          const batch: QueuedAnimation[] = [];
-          while (queue.length > 0 && queue[0].step === nextStep) {
-            batch.push(queue.shift()!);
-          }
-
-          // Create PlayerRunAnimation[] with virtual startTime = 0
-          const anims = this.createBatchAnims(
-            batch,
-            exportState,
-            allLineAnns,
-            finishedAnims,
-            0,
-          );
-
-          // Determine batch duration (account for delayed starts, e.g. pass lead delay)
-          const batchDurationMs = Math.max(
-            ...anims.map((a) => a.startTime + a.durationMs),
-          );
-          const batchTotalFrames = Math.ceil(batchDurationMs / dtMs) + 1;
-
-          // Render frames for this batch
-          for (let f = 0; f <= batchTotalFrames; f++) {
-            if (this.cancelled) {
-              mediaRecorder.stop();
-              reject(new Error('Export cancelled'));
-              return;
-            }
-
-            const virtualNow = f * dtMs;
-            let renderState = { ...exportState };
-
-            // Apply completed annotation ghost IDs
-            if (completedAnimIds.size > 0) {
-              const extraGhostIds = [...completedAnimIds].filter(
-                (id) => !renderState.ghostAnnotationIds.includes(id),
-              );
-              if (extraGhostIds.length > 0) {
-                renderState = {
-                  ...renderState,
-                  ghostAnnotationIds: [
-                    ...renderState.ghostAnnotationIds,
-                    ...extraGhostIds,
-                  ],
-                };
-              }
-            }
-
-            const overlays: RunAnimationOverlay[] = [];
-
-            for (const anim of anims) {
-              const frame = computeRunFrame(anim, virtualNow);
-              const animType = anim.animationType ?? 'run';
-
-              // Override player position (skip for pass)
-              if (animType !== 'pass') {
-                renderState = {
-                  ...renderState,
-                  players: renderState.players.map((p) =>
-                    p.id === frame.playerId
-                      ? { ...p, x: frame.x, y: frame.y, facing: frame.facing }
-                      : p,
-                  ),
-                };
-              }
-
-              // Override ball position
-              if (frame.ballX != null && frame.ballY != null) {
-                renderState = {
-                  ...renderState,
-                  ball: {
-                    ...renderState.ball,
-                    x: frame.ballX,
-                    y: frame.ballY,
-                  },
-                };
-              }
-
-              // Build overlay (ghost at start pos)
-              const player = exportState.players.find(
-                (p) => p.id === frame.playerId,
-              );
-              if (player) {
-                overlays.push({
-                  annotationId: anim.annotationId,
-                  playerId: frame.playerId,
-                  progress: frame.easedProgress,
-                  ghostPlayer: {
-                    playerId: player.id,
-                    team: player.team,
-                    number: player.number,
-                    name: player.name,
-                    x: anim.startPos.x,
-                    y: anim.startPos.y,
-                    facing: player.facing,
-                    isGK: player.isGK,
-                    createdAt: 0,
-                  },
-                  ballPos:
-                    frame.ballX != null && frame.ballY != null
-                      ? { x: frame.ballX, y: frame.ballY }
-                      : undefined,
-                  animationType: animType,
-                  isLofted: anim.isLofted,
-                  ballElevation: frame.ballElevation,
-                });
-              }
-            }
-
-            // Render frame
-            ctx.clearRect(0, 0, width, height);
-            render(ctx, transform, renderState, width, height, overlays);
-            requestFrame();
-            await new Promise((r) => setTimeout(r, 0));
-          }
-
-          // Batch finished — apply state changes (simulate EXECUTE_RUN)
-          exportState = this.applyBatchCompletion(exportState, anims);
-          for (const anim of anims) {
-            completedAnimIds.add(anim.annotationId);
-          }
-
-          // Track finished anims for next batch start position resolution
-          finishedAnims.length = 0;
-          finishedAnims.push(...anims);
-
-          completedBatches++;
-          onProgress?.(Math.min(0.95, completedBatches / totalBatches));
-        }
-
-        // Final hold (1s)
-        let finalState = { ...exportState };
-        if (completedAnimIds.size > 0) {
-          const extraGhostIds = [...completedAnimIds].filter(
-            (id) => !finalState.ghostAnnotationIds.includes(id),
-          );
-          if (extraGhostIds.length > 0) {
-            finalState = {
-              ...finalState,
-              ghostAnnotationIds: [
-                ...finalState.ghostAnnotationIds,
-                ...extraGhostIds,
-              ],
-            };
-          }
-        }
-        await renderHold(finalState, Math.ceil(1000 / dtMs));
-
-        onProgress?.(1);
+      this.renderAllFrames({
+        canvas,
+        ctx,
+        onFrame: async () => { requestFrame(); },
+        onProgress,
+      }).then(() => {
         mediaRecorder.stop();
-      };
-
-      processQueue();
+      }).catch((err) => {
+        mediaRecorder.stop();
+        reject(err);
+      });
     });
+  }
+
+  async exportMP4(
+    onProgress?: (progress: number) => void,
+  ): Promise<Blob> {
+    const { fps, width, height } = this.options;
+
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d')!;
+
+    const encoder = new MP4FrameEncoder(canvas, { width, height, fps });
+    await encoder.start();
+
+    let frameIndex = 0;
+    try {
+      await this.renderAllFrames({
+        canvas,
+        ctx,
+        onFrame: async () => {
+          await encoder.addFrame(frameIndex++);
+        },
+        onProgress,
+      });
+      return encoder.finalize();
+    } catch (err) {
+      encoder.dispose();
+      throw err;
+    }
+  }
+
+  /** Auto-detect best format: MP4 if supported, WebM fallback. */
+  async export(onProgress?: (progress: number) => void): Promise<ExportResult> {
+    if (await supportsMP4Export()) {
+      try {
+        const blob = await this.exportMP4(onProgress);
+        return { blob, format: 'mp4' };
+      } catch (err) {
+        if (this.cancelled) throw err;
+        console.warn('MP4 export failed, falling back to WebM:', err);
+      }
+    }
+    const blob = await this.exportWebM(onProgress);
+    return { blob, format: 'webm' };
   }
 
   // ── Queue building (mirrors buildAnimQueueForAll in App.tsx) ──

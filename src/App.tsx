@@ -330,28 +330,33 @@ function AppContent() {
 
     try {
       let blob: Blob;
+      let format: 'mp4' | 'webm';
 
       if (exportSequence) {
         // Keyframe-based export (Animation Mode)
         const controller = new ExportController(exportSequence, state, options);
         exportControllerRef.current = controller;
-        blob = await controller.exportWebM((progress) => {
+        const result = await controller.export((progress) => {
           setExportProgress(progress);
         });
+        blob = result.blob;
+        format = result.format;
       } else {
         // Run-animation export (Lines)
         const controller = new RunAnimExportController(state, options);
         exportControllerRef.current = controller;
-        blob = await controller.exportWebM((progress) => {
+        const result = await controller.export((progress) => {
           setExportProgress(progress);
         });
+        blob = result.blob;
+        format = result.format;
       }
 
       // Trigger download
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `animation-export.webm`;
+      a.download = `animation-export.${format}`;
       a.click();
       URL.revokeObjectURL(url);
 

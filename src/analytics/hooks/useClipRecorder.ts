@@ -4,6 +4,7 @@ import { formatTimestamp } from '../utils/time';
 import { saveClip as saveClipToDb } from '../services/analysisService';
 import { renderStrokeToCanvas, renderMarkerToCanvas, computeClipStrokeOpacity, isDotAnnotation } from '../utils/strokeRenderer';
 import type { SessionClip, VideoAnnotation } from '../types';
+import { MP4ClipEncoder, likelySupportsMp4 } from '../../animation/mp4Encoder';
 
 export function useClipRecorder(
   videoRef: React.RefObject<HTMLVideoElement | null>,
@@ -11,11 +12,13 @@ export function useClipRecorder(
 ) {
   const { state, dispatch } = useAnalytics();
   const recorderRef = useRef<MediaRecorder | null>(null);
+  const mp4EncoderRef = useRef<MP4ClipEncoder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const rafRef = useRef<number>(0);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const elapsedIntervalRef = useRef<ReturnType<typeof setInterval>>(undefined);
   const startTimeRef = useRef<number>(0);
+  const useMP4Ref = useRef(false);
 
   const sessionIdRef = useRef(state.sessionId);
   sessionIdRef.current = state.sessionId;
@@ -41,11 +44,14 @@ export function useClipRecorder(
     const onSeeked = () => {
       video.removeEventListener('seeked', onSeeked);
 
-      const drawFrame = () => {
+      const useMP4 = likelySupportsMp4();
+      useMP4Ref.current = useMP4;
+
+      // Compositing function shared by both paths
+      const compositeFrame = () => {
         if (video.readyState >= 2) {
           ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-          // Composite freehand strokes and dot markers into the recording
           const freehandAnns = annotationsRef.current.filter(a => a.type === 'freehand');
           const dotCounters: Record<string, number> = {};
           for (const ann of freehandAnns) {
@@ -60,44 +66,13 @@ export function useClipRecorder(
             }
           }
         }
-        rafRef.current = requestAnimationFrame(drawFrame);
-      };
-      drawFrame();
-
-      const stream = canvas.captureStream(30);
-
-      try {
-        const videoStream = (video as HTMLVideoElement & { captureStream?: () => MediaStream }).captureStream?.();
-        if (videoStream) {
-          const audioTracks = videoStream.getAudioTracks();
-          audioTracks.forEach(track => stream.addTrack(track));
-        }
-      } catch {
-        // Audio capture may fail
-      }
-
-      const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')
-        ? 'video/webm;codecs=vp9,opus'
-        : MediaRecorder.isTypeSupported('video/webm;codecs=vp9')
-          ? 'video/webm;codecs=vp9'
-          : 'video/webm';
-
-      const recorder = new MediaRecorder(stream, {
-        mimeType,
-        videoBitsPerSecond: 5_000_000,
-      });
-      recorderRef.current = recorder;
-      chunksRef.current = [];
-
-      recorder.ondataavailable = (e) => {
-        if (e.data.size > 0) chunksRef.current.push(e.data);
       };
 
-      recorder.onstop = () => {
+      // Shared clip finalization
+      const finalizeClip = (blob: Blob, mimeType: string) => {
         cancelAnimationFrame(rafRef.current);
         if (elapsedIntervalRef.current) clearInterval(elapsedIntervalRef.current);
 
-        const blob = new Blob(chunksRef.current, { type: 'video/webm' });
         const downloadUrl = URL.createObjectURL(blob);
 
         const thumbCanvas = document.createElement('canvas');
@@ -112,6 +87,7 @@ export function useClipRecorder(
         const clip: SessionClip = {
           id: crypto.randomUUID(),
           type: 'video',
+          mimeType,
           timestamp: state.inPoint!,
           inPoint: state.inPoint!,
           outPoint: state.outPoint!,
@@ -137,28 +113,130 @@ export function useClipRecorder(
         }
       };
 
-      recorder.start(1000);
-      dispatch({ type: 'SET_RECORDING_STATUS', status: 'recording' });
+      if (useMP4) {
+        // ── MP4 path (WebCodecs + mediabunny) ──
+        let audioTrack: MediaStreamTrack | null = null;
+        try {
+          const videoStream = (video as HTMLVideoElement & { captureStream?: () => MediaStream }).captureStream?.();
+          if (videoStream) {
+            audioTrack = videoStream.getAudioTracks()[0] ?? null;
+          }
+        } catch { /* Audio capture may fail */ }
 
-      startTimeRef.current = Date.now();
-      elapsedIntervalRef.current = setInterval(() => {
-        dispatch({ type: 'SET_RECORDING_ELAPSED', elapsed: (Date.now() - startTimeRef.current) / 1000 });
-      }, 100);
+        const mp4Encoder = new MP4ClipEncoder({
+          canvas,
+          fps: 30,
+          bitrate: 5_000_000,
+          audioTrack,
+        });
+        mp4EncoderRef.current = mp4Encoder;
 
-      video.play().catch(() => {});
+        let stopped = false;
 
-      setTimeout(() => {
-        if (recorder.state === 'recording') {
-          recorder.stop();
-        }
-      }, clipDuration * 1000);
+        const drawFrame = () => {
+          if (stopped) return;
+          compositeFrame();
+          mp4Encoder.captureFrame().catch(() => {});
+          rafRef.current = requestAnimationFrame(drawFrame);
+        };
+
+        mp4Encoder.start().then(() => {
+          drawFrame();
+
+          dispatch({ type: 'SET_RECORDING_STATUS', status: 'recording' });
+          startTimeRef.current = Date.now();
+          elapsedIntervalRef.current = setInterval(() => {
+            dispatch({ type: 'SET_RECORDING_ELAPSED', elapsed: (Date.now() - startTimeRef.current) / 1000 });
+          }, 100);
+
+          video.play().catch(() => {});
+
+          setTimeout(async () => {
+            if (stopped) return;
+            stopped = true;
+            cancelAnimationFrame(rafRef.current);
+            try {
+              const blob = await mp4Encoder.finalize();
+              finalizeClip(blob, 'video/mp4');
+            } catch {
+              mp4Encoder.dispose();
+            }
+            mp4EncoderRef.current = null;
+          }, clipDuration * 1000);
+        }).catch(() => {
+          // MP4 start failed — should not happen if likelySupportsMp4() was true
+          mp4EncoderRef.current = null;
+        });
+      } else {
+        // ── WebM path (MediaRecorder) ──
+        const drawFrame = () => {
+          compositeFrame();
+          rafRef.current = requestAnimationFrame(drawFrame);
+        };
+        drawFrame();
+
+        const stream = canvas.captureStream(30);
+
+        try {
+          const videoStream = (video as HTMLVideoElement & { captureStream?: () => MediaStream }).captureStream?.();
+          if (videoStream) {
+            const audioTracks = videoStream.getAudioTracks();
+            audioTracks.forEach(track => stream.addTrack(track));
+          }
+        } catch { /* Audio capture may fail */ }
+
+        const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')
+          ? 'video/webm;codecs=vp9,opus'
+          : MediaRecorder.isTypeSupported('video/webm;codecs=vp9')
+            ? 'video/webm;codecs=vp9'
+            : 'video/webm';
+
+        const recorder = new MediaRecorder(stream, {
+          mimeType,
+          videoBitsPerSecond: 5_000_000,
+        });
+        recorderRef.current = recorder;
+        chunksRef.current = [];
+
+        recorder.ondataavailable = (e) => {
+          if (e.data.size > 0) chunksRef.current.push(e.data);
+        };
+
+        recorder.onstop = () => {
+          const blob = new Blob(chunksRef.current, { type: 'video/webm' });
+          finalizeClip(blob, 'video/webm');
+        };
+
+        recorder.start(1000);
+        dispatch({ type: 'SET_RECORDING_STATUS', status: 'recording' });
+
+        startTimeRef.current = Date.now();
+        elapsedIntervalRef.current = setInterval(() => {
+          dispatch({ type: 'SET_RECORDING_ELAPSED', elapsed: (Date.now() - startTimeRef.current) / 1000 });
+        }, 100);
+
+        video.play().catch(() => {});
+
+        setTimeout(() => {
+          if (recorder.state === 'recording') {
+            recorder.stop();
+          }
+        }, clipDuration * 1000);
+      }
     };
 
     video.addEventListener('seeked', onSeeked);
   }, [videoRef, state.inPoint, state.outPoint, state.annotations, dispatch, onClipReady]);
 
   const stopRecording = useCallback(() => {
-    if (recorderRef.current?.state === 'recording') {
+    if (mp4EncoderRef.current) {
+      // MP4 path — finalize is handled by the timeout, but if stopped early
+      // we need to trigger finalization
+      cancelAnimationFrame(rafRef.current);
+      const encoder = mp4EncoderRef.current;
+      mp4EncoderRef.current = null;
+      encoder.finalize().catch(() => encoder.dispose());
+    } else if (recorderRef.current?.state === 'recording') {
       recorderRef.current.stop();
     }
     const video = videoRef.current;
@@ -182,6 +260,7 @@ export function useClipRecorder(
 
       const saved = await saveClipToDb(currentSessionId, {
         type: 'video',
+        mimeType: clip.mimeType,
         blob: clip.blob,
         thumbnailBlob,
         label,

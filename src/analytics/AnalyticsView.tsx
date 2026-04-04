@@ -301,7 +301,7 @@ function AnalyticsContent() {
             />
             <MatchClock />
             <VideoOverlayHeader />
-            <DrawingToolbar />
+            {!showSessionBrowser && <DrawingToolbar />}
             <VideoOverlayControls
               playerRef={playerRef}
               clipCount={clipCount}
@@ -331,7 +331,7 @@ function AnalyticsContent() {
                 position: 'absolute',
                 inset: 0,
                 background: 'rgba(0, 0, 0, 0.5)',
-                zIndex: 10,
+                zIndex: 20,
                 display: 'flex',
                 flexDirection: 'column',
                 justifyContent: 'flex-end',
