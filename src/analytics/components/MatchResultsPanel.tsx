@@ -176,7 +176,7 @@ function EditableTeamName({
           e.stopPropagation();
         }}
         style={{
-          width: 110,
+          width: 140,
           padding: '2px 6px',
           background: 'rgba(255, 255, 255, 0.1)',
           border: '1px solid rgba(255, 255, 255, 0.3)',
@@ -200,9 +200,6 @@ function EditableTeamName({
         fontSize: 15,
         fontWeight: 600,
         color: value ? 'rgba(255, 255, 255, 0.9)' : 'rgba(255, 255, 255, 0.35)',
-        maxWidth: 120,
-        overflow: 'hidden',
-        textOverflow: 'ellipsis',
         whiteSpace: 'nowrap',
         textAlign: align,
         cursor: 'text',
