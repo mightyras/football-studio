@@ -425,6 +425,10 @@ function AnalyticsContent() {
               <BookmarkList
                 onSeek={seekTo}
                 onClose={() => setBookmarkPanelOpen(false)}
+                onLeaveSession={() => {
+                  const video = playerRef.current?.getVideoElement();
+                  if (video) video.pause();
+                }}
               />
             </div>
           ) : (

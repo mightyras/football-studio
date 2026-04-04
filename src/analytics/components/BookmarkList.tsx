@@ -4,6 +4,7 @@ import { useAuth } from '../../state/AuthContext';
 import { detectUrlType, extractUrlMetadata } from '../utils/urlDetector';
 import { updateSession, updateEventComment, deleteEvent } from '../services/analysisService';
 import { formatTime } from '../utils/time';
+import { ConfirmDialog } from './ConfirmDialog';
 import { THEME } from '../../constants/colors';
 import { BOOKMARK_CATEGORY_LABELS } from '../types';
 import { supabase } from '../../lib/supabase';
@@ -11,9 +12,10 @@ import { supabase } from '../../lib/supabase';
 type Props = {
   onSeek: (time: number) => void;
   onClose?: () => void;
+  onLeaveSession?: () => void;
 };
 
-export function BookmarkList({ onSeek, onClose }: Props) {
+export function BookmarkList({ onSeek, onClose, onLeaveSession }: Props) {
   const { state, dispatch } = useAnalytics();
   const { user } = useAuth();
   const isSessionOwner = state.sessionOwnerId === user?.id;
@@ -21,6 +23,7 @@ export function BookmarkList({ onSeek, onClose }: Props) {
   const [editValue, setEditValue] = useState('');
   const [urlDialogOpen, setUrlDialogOpen] = useState(false);
   const [urlValue, setUrlValue] = useState('');
+  const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
 
   const startEditing = useCallback((id: string, currentComment: string) => {
     setEditingId(id);
@@ -81,13 +84,19 @@ export function BookmarkList({ onSeek, onClose }: Props) {
     }
   }, [urlValue, state.sessionId, dispatch]);
 
-  const handleOpenNewGame = useCallback(async () => {
+  const handleOpenNewGame = useCallback(() => {
+    setShowLeaveConfirm(true);
+  }, []);
+
+  const handleConfirmLeave = useCallback(async () => {
+    setShowLeaveConfirm(false);
     // Flush pending save before resetting
     if (state.sessionId && state.sessionName) {
       await updateSession(state.sessionId, { name: state.sessionName });
     }
+    onLeaveSession?.();
     dispatch({ type: 'RESET' });
-  }, [state.sessionId, state.sessionName, dispatch]);
+  }, [state.sessionId, state.sessionName, onLeaveSession, dispatch]);
 
   const handleDeleteBookmark = useCallback((id: string) => {
     const bookmark = state.bookmarks.find(b => b.id === id);
@@ -397,6 +406,16 @@ export function BookmarkList({ onSeek, onClose }: Props) {
           </div>
         ))}
       </div>
+
+      {/* Leave session confirmation */}
+      {showLeaveConfirm && (
+        <ConfirmDialog
+          message="Leave this game and open a new one?"
+          confirmLabel="Leave"
+          onConfirm={handleConfirmLeave}
+          onCancel={() => setShowLeaveConfirm(false)}
+        />
+      )}
 
       {/* Centered URL dialog */}
       {urlDialogOpen && (
