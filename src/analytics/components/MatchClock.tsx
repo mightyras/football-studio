@@ -38,12 +38,13 @@ export function MatchClock() {
       {/* Main time display */}
       <div
         style={{
-          fontFamily: "'Courier New', Courier, monospace",
-          fontSize: 20,
-          fontWeight: 700,
+          fontFamily: 'inherit',
+          fontSize: 22,
+          fontWeight: 800,
           color: '#ffffff',
           lineHeight: 1,
-          letterSpacing: '1px',
+          letterSpacing: '0.5px',
+          fontVariantNumeric: 'tabular-nums',
         }}
       >
         {clockState.display}

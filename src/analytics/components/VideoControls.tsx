@@ -517,11 +517,40 @@ export function VideoControls({ playerRef, onScreenshot, onStartRecording, onSto
           {/* Bookmark markers */}
           {state.duration > 0 && state.bookmarks.map(bookmark => {
             const pct = fullTimeToPct(bookmark.time);
+            const isGoal = bookmark.category === 'goal';
+
+            // Goal bookmark: small white circle marker
+            if (isGoal) {
+              return (
+                <div
+                  key={bookmark.id}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const video = playerRef.current?.getVideoElement();
+                    if (video) video.currentTime = bookmark.time;
+                  }}
+                  title={bookmark.comment || formatTime(bookmark.time)}
+                  style={{
+                    position: 'absolute',
+                    left: `calc(${pct}% - 5px)`,
+                    top: 12,
+                    width: 10,
+                    height: 10,
+                    borderRadius: '50%',
+                    background: '#ffffff',
+                    border: '2px solid rgba(0,0,0,0.4)',
+                    cursor: 'pointer',
+                    zIndex: 4,
+                  }}
+                />
+              );
+            }
 
             // Standard bookmark: vertical line with label
             if (bookmark.category) {
               const color = '#3b82f6';
-              const label = BOOKMARK_CATEGORY_LABELS[bookmark.category].short;
+              const labelEntry = BOOKMARK_CATEGORY_LABELS[bookmark.category as keyof typeof BOOKMARK_CATEGORY_LABELS];
+              const label = labelEntry?.short ?? bookmark.category.toUpperCase();
               return (
                 <div
                   key={bookmark.id}

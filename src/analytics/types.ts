@@ -154,15 +154,20 @@ export const PRESET_COMPETITIONS = [
   'Division 4',
 ] as const;
 
-export type BookmarkCategory = 'kickoff' | 'halftime' | 'start_2nd_half' | 'end';
+export type BookmarkCategory = 'kickoff' | 'halftime' | 'start_2nd_half' | 'end' | 'goal';
+
+/** Categories that are unique per session (only one allowed). */
+export const UNIQUE_BOOKMARK_CATEGORIES: BookmarkCategory[] = ['kickoff', 'halftime', 'start_2nd_half', 'end'];
 
 export const BOOKMARK_CATEGORY_LABELS: Record<BookmarkCategory, { short: string; full: string }> = {
   kickoff:        { short: 'KO',  full: 'Kickoff' },
   halftime:       { short: 'HT',  full: 'Halftime' },
   start_2nd_half: { short: '2H',  full: 'Start 2nd Half' },
   end:            { short: 'FT',  full: 'Full Time' },
+  goal:           { short: 'GOAL', full: 'Goal' },
 };
 
+/** Standard match structure categories shown in the picker (excludes goals). */
 export const BOOKMARK_CATEGORY_ORDER: BookmarkCategory[] = ['kickoff', 'halftime', 'start_2nd_half', 'end'];
 
 export type Bookmark = {

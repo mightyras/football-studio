@@ -43,7 +43,7 @@ export function VideoOverlayHeader() {
   const hasSession = state.sessionId !== null || state.streamStatus === 'playing';
 
   const displayName = state.sessionName
-    || (meta?.homeTeam && meta?.awayTeam ? `${meta.homeTeam} vs ${meta.awayTeam}` : null)
+    || (meta?.homeTeam && meta?.awayTeam ? `${meta.homeTeam} - ${meta.awayTeam}` : null)
     || meta?.homeTeam
     || (meta?.matchDate ? `Match ${meta.matchDate}` : null)
     || 'Untitled Game';

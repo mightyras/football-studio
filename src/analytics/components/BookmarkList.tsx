@@ -259,7 +259,9 @@ export function BookmarkList({ onSeek, onClose, onLeaveSession }: Props) {
                   fontSize: 10,
                   fontFamily: 'monospace',
                   fontWeight: 600,
-                  color: bookmark.category ? '#3b82f6' : THEME.highlight,
+                  color: bookmark.category === 'goal'
+                    ? '#ffffff'
+                    : bookmark.category ? '#3b82f6' : THEME.highlight,
                   cursor: 'pointer',
                   minWidth: 44,
                   textAlign: 'center',
@@ -270,23 +272,26 @@ export function BookmarkList({ onSeek, onClose, onLeaveSession }: Props) {
               </button>
 
               {/* Category badge */}
-              {bookmark.category && (
-                <span style={{
-                  flexShrink: 0,
-                  background: 'rgba(59, 130, 246, 0.15)',
-                  color: '#3b82f6',
-                  borderRadius: 3,
-                  padding: '1px 5px',
-                  fontSize: 9,
-                  fontWeight: 700,
-                  letterSpacing: '0.3px',
-                }}>
-                  {BOOKMARK_CATEGORY_LABELS[bookmark.category].short}
-                </span>
-              )}
+              {bookmark.category && (() => {
+                const isGoal = bookmark.category === 'goal';
+                return (
+                  <span style={{
+                    flexShrink: 0,
+                    background: isGoal ? 'rgba(255, 255, 255, 0.15)' : 'rgba(59, 130, 246, 0.15)',
+                    color: isGoal ? '#ffffff' : '#3b82f6',
+                    borderRadius: 3,
+                    padding: '1px 5px',
+                    fontSize: 9,
+                    fontWeight: 700,
+                    letterSpacing: '0.3px',
+                  }}>
+                    {isGoal ? 'GOAL' : (BOOKMARK_CATEGORY_LABELS[bookmark.category as keyof typeof BOOKMARK_CATEGORY_LABELS]?.short ?? bookmark.category)}
+                  </span>
+                );
+              })()}
 
-              {/* Spacer for standard events, comment field for custom */}
-              {bookmark.category ? (
+              {/* Spacer for standard events, comment field for custom/goals */}
+              {bookmark.category && bookmark.category !== 'goal' ? (
                 <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
                   {/* Creator attribution for category events */}
                   {bookmark.createdByName && bookmark.ownerId !== user?.id && (

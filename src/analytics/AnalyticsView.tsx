@@ -4,7 +4,6 @@ import { StreamUrlBar } from './components/StreamUrlBar';
 import { VideoPlayer, type VideoPlayerHandle } from './components/VideoPlayer';
 import { VideoControls } from './components/VideoControls';
 import { SessionClipList } from './components/SessionClipList';
-import { VideoOverlayHeader } from './components/VideoOverlayHeader';
 import { BookmarkList } from './components/BookmarkList';
 import { ClipViewer } from './components/ClipViewer';
 import { SessionBrowser } from './components/SessionBrowser';
@@ -13,7 +12,10 @@ import { SaveToast } from './components/SaveToast';
 import { VideoDrawingOverlay } from './components/VideoDrawingOverlay';
 import { DrawingToolbar } from './components/DrawingToolbar';
 import { BookmarkPicker } from './components/BookmarkPicker';
+import { GoalTeamPicker } from './components/GoalTeamPicker';
+import { MatchResultsPanel } from './components/MatchResultsPanel';
 import { MatchClock } from './components/MatchClock';
+import { MatchInfoPanel } from './components/MatchInfoPanel';
 import { VideoOverlayControls } from './components/VideoOverlayControls';
 import { useScreenshotCapture } from './hooks/useScreenshotCapture';
 import { useClipRecorder } from './hooks/useClipRecorder';
@@ -36,6 +38,7 @@ function AnalyticsContent() {
 
   const videoElementRef = useRef<HTMLVideoElement | null>(null);
   const [showBookmarkPicker, setShowBookmarkPicker] = useState(false);
+  const [showGoalPicker, setShowGoalPicker] = useState(false);
   const bookmarkTimeRef = useRef(0);
 
   // Keep a stable ref to the video element
@@ -223,8 +226,42 @@ function AnalyticsContent() {
     }
   }, []);
 
+  const handleGoalScoreConfirm = useCallback((homeScore: number, awayScore: number) => {
+    setShowGoalPicker(false);
+    const time = bookmarkTimeRef.current;
+    const localId = crypto.randomUUID();
+    const ownerId = user?.id;
+    const createdByName = profile?.display_name ?? undefined;
+    const category: BookmarkCategory = 'goal';
+    const comment = `${homeScore} - ${awayScore}`;
+
+    const bookmark = {
+      id: localId, time, comment, createdAt: Date.now(),
+      category, ownerId, createdByName,
+    };
+    dispatch({ type: 'ADD_BOOKMARK', bookmark });
+
+    if (state.sessionId) {
+      createEvent(state.sessionId, { time, comment, category }).then(row => {
+        if (row) {
+          dispatch({ type: 'REMOVE_BOOKMARK', id: localId });
+          dispatch({
+            type: 'ADD_BOOKMARK',
+            bookmark: { ...bookmark, cloudId: row.id },
+          });
+        }
+      });
+    }
+  }, [state.sessionId, user?.id, profile?.display_name, dispatch]);
+
   const handleBookmarkSelect = useCallback((selection: BookmarkCategory | 'custom') => {
     setShowBookmarkPicker(false);
+
+    if (selection === 'goal') {
+      setShowGoalPicker(true);
+      return;
+    }
+
     const time = bookmarkTimeRef.current;
     const localId = crypto.randomUUID();
     const ownerId = user?.id;
@@ -330,7 +367,8 @@ function AnalyticsContent() {
               mode="live"
             />
             <MatchClock />
-            <VideoOverlayHeader />
+            <MatchResultsPanel />
+            <MatchInfoPanel />
             {!showSessionBrowser && <DrawingToolbar />}
             <VideoOverlayControls
               playerRef={playerRef}
@@ -343,6 +381,14 @@ function AnalyticsContent() {
                 existingBookmarks={state.bookmarks}
                 onSelect={handleBookmarkSelect}
                 onDismiss={() => setShowBookmarkPicker(false)}
+              />
+            )}
+            {showGoalPicker && (
+              <GoalTeamPicker
+                homeTeamName={state.urlMetadata?.homeTeam ?? null}
+                awayTeamName={state.urlMetadata?.awayTeam ?? null}
+                onConfirm={handleGoalScoreConfirm}
+                onDismiss={() => setShowGoalPicker(false)}
               />
             )}
           </div>

@@ -14,7 +14,10 @@ const CATEGORY_COLORS: Record<BookmarkCategory, string> = {
   halftime: '#f59e0b',
   start_2nd_half: '#3b82f6',
   end: '#ef4444',
+  goal: '#ffffff',
 };
+
+const GOAL_COLOR = '#ffffff';
 
 export function BookmarkPicker({ existingBookmarks, onSelect, onDismiss }: Props) {
   const existingCategories = new Set(
@@ -34,6 +37,8 @@ export function BookmarkPicker({ existingBookmarks, onSelect, onDismiss }: Props
     if (num >= 1 && num <= 4) {
       onSelect(BOOKMARK_CATEGORY_ORDER[num - 1]);
     } else if (num === 5) {
+      onSelect('goal');
+    } else if (num === 6) {
       onSelect('custom');
     }
   }, [onSelect, onDismiss]);
@@ -43,14 +48,17 @@ export function BookmarkPicker({ existingBookmarks, onSelect, onDismiss }: Props
     return () => window.removeEventListener('keydown', handleKey, true);
   }, [handleKey]);
 
-  const options: { key: BookmarkCategory | 'custom'; num: number; label: string; color: string }[] = [
-    ...BOOKMARK_CATEGORY_ORDER.map((cat, i) => ({
+  const standardOptions: { key: BookmarkCategory | 'custom'; num: number; label: string; color: string }[] =
+    BOOKMARK_CATEGORY_ORDER.map((cat, i) => ({
       key: cat,
       num: i + 1,
       label: BOOKMARK_CATEGORY_LABELS[cat].full,
       color: CATEGORY_COLORS[cat],
-    })),
-    { key: 'custom', num: 5, label: 'Custom', color: THEME.highlight },
+    }));
+
+  const extraOptions: typeof standardOptions = [
+    { key: 'goal', num: 5, label: 'Goal', color: GOAL_COLOR },
+    { key: 'custom', num: 6, label: 'Custom', color: THEME.highlight },
   ];
 
   return (
@@ -90,67 +98,19 @@ export function BookmarkPicker({ existingBookmarks, onSelect, onDismiss }: Props
           Set event
         </div>
 
-        {options.map(opt => {
-          const isSet = opt.key !== 'custom' && existingCategories.has(opt.key);
+        {standardOptions.map(opt => {
+          const isSet = existingCategories.has(opt.key as BookmarkCategory);
           return (
-            <button
-              key={opt.key}
-              onClick={() => onSelect(opt.key)}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 10,
-                width: '100%',
-                padding: '7px 14px',
-                background: 'none',
-                border: 'none',
-                cursor: 'pointer',
-                fontSize: 13,
-                fontFamily: 'inherit',
-                color: THEME.secondary,
-                textAlign: 'left',
-              }}
-              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = THEME.surfaceHover; }}
-              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'none'; }}
-            >
-              {/* Number key hint */}
-              <span style={{
-                width: 20,
-                height: 20,
-                borderRadius: 4,
-                background: 'rgba(255, 255, 255, 0.08)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: 11,
-                fontWeight: 600,
-                color: THEME.textMuted,
-                flexShrink: 0,
-              }}>
-                {opt.num}
-              </span>
-
-              {/* Color dot */}
-              <span style={{
-                width: 8,
-                height: 8,
-                borderRadius: '50%',
-                background: opt.color,
-                flexShrink: 0,
-              }} />
-
-              {/* Label */}
-              <span style={{ flex: 1 }}>{opt.label}</span>
-
-              {/* Checkmark if already set */}
-              {isSet && (
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={opt.color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="20 6 9 17 4 12" />
-                </svg>
-              )}
-            </button>
+            <PickerRow key={opt.key} opt={opt} isSet={isSet} onSelect={onSelect} />
           );
         })}
+
+        {/* Divider */}
+        <div style={{ height: 1, background: 'rgba(255, 255, 255, 0.08)', margin: '4px 14px' }} />
+
+        {extraOptions.map(opt => (
+          <PickerRow key={opt.key} opt={opt} isSet={false} onSelect={onSelect} />
+        ))}
 
         <div style={{
           padding: '6px 14px 2px',
@@ -158,9 +118,77 @@ export function BookmarkPicker({ existingBookmarks, onSelect, onDismiss }: Props
           color: 'rgba(255, 255, 255, 0.3)',
           textAlign: 'center',
         }}>
-          Press 1-5 or click &middot; ESC to cancel
+          Press 1-6 or click &middot; ESC to cancel
         </div>
       </div>
     </div>
+  );
+}
+
+function PickerRow({
+  opt,
+  isSet,
+  onSelect,
+}: {
+  opt: { key: BookmarkCategory | 'custom'; num: number; label: string; color: string };
+  isSet: boolean;
+  onSelect: (key: BookmarkCategory | 'custom') => void;
+}) {
+  return (
+    <button
+      onClick={() => onSelect(opt.key)}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 10,
+        width: '100%',
+        padding: '7px 14px',
+        background: 'none',
+        border: 'none',
+        cursor: 'pointer',
+        fontSize: 13,
+        fontFamily: 'inherit',
+        color: THEME.secondary,
+        textAlign: 'left',
+      }}
+      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = THEME.surfaceHover; }}
+      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'none'; }}
+    >
+      {/* Number key hint */}
+      <span style={{
+        width: 20,
+        height: 20,
+        borderRadius: 4,
+        background: 'rgba(255, 255, 255, 0.08)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        fontSize: 11,
+        fontWeight: 600,
+        color: THEME.textMuted,
+        flexShrink: 0,
+      }}>
+        {opt.num}
+      </span>
+
+      {/* Color dot */}
+      <span style={{
+        width: 8,
+        height: 8,
+        borderRadius: '50%',
+        background: opt.color,
+        flexShrink: 0,
+      }} />
+
+      {/* Label */}
+      <span style={{ flex: 1 }}>{opt.label}</span>
+
+      {/* Checkmark if already set */}
+      {isSet && (
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={opt.color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <polyline points="20 6 9 17 4 12" />
+        </svg>
+      )}
+    </button>
   );
 }

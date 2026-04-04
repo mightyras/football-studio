@@ -454,8 +454,9 @@ export async function createEvent(
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
 
-  // For category events, soft-delete the existing one to enforce uniqueness
-  if (event.category) {
+  // For unique category events (not goals), soft-delete the existing one to enforce uniqueness
+  const UNIQUE_CATEGORIES = ['kickoff', 'halftime', 'start_2nd_half', 'end'];
+  if (event.category && UNIQUE_CATEGORIES.includes(event.category)) {
     const { data: existing } = await supabase
       .from('analysis_events')
       .select('id')

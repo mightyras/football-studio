@@ -28,7 +28,7 @@ export function DrawingToolbar() {
     <div
       style={{
         position: 'absolute',
-        top: 10,
+        top: 46,
         right: 10,
         zIndex: 6,
         display: 'flex',
