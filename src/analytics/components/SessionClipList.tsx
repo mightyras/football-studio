@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { useAnalytics } from '../AnalyticsContext';
+import { useAuth } from '../../state/AuthContext';
 import { formatTime, formatFileSize } from '../utils/time';
 import { downloadBlob } from '../utils/download';
 import { formatTimestamp } from '../utils/time';
@@ -9,6 +10,8 @@ import { THEME } from '../../constants/colors';
 
 export function SessionClipList() {
   const { state, dispatch } = useAnalytics();
+  const { user } = useAuth();
+  const isSessionOwner = state.sessionOwnerId === user?.id;
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
   const [deletingClipId, setDeletingClipId] = useState<string | null>(null);
@@ -128,7 +131,9 @@ export function SessionClipList() {
           paddingBottom: 4,
         }}
       >
-        {state.sessionClips.map(clip => (
+        {state.sessionClips.map(clip => {
+          const canEdit = clip.ownerId === user?.id || isSessionOwner;
+          return (
           <div
             key={clip.id}
             style={{
@@ -223,7 +228,7 @@ export function SessionClipList() {
 
             {/* Info */}
             <div style={{ padding: '6px 8px' }}>
-              {editingId === clip.id ? (
+              {editingId === clip.id && canEdit ? (
                 <input
                   autoFocus
                   type="text"
@@ -250,21 +255,27 @@ export function SessionClipList() {
                 />
               ) : (
                 <div
-                  onClick={e => {
+                  onClick={canEdit ? (e => {
                     e.stopPropagation();
                     startEditing(clip.id, clip.label || '');
-                  }}
+                  }) : undefined}
                   style={{
                     fontSize: 11,
                     color: THEME.secondary,
                     whiteSpace: 'nowrap',
                     overflow: 'hidden',
                     textOverflow: 'ellipsis',
-                    cursor: 'text',
+                    cursor: canEdit ? 'text' : 'default',
                   }}
-                  title="Click to edit label"
+                  title={canEdit ? 'Click to edit label' : undefined}
                 >
                   {clip.label || `${clip.type === 'video' ? 'Clip' : 'Screenshot'} @ ${formatTime(clip.timestamp)}`}
+                </div>
+              )}
+              {/* Creator attribution */}
+              {clip.createdByName && clip.ownerId !== user?.id && (
+                <div style={{ fontSize: 9, color: THEME.textMuted, marginTop: 1, opacity: 0.7 }}>
+                  by {clip.createdByName}
                 </div>
               )}
               <div style={{
@@ -314,34 +325,37 @@ export function SessionClipList() {
                       <line x1="12" y1="15" x2="12" y2="3" />
                     </svg>
                   </button>
-                  {/* Delete */}
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setDeletingClipId(clip.id);
-                    }}
-                    style={{
-                      background: 'none',
-                      border: 'none',
-                      color: THEME.textMuted,
-                      cursor: 'pointer',
-                      padding: 2,
-                      fontSize: 11,
-                      fontFamily: 'inherit',
-                      opacity: 0.6,
-                    }}
-                    title="Delete clip"
-                  >
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <polyline points="3 6 5 6 21 6" />
-                      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                    </svg>
-                  </button>
+                  {/* Delete — only for clip owner or session owner */}
+                  {canEdit && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setDeletingClipId(clip.id);
+                      }}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: THEME.textMuted,
+                        cursor: 'pointer',
+                        padding: 2,
+                        fontSize: 11,
+                        fontFamily: 'inherit',
+                        opacity: 0.6,
+                      }}
+                      title="Delete clip"
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <polyline points="3 6 5 6 21 6" />
+                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                      </svg>
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
           </div>
-        ))}
+          );
+        })}
       </div>
 
       {deletingClipId && (() => {

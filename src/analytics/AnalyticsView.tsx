@@ -18,7 +18,9 @@ import { VideoOverlayControls } from './components/VideoOverlayControls';
 import { useScreenshotCapture } from './hooks/useScreenshotCapture';
 import { useClipRecorder } from './hooks/useClipRecorder';
 import { useAnalyticsAutoSave } from './hooks/useAnalyticsAutoSave';
+import { useAuth } from '../state/AuthContext';
 import { detectUrlType } from './utils/urlDetector';
+import { createEvent } from './services/analysisService';
 import { supabase } from '../lib/supabase';
 import { THEME } from '../constants/colors';
 import type { SessionClip, BookmarkCategory } from './types';
@@ -27,6 +29,7 @@ import { BOOKMARK_CATEGORY_LABELS } from './types';
 function AnalyticsContent() {
   const playerRef = useRef<VideoPlayerHandle>(null);
   const { state, dispatch } = useAnalytics();
+  const { user, profile } = useAuth();
   const [clipTrayOpen, setClipTrayOpen] = useState(false);
   const [pendingClip, setPendingClip] = useState<SessionClip | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -223,32 +226,59 @@ function AnalyticsContent() {
   const handleBookmarkSelect = useCallback((selection: BookmarkCategory | 'custom') => {
     setShowBookmarkPicker(false);
     const time = bookmarkTimeRef.current;
+    const localId = crypto.randomUUID();
+    const ownerId = user?.id;
+    const createdByName = profile?.display_name ?? undefined;
 
     if (selection === 'custom') {
-      dispatch({
-        type: 'ADD_BOOKMARK',
-        bookmark: { id: crypto.randomUUID(), time, comment: '', createdAt: Date.now() },
-      });
+      const bookmark = {
+        id: localId, time, comment: '', createdAt: Date.now(),
+        ownerId, createdByName,
+      };
+      dispatch({ type: 'ADD_BOOKMARK', bookmark });
+
+      // Persist to DB
+      if (state.sessionId) {
+        createEvent(state.sessionId, { time, comment: '' }).then(row => {
+          if (row) {
+            // Patch in cloudId by replacing the bookmark
+            dispatch({ type: 'REMOVE_BOOKMARK', id: localId });
+            dispatch({
+              type: 'ADD_BOOKMARK',
+              bookmark: { ...bookmark, cloudId: row.id },
+            });
+          }
+        });
+      }
       return;
     }
 
-    // Remove existing bookmark with same category
+    // Remove existing bookmark with same category (locally — DB-side handled by createEvent)
     const existing = state.bookmarks.find(b => b.category === selection);
     if (existing) {
       dispatch({ type: 'REMOVE_BOOKMARK', id: existing.id });
     }
 
-    dispatch({
-      type: 'ADD_BOOKMARK',
-      bookmark: {
-        id: crypto.randomUUID(),
-        time,
-        comment: BOOKMARK_CATEGORY_LABELS[selection].full,
-        createdAt: Date.now(),
-        category: selection,
-      },
-    });
-  }, [state.bookmarks, dispatch]);
+    const comment = BOOKMARK_CATEGORY_LABELS[selection].full;
+    const bookmark = {
+      id: localId, time, comment, createdAt: Date.now(),
+      category: selection, ownerId, createdByName,
+    };
+    dispatch({ type: 'ADD_BOOKMARK', bookmark });
+
+    // Persist to DB
+    if (state.sessionId) {
+      createEvent(state.sessionId, { time, comment, category: selection }).then(row => {
+        if (row) {
+          dispatch({ type: 'REMOVE_BOOKMARK', id: localId });
+          dispatch({
+            type: 'ADD_BOOKMARK',
+            bookmark: { ...bookmark, cloudId: row.id },
+          });
+        }
+      });
+    }
+  }, [state.bookmarks, state.sessionId, user?.id, profile?.display_name, dispatch]);
 
   return (
     <div style={{

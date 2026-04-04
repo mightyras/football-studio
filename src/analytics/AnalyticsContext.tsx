@@ -29,6 +29,7 @@ const initialState: AnalyticsState = {
   bookmarks: [],
   sessionId: null,
   sessionName: null,
+  sessionOwnerId: null,
   saveStatus: 'idle',
   holdStrokesOnPause: false,
 };
@@ -52,6 +53,7 @@ function analyticsReducer(state: AnalyticsState, action: AnalyticsAction): Analy
         bookmarks: [],
         sessionId: null,
         sessionName: null,
+        sessionOwnerId: null,
         saveStatus: 'idle',
       };
     case 'SET_RESOLVED_STREAM_URL':
@@ -147,7 +149,7 @@ function analyticsReducer(state: AnalyticsState, action: AnalyticsAction): Analy
         ),
       };
     case 'SET_SESSION':
-      return { ...state, sessionId: action.id, sessionName: action.name };
+      return { ...state, sessionId: action.id, sessionName: action.name, sessionOwnerId: action.ownerId };
     case 'SET_SESSION_NAME':
       return { ...state, sessionName: action.name };
     case 'SET_SAVE_STATUS':
@@ -166,6 +168,7 @@ function analyticsReducer(state: AnalyticsState, action: AnalyticsAction): Analy
         ...state,
         sessionId: action.sessionId,
         sessionName: action.sessionName,
+        sessionOwnerId: action.sessionOwnerId,
         streamUrl: action.streamUrl,
         resolvedStreamUrl: null,
         streamStatus: 'loading',
@@ -180,7 +183,7 @@ function analyticsReducer(state: AnalyticsState, action: AnalyticsAction): Analy
         inPoint: null,
         outPoint: null,
         annotations: [],
-        saveStatus: 'saved',
+        saveStatus: 'idle',
       };
     case 'CLEAR_FREEHAND_ANNOTATIONS':
       return { ...state, annotations: state.annotations.filter(a => a.type !== 'freehand' && a.type !== 'spotlight') };

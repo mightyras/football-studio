@@ -37,6 +37,9 @@ export type SessionClip = {
   annotations: VideoAnnotation[];
   label?: string;
   createdAt: number;
+  // Attribution
+  ownerId?: string;
+  createdByName?: string;
   // Persistence fields (set after saving to Supabase)
   cloudId?: string;
   storagePath?: string;
@@ -74,6 +77,7 @@ export type AnalyticsState = {
   bookmarks: Bookmark[];
   sessionId: string | null;
   sessionName: string | null;
+  sessionOwnerId: string | null;
   saveStatus: 'idle' | 'saving' | 'saved' | 'error';
   holdStrokesOnPause: boolean;
 };
@@ -107,11 +111,11 @@ export type AnalyticsAction =
   | { type: 'ADD_BOOKMARK'; bookmark: Bookmark }
   | { type: 'REMOVE_BOOKMARK'; id: string }
   | { type: 'UPDATE_BOOKMARK_COMMENT'; id: string; comment: string }
-  | { type: 'SET_SESSION'; id: string; name: string }
+  | { type: 'SET_SESSION'; id: string; name: string; ownerId: string }
   | { type: 'SET_SESSION_NAME'; name: string }
   | { type: 'SET_SAVE_STATUS'; status: 'idle' | 'saving' | 'saved' | 'error' }
   | { type: 'SET_CLIP_CLOUD_ID'; localId: string; cloudId: string; storagePath: string; thumbnailStoragePath?: string }
-  | { type: 'LOAD_SESSION'; clips: SessionClip[]; bookmarks: Bookmark[]; streamUrl: string; metadata: UrlMetadata | null; sessionId: string; sessionName: string }
+  | { type: 'LOAD_SESSION'; clips: SessionClip[]; bookmarks: Bookmark[]; streamUrl: string; metadata: UrlMetadata | null; sessionId: string; sessionName: string; sessionOwnerId: string }
   | { type: 'CLEAR_FREEHAND_ANNOTATIONS' }
   | { type: 'REMOVE_FADED_ANNOTATIONS'; ids: string[] }
   | { type: 'STAMP_FREEHAND_FADE_START'; time: number; videoTime?: number }
@@ -155,4 +159,9 @@ export type Bookmark = {
   comment: string;
   createdAt: number;
   category?: BookmarkCategory;
+  // Attribution
+  ownerId?: string;
+  createdByName?: string;
+  // Persistence
+  cloudId?: string;
 };

@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { useAnalytics } from '../AnalyticsContext';
 import { useStreamUrlResolver } from '../hooks/useStreamUrlResolver';
 import { createSession } from '../services/analysisService';
+import { useTeam } from '../../state/TeamContext';
 import { THEME } from '../../constants/colors';
 
 /**
@@ -12,6 +13,7 @@ export function StreamUrlBar() {
   const [inputValue, setInputValue] = useState('');
   const { state, dispatch } = useAnalytics();
   const { resolveUrl } = useStreamUrlResolver();
+  const { activeTeam } = useTeam();
   const sessionCreatedForUrlRef = useRef<string | null>(null);
 
   // Auto-create a session when a stream starts playing (and we don't already have one)
@@ -33,13 +35,13 @@ export function StreamUrlBar() {
         name = `Match ${meta.matchDate}`;
       }
 
-      createSession(name, state.streamUrl, meta ?? null).then(row => {
+      createSession(name, state.streamUrl, meta ?? null, activeTeam?.id).then(row => {
         if (row) {
-          dispatch({ type: 'SET_SESSION', id: row.id, name: row.name });
+          dispatch({ type: 'SET_SESSION', id: row.id, name: row.name, ownerId: row.owner_id });
         }
       });
     }
-  }, [state.streamStatus, state.sessionId, state.streamUrl, state.urlMetadata, dispatch]);
+  }, [state.streamStatus, state.sessionId, state.streamUrl, state.urlMetadata, activeTeam, dispatch]);
 
   const handleLoad = useCallback(() => {
     const url = inputValue.trim();

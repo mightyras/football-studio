@@ -5,53 +5,54 @@ import { updateSession } from '../services/analysisService';
 const DEBOUNCE_MS = 2500;
 
 /**
- * Auto-saves bookmarks and session name to Supabase when they change.
- * Follows the same debounce + flush-on-unmount pattern as useMatchAutoSave.
+ * Auto-saves session name to Supabase when it changes.
+ * Events (formerly bookmarks) are now persisted individually via the
+ * analysis_events table, so they are no longer batch-saved here.
  */
 export function useAnalyticsAutoSave() {
   const { state, dispatch } = useAnalytics();
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const skipNextRef = useRef(false);
   const prevSessionIdRef = useRef(state.sessionId);
+  const prevSessionNameRef = useRef(state.sessionName);
+  const isFirstRenderRef = useRef(true);
 
   // Keep refs up-to-date for unmount flush
-  const bookmarksRef = useRef(state.bookmarks);
-  bookmarksRef.current = state.bookmarks;
   const sessionNameRef = useRef(state.sessionName);
   sessionNameRef.current = state.sessionName;
   const sessionIdRef = useRef(state.sessionId);
   sessionIdRef.current = state.sessionId;
 
-  // When sessionId changes (new session loaded), skip the next auto-save
   useEffect(() => {
-    if (prevSessionIdRef.current !== state.sessionId) {
-      skipNextRef.current = true;
+    // Skip the very first render
+    if (isFirstRenderRef.current) {
+      isFirstRenderRef.current = false;
       prevSessionIdRef.current = state.sessionId;
-    }
-  }, [state.sessionId]);
-
-  // Debounced save of bookmarks + name
-  const triggerSave = () => {
-    if (!state.sessionId) return;
-
-    if (skipNextRef.current) {
-      skipNextRef.current = false;
+      prevSessionNameRef.current = state.sessionName;
       return;
     }
+
+    // Skip if session just changed (loaded a different session)
+    if (prevSessionIdRef.current !== state.sessionId) {
+      prevSessionIdRef.current = state.sessionId;
+      prevSessionNameRef.current = state.sessionName;
+      return;
+    }
+
+    // Skip if name hasn't actually changed
+    if (prevSessionNameRef.current === state.sessionName) {
+      return;
+    }
+
+    prevSessionNameRef.current = state.sessionName;
+
+    if (!state.sessionId || !state.sessionName) return;
 
     if (timerRef.current) clearTimeout(timerRef.current);
 
     timerRef.current = setTimeout(async () => {
       dispatch({ type: 'SET_SAVE_STATUS', status: 'saving' });
 
-      const updates: { bookmarks: typeof state.bookmarks; name?: string } = {
-        bookmarks: state.bookmarks,
-      };
-      if (state.sessionName) {
-        updates.name = state.sessionName;
-      }
-
-      const ok = await updateSession(state.sessionId!, updates);
+      const ok = await updateSession(state.sessionId!, { name: state.sessionName! });
 
       dispatch({ type: 'SET_SAVE_STATUS', status: ok ? 'saved' : 'error' });
 
@@ -59,15 +60,9 @@ export function useAnalyticsAutoSave() {
         setTimeout(() => dispatch({ type: 'SET_SAVE_STATUS', status: 'idle' }), 2000);
       }
     }, DEBOUNCE_MS);
-  };
 
-  // Watch bookmarks for changes
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { triggerSave(); return () => { if (timerRef.current) clearTimeout(timerRef.current); }; }, [state.bookmarks]);
-
-  // Watch session name for changes
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { triggerSave(); return () => { if (timerRef.current) clearTimeout(timerRef.current); }; }, [state.sessionName]);
+    return () => { if (timerRef.current) clearTimeout(timerRef.current); };
+  }, [state.sessionId, state.sessionName, dispatch]);
 
   // Flush pending save on unmount
   useEffect(() => {
@@ -75,12 +70,9 @@ export function useAnalyticsAutoSave() {
       if (timerRef.current) {
         clearTimeout(timerRef.current);
         const sid = sessionIdRef.current;
-        const bm = bookmarksRef.current;
         const name = sessionNameRef.current;
-        if (sid) {
-          const updates: { bookmarks: typeof bm; name?: string } = { bookmarks: bm };
-          if (name) updates.name = name;
-          updateSession(sid, updates);
+        if (sid && name) {
+          updateSession(sid, { name });
         }
       }
     };

@@ -1,7 +1,8 @@
 import { useState, useCallback } from 'react';
 import { useAnalytics } from '../AnalyticsContext';
+import { useAuth } from '../../state/AuthContext';
 import { detectUrlType, extractUrlMetadata } from '../utils/urlDetector';
-import { updateSession } from '../services/analysisService';
+import { updateSession, updateEventComment, deleteEvent } from '../services/analysisService';
 import { formatTime } from '../utils/time';
 import { THEME } from '../../constants/colors';
 import { BOOKMARK_CATEGORY_LABELS } from '../types';
@@ -14,6 +15,8 @@ type Props = {
 
 export function BookmarkList({ onSeek, onClose }: Props) {
   const { state, dispatch } = useAnalytics();
+  const { user } = useAuth();
+  const isSessionOwner = state.sessionOwnerId === user?.id;
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
   const [urlDialogOpen, setUrlDialogOpen] = useState(false);
@@ -27,9 +30,14 @@ export function BookmarkList({ onSeek, onClose }: Props) {
   const saveEdit = useCallback(() => {
     if (editingId) {
       dispatch({ type: 'UPDATE_BOOKMARK_COMMENT', id: editingId, comment: editValue });
+      // Persist to DB
+      const bookmark = state.bookmarks.find(b => b.id === editingId);
+      if (bookmark?.cloudId) {
+        updateEventComment(bookmark.cloudId, editValue);
+      }
       setEditingId(null);
     }
-  }, [editingId, editValue, dispatch]);
+  }, [editingId, editValue, dispatch, state.bookmarks]);
 
   const cancelEdit = useCallback(() => {
     setEditingId(null);
@@ -75,15 +83,19 @@ export function BookmarkList({ onSeek, onClose }: Props) {
 
   const handleOpenNewGame = useCallback(async () => {
     // Flush pending save before resetting
-    if (state.sessionId) {
-      const updates: { bookmarks: typeof state.bookmarks; name?: string } = {
-        bookmarks: state.bookmarks,
-      };
-      if (state.sessionName) updates.name = state.sessionName;
-      await updateSession(state.sessionId, updates);
+    if (state.sessionId && state.sessionName) {
+      await updateSession(state.sessionId, { name: state.sessionName });
     }
     dispatch({ type: 'RESET' });
-  }, [state.sessionId, state.bookmarks, state.sessionName, dispatch]);
+  }, [state.sessionId, state.sessionName, dispatch]);
+
+  const handleDeleteBookmark = useCallback((id: string) => {
+    const bookmark = state.bookmarks.find(b => b.id === id);
+    if (bookmark?.cloudId) {
+      deleteEvent(bookmark.cloudId);
+    }
+    dispatch({ type: 'REMOVE_BOOKMARK', id });
+  }, [dispatch, state.bookmarks]);
 
   if (state.bookmarks.length === 0) return null;
 
@@ -127,66 +139,68 @@ export function BookmarkList({ onSeek, onClose }: Props) {
         </div>
       )}
 
-      {/* Session actions */}
-      <div style={{
-        padding: '4px 8px 6px',
-        borderBottom: `1px solid ${THEME.borderSubtle}`,
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 4,
-        flexShrink: 0,
-      }}>
-        <button
-          onClick={handleOpenNewGame}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 5,
-            width: '100%',
-            padding: '5px 6px',
-            background: THEME.surfaceHover,
-            border: `1px solid ${THEME.borderSubtle}`,
-            borderRadius: 4,
-            color: THEME.secondary,
-            fontSize: 11,
-            fontFamily: 'inherit',
-            cursor: 'pointer',
-          }}
-        >
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-            <line x1="12" y1="5" x2="12" y2="19" />
-            <line x1="5" y1="12" x2="19" y2="12" />
-          </svg>
-          Open new game
-        </button>
+      {/* Session actions — only for session owner */}
+      {isSessionOwner && (
+        <div style={{
+          padding: '4px 8px 6px',
+          borderBottom: `1px solid ${THEME.borderSubtle}`,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 4,
+          flexShrink: 0,
+        }}>
+          <button
+            onClick={handleOpenNewGame}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 5,
+              width: '100%',
+              padding: '5px 6px',
+              background: THEME.surfaceHover,
+              border: `1px solid ${THEME.borderSubtle}`,
+              borderRadius: 4,
+              color: THEME.secondary,
+              fontSize: 11,
+              fontFamily: 'inherit',
+              cursor: 'pointer',
+            }}
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <line x1="12" y1="5" x2="12" y2="19" />
+              <line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
+            Open new game
+          </button>
 
-        <button
-          onClick={() => {
-            setUrlValue(state.streamUrl || '');
-            setUrlDialogOpen(true);
-          }}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 5,
-            width: '100%',
-            padding: '5px 6px',
-            background: 'transparent',
-            border: `1px solid ${THEME.borderSubtle}`,
-            borderRadius: 4,
-            color: THEME.textMuted,
-            fontSize: 11,
-            fontFamily: 'inherit',
-            cursor: 'pointer',
-          }}
-        >
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
-            <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
-          </svg>
-          Change stream URL
-        </button>
-      </div>
+          <button
+            onClick={() => {
+              setUrlValue(state.streamUrl || '');
+              setUrlDialogOpen(true);
+            }}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 5,
+              width: '100%',
+              padding: '5px 6px',
+              background: 'transparent',
+              border: `1px solid ${THEME.borderSubtle}`,
+              borderRadius: 4,
+              color: THEME.textMuted,
+              fontSize: 11,
+              fontFamily: 'inherit',
+              cursor: 'pointer',
+            }}
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+              <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+            </svg>
+            Change stream URL
+          </button>
+        </div>
+      )}
 
       {/* Events header */}
       <div style={{
@@ -211,127 +225,147 @@ export function BookmarkList({ onSeek, onClose }: Props) {
         overflowY: 'auto',
         padding: '4px 8px',
       }}>
-        {state.bookmarks.map(bookmark => (
-          <div
-            key={bookmark.id}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6,
-              padding: '4px 0',
-              fontSize: 11,
-            }}
-          >
-            {/* Timestamp pill */}
-            <button
-              onClick={() => onSeek(bookmark.time)}
+        {state.bookmarks.map(bookmark => {
+          const canEdit = bookmark.ownerId === user?.id || isSessionOwner;
+          return (
+            <div
+              key={bookmark.id}
               style={{
-                flexShrink: 0,
-                background: THEME.surfaceHover,
-                border: `1px solid ${THEME.borderSubtle}`,
-                borderRadius: 4,
-                padding: '2px 6px',
-                fontSize: 10,
-                fontFamily: 'monospace',
-                fontWeight: 600,
-                color: bookmark.category ? '#3b82f6' : THEME.highlight,
-                cursor: 'pointer',
-                minWidth: 44,
-                textAlign: 'center',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '4px 0',
+                fontSize: 11,
               }}
-              title="Jump to this time"
             >
-              {formatTime(bookmark.time)}
-            </button>
+              {/* Timestamp pill */}
+              <button
+                onClick={() => onSeek(bookmark.time)}
+                style={{
+                  flexShrink: 0,
+                  background: THEME.surfaceHover,
+                  border: `1px solid ${THEME.borderSubtle}`,
+                  borderRadius: 4,
+                  padding: '2px 6px',
+                  fontSize: 10,
+                  fontFamily: 'monospace',
+                  fontWeight: 600,
+                  color: bookmark.category ? '#3b82f6' : THEME.highlight,
+                  cursor: 'pointer',
+                  minWidth: 44,
+                  textAlign: 'center',
+                }}
+                title="Jump to this time"
+              >
+                {formatTime(bookmark.time)}
+              </button>
 
-            {/* Category badge */}
-            {bookmark.category && (
-              <span style={{
-                flexShrink: 0,
-                background: 'rgba(59, 130, 246, 0.15)',
-                color: '#3b82f6',
-                borderRadius: 3,
-                padding: '1px 5px',
-                fontSize: 9,
-                fontWeight: 700,
-                letterSpacing: '0.3px',
-              }}>
-                {BOOKMARK_CATEGORY_LABELS[bookmark.category].short}
-              </span>
-            )}
-
-            {/* Spacer for standard events, comment field for custom */}
-            {bookmark.category ? (
-              <div style={{ flex: 1 }} />
-            ) : (
-              editingId === bookmark.id ? (
-                <input
-                  autoFocus
-                  type="text"
-                  value={editValue}
-                  onChange={e => setEditValue(e.target.value)}
-                  onBlur={saveEdit}
-                  onKeyDown={e => {
-                    if (e.key === 'Enter') saveEdit();
-                    if (e.key === 'Escape') cancelEdit();
-                    e.stopPropagation();
-                  }}
-                  style={{
-                    flex: 1,
-                    padding: '2px 6px',
-                    background: THEME.surfaceRaised,
-                    border: `1px solid ${THEME.highlight}`,
-                    borderRadius: 3,
-                    color: THEME.secondary,
-                    fontSize: 11,
-                    fontFamily: 'inherit',
-                    outline: 'none',
-                    minWidth: 0,
-                  }}
-                  placeholder="Add a note..."
-                />
-              ) : (
-                <span
-                  onClick={() => startEditing(bookmark.id, bookmark.comment)}
-                  style={{
-                    flex: 1,
-                    color: bookmark.comment ? THEME.secondary : THEME.textMuted,
-                    cursor: 'text',
-                    padding: '2px 4px',
-                    borderRadius: 3,
-                    minWidth: 0,
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                    fontSize: 11,
-                  }}
-                  title={bookmark.comment || 'Click to add a note'}
-                >
-                  {bookmark.comment || 'Add note...'}
+              {/* Category badge */}
+              {bookmark.category && (
+                <span style={{
+                  flexShrink: 0,
+                  background: 'rgba(59, 130, 246, 0.15)',
+                  color: '#3b82f6',
+                  borderRadius: 3,
+                  padding: '1px 5px',
+                  fontSize: 9,
+                  fontWeight: 700,
+                  letterSpacing: '0.3px',
+                }}>
+                  {BOOKMARK_CATEGORY_LABELS[bookmark.category].short}
                 </span>
-              )
-            )}
+              )}
 
-            {/* Delete */}
-            <button
-              onClick={() => dispatch({ type: 'REMOVE_BOOKMARK', id: bookmark.id })}
-              style={{
-                flexShrink: 0,
-                background: 'none',
-                border: 'none',
-                color: THEME.textMuted,
-                cursor: 'pointer',
-                padding: 2,
-                fontSize: 13,
-                lineHeight: 1,
-                opacity: 0.5,
-              }}
-              title="Remove event"
-            >
-              &times;
-            </button>
-          </div>
-        ))}
+              {/* Spacer for standard events, comment field for custom */}
+              {bookmark.category ? (
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+                  {/* Creator attribution for category events */}
+                  {bookmark.createdByName && bookmark.ownerId !== user?.id && (
+                    <span style={{ fontSize: 9, color: THEME.textMuted, opacity: 0.7 }}>
+                      by {bookmark.createdByName}
+                    </span>
+                  )}
+                </div>
+              ) : (
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+                  {editingId === bookmark.id && canEdit ? (
+                    <input
+                      autoFocus
+                      type="text"
+                      value={editValue}
+                      onChange={e => setEditValue(e.target.value)}
+                      onBlur={saveEdit}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') saveEdit();
+                        if (e.key === 'Escape') cancelEdit();
+                        e.stopPropagation();
+                      }}
+                      style={{
+                        flex: 1,
+                        padding: '2px 6px',
+                        background: THEME.surfaceRaised,
+                        border: `1px solid ${THEME.highlight}`,
+                        borderRadius: 3,
+                        color: THEME.secondary,
+                        fontSize: 11,
+                        fontFamily: 'inherit',
+                        outline: 'none',
+                        minWidth: 0,
+                      }}
+                      placeholder="Add a note..."
+                    />
+                  ) : (
+                    <span
+                      onClick={canEdit ? () => startEditing(bookmark.id, bookmark.comment) : undefined}
+                      style={{
+                        flex: 1,
+                        color: bookmark.comment ? THEME.secondary : THEME.textMuted,
+                        cursor: canEdit ? 'text' : 'default',
+                        padding: '2px 4px',
+                        borderRadius: 3,
+                        minWidth: 0,
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                        fontSize: 11,
+                      }}
+                      title={canEdit ? (bookmark.comment || 'Click to add a note') : bookmark.comment}
+                    >
+                      {bookmark.comment || (canEdit ? 'Add note...' : '')}
+                    </span>
+                  )}
+                  {/* Creator attribution for custom events */}
+                  {bookmark.createdByName && bookmark.ownerId !== user?.id && (
+                    <span style={{ fontSize: 9, color: THEME.textMuted, opacity: 0.7, padding: '0 4px' }}>
+                      by {bookmark.createdByName}
+                    </span>
+                  )}
+                </div>
+              )}
+
+              {/* Delete — only for event owner or session owner */}
+              {canEdit && (
+                <button
+                  onClick={() => handleDeleteBookmark(bookmark.id)}
+                  style={{
+                    flexShrink: 0,
+                    background: 'none',
+                    border: 'none',
+                    color: THEME.textMuted,
+                    cursor: 'pointer',
+                    padding: 2,
+                    fontSize: 13,
+                    lineHeight: 1,
+                    opacity: 0.5,
+                  }}
+                  title="Remove event"
+                >
+                  &times;
+                </button>
+              )}
+            </div>
+          );
+        })}
       </div>
 
       {/* Keyboard shortcuts */}
