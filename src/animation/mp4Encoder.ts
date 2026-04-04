@@ -77,7 +77,7 @@ export class MP4FrameEncoder {
 
   async finalize(): Promise<Blob> {
     await this.output.finalize();
-    return new Blob([this.output.target.buffer], { type: 'video/mp4' });
+    return new Blob([this.output.target.buffer!], { type: 'video/mp4' });
   }
 
   dispose(): void {
@@ -176,7 +176,7 @@ export class MP4ClipEncoder {
 
   async finalize(): Promise<Blob> {
     await this.output.finalize();
-    return new Blob([this.output.target.buffer], { type: 'video/mp4' });
+    return new Blob([this.output.target.buffer!], { type: 'video/mp4' });
   }
 
   dispose(): void {
