@@ -47,6 +47,7 @@ export function StreamUrlBar() {
     const url = inputValue.trim();
     if (!url) return;
     sessionCreatedForUrlRef.current = null;
+    setInputValue('');
     resolveUrl(url);
   }, [inputValue, resolveUrl]);
 

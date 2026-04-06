@@ -40,6 +40,25 @@ function AnalyticsContent() {
   const [showBookmarkPicker, setShowBookmarkPicker] = useState(false);
   const [showGoalPicker, setShowGoalPicker] = useState(false);
   const bookmarkTimeRef = useRef(0);
+  const kickoffSeekDoneRef = useRef<string | null>(null);
+
+  // Auto-seek to ~10s before kickoff when loading a saved session
+  useEffect(() => {
+    if (
+      state.streamStatus === 'playing' &&
+      state.sessionId &&
+      kickoffSeekDoneRef.current !== state.sessionId
+    ) {
+      const kickoff = state.bookmarks.find(b => b.category === 'kickoff');
+      if (kickoff) {
+        kickoffSeekDoneRef.current = state.sessionId;
+        const video = playerRef.current?.getVideoElement();
+        if (video) {
+          video.currentTime = Math.max(0, kickoff.time - 10);
+        }
+      }
+    }
+  }, [state.streamStatus, state.sessionId, state.bookmarks]);
 
   // Keep a stable ref to the video element
   useEffect(() => {
