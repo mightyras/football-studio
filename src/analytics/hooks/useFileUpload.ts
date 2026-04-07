@@ -72,16 +72,12 @@ export function useFileUpload() {
         ? `${firstName} (+1 more)`
         : `${firstName} (+${sorted.length - 1} more)`;
 
-      // Check if any files are too large to upload
-      const hasOversized = sorted.some(f => f.size > MAX_UPLOAD_SIZE);
-      const sourceType = hasOversized ? 'local_file' : 'uploaded_files';
-
       const row = await createSession(
         name,
         null,
         null,
         activeTeam?.id,
-        sourceType,
+        'uploaded_files',
       );
 
       if (!row) {
@@ -90,9 +86,9 @@ export function useFileUpload() {
       }
 
       dispatch({ type: 'SET_SESSION', id: row.id, name: row.name, ownerId: row.owner_id });
-      dispatch({ type: 'SET_SOURCE_TYPE', sourceType });
+      dispatch({ type: 'SET_SOURCE_TYPE', sourceType: 'uploaded_files' });
 
-      // Process files — upload small ones, create Object URLs for large ones
+      // Process files — upload small ones to storage, keep large ones as local Object URLs
       const sourceFiles: SourceFileInfo[] = [];
       for (let i = 0; i < sorted.length; i++) {
         const file = sorted[i];
@@ -100,7 +96,7 @@ export function useFileUpload() {
         setUploadProgress(Math.round((i / sorted.length) * 100));
         setUploadStatus(`${shortName} (${i + 1}/${sorted.length})`);
 
-        if (file.size <= MAX_UPLOAD_SIZE && !hasOversized) {
+        if (file.size <= MAX_UPLOAD_SIZE) {
           // Upload to Supabase Storage
           const sf = await uploadSourceFile(row.id, file, i);
           if (sf) {
@@ -113,7 +109,7 @@ export function useFileUpload() {
             });
           }
         } else {
-          // Keep local with Object URL
+          // Too large for upload — keep local with Object URL (won't persist across reload)
           const objectUrl = URL.createObjectURL(file);
           sourceFiles.push({
             id: crypto.randomUUID(),

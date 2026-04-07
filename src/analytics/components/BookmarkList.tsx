@@ -223,14 +223,11 @@ export function BookmarkList({ onSeek, onClose, onLeaveSession, autoEditId }: Pr
     const currentCount = state.sourceFiles.length;
     const newFiles: SourceFileInfo[] = [];
 
-    // Check if any files are too large — if so, keep them local
-    const hasOversized = files.some(f => f.size > MAX_UPLOAD_SIZE);
-
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
       const sortOrder = currentCount + i;
 
-      if (!hasOversized && file.size <= MAX_UPLOAD_SIZE) {
+      if (file.size <= MAX_UPLOAD_SIZE) {
         const sf = await uploadSourceFile(state.sessionId, file, sortOrder);
         if (sf) {
           newFiles.push({
@@ -257,7 +254,7 @@ export function BookmarkList({ onSeek, onClose, onLeaveSession, autoEditId }: Pr
       dispatch({ type: 'SET_SOURCE_FILES', files: [...state.sourceFiles, ...newFiles] });
       // If this was a single local-file session, upgrade the source type
       if (state.sourceType === 'local_file' || state.sourceType === 'stream') {
-        dispatch({ type: 'SET_SOURCE_TYPE', sourceType: hasOversized ? 'local_file' : 'uploaded_files' });
+        dispatch({ type: 'SET_SOURCE_TYPE', sourceType: 'uploaded_files' });
       }
     }
 

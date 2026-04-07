@@ -52,7 +52,7 @@ export function SessionBrowser() {
     setLoadingSessionId(session.id);
 
     // Fetch clips, events, and source files in parallel
-    const fetchSourceFiles = session.source_type === 'uploaded_files'
+    const fetchSourceFiles = session.source_type !== 'stream'
       ? fetchSessionSourceFiles(session.id)
       : Promise.resolve([]);
 

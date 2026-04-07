@@ -98,26 +98,44 @@ ALTER TABLE public.analysis_clips
   ADD COLUMN source_file_id uuid REFERENCES public.analysis_source_files(id) ON DELETE SET NULL;
 
 -- ============================================================
--- 4. STORAGE — allow reading source file media for team members
+-- 4. STORAGE — allow reading source file media (owner + team)
 -- ============================================================
 
-CREATE POLICY "Team members can read team source file media"
+-- Use a SECURITY DEFINER function to avoid nested RLS issues
+-- (the storage policy's EXISTS subquery would otherwise be filtered
+-- by analysis_source_files' own RLS policies, causing 400 errors).
+CREATE OR REPLACE FUNCTION public.can_access_source_file_media(file_path text, requesting_user_id uuid)
+RETURNS boolean
+LANGUAGE plpgsql
+SECURITY DEFINER SET search_path = ''
+AS $$
+BEGIN
+  RETURN EXISTS (
+    SELECT 1
+    FROM public.analysis_source_files sf
+    JOIN public.analysis_sessions s ON s.id = sf.session_id
+    WHERE sf.deleted_at IS NULL
+      AND s.deleted_at IS NULL
+      AND sf.storage_path = file_path
+      AND (
+        sf.owner_id = requesting_user_id
+        OR (
+          s.visibility = 'team'
+          AND s.team_id IN (
+            SELECT tm.team_id FROM public.team_members tm WHERE tm.user_id = requesting_user_id
+          )
+        )
+      )
+  );
+END;
+$$;
+
+CREATE POLICY "Users and team members can read source file media"
   ON storage.objects FOR SELECT
   TO authenticated
   USING (
     bucket_id = 'analysis-media'
-    AND EXISTS (
-      SELECT 1
-      FROM public.analysis_source_files sf
-      JOIN public.analysis_sessions s ON s.id = sf.session_id
-      WHERE sf.deleted_at IS NULL
-        AND s.deleted_at IS NULL
-        AND s.visibility = 'team'
-        AND sf.storage_path = name
-        AND s.team_id IN (
-          SELECT tm.team_id FROM public.team_members tm WHERE tm.user_id = auth.uid()
-        )
-    )
+    AND public.can_access_source_file_media(name, auth.uid())
   );
 
 -- ============================================================
