@@ -47,9 +47,6 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle>(function VideoPlayer(_p
   // Local file session loaded but no video URL yet → needs re-selection
   const needsFileReselection = state.sourceType === 'local_file' && state.sessionId && !state.resolvedStreamUrl && state.streamStatus === 'idle';
 
-  // Don't set crossOrigin for blob URLs (causes issues)
-  const isBlobUrl = state.resolvedStreamUrl?.startsWith('blob:');
-
   return (
     <div style={{
       position: 'relative',
@@ -67,7 +64,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle>(function VideoPlayer(_p
           display: (showPlaceholder || needsFileReselection) && !showLoading ? 'none' : 'block',
         }}
         playsInline
-        crossOrigin={isBlobUrl ? undefined : 'anonymous'}
+        crossOrigin="anonymous"
       />
 
       {/* Re-selection overlay for local file sessions */}
