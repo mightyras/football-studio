@@ -155,6 +155,16 @@ function AnalyticsContent() {
 
       const video = playerRef.current?.getVideoElement();
 
+      // Ctrl/Cmd+Z to undo last annotation
+      if (e.key.toLowerCase() === 'z' && (e.metaKey || e.ctrlKey) && !e.shiftKey) {
+        e.preventDefault();
+        const lastAnnotation = state.annotations[state.annotations.length - 1];
+        if (lastAnnotation) {
+          dispatch({ type: 'DELETE_ANNOTATION', id: lastAnnotation.id });
+        }
+        return;
+      }
+
       switch (e.key.toLowerCase()) {
         case ' ':
           e.preventDefault();
@@ -214,7 +224,7 @@ function AnalyticsContent() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [state.streamStatus, state.inPoint, state.outPoint, state.recordingStatus, state.activeTool, state.selectedClipId, showBookmarkPicker, dispatch, startRecording, stopRecording]);
+  }, [state.streamStatus, state.inPoint, state.outPoint, state.recordingStatus, state.activeTool, state.selectedClipId, state.annotations, showBookmarkPicker, dispatch, startRecording, stopRecording]);
 
   // Clear freehand strokes when video resumes playing (unless hold is on)
   const prevPlayingRef = useRef(state.isPlaying);
@@ -229,14 +239,17 @@ function AnalyticsContent() {
   const clipCount = state.sessionClips.length;
   const bookmarkCount = state.bookmarks.length;
   const [bookmarkPanelOpen, setBookmarkPanelOpen] = useState(false);
+  const [autoEditBookmarkId, setAutoEditBookmarkId] = useState<string | null>(null);
 
-  // Auto-open bookmark panel when first bookmark is added
+  const hasSourceFiles = state.sourceFiles.length > 1;
+
+  // Auto-open bookmark panel when first bookmark is added or source files are loaded
   useEffect(() => {
-    if (bookmarkCount > 0 && !bookmarkPanelOpen) {
+    if ((bookmarkCount > 0 || hasSourceFiles) && !bookmarkPanelOpen) {
       setBookmarkPanelOpen(true);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bookmarkCount > 0]);
+  }, [bookmarkCount > 0, hasSourceFiles]);
 
   const seekTo = useCallback((time: number) => {
     const video = playerRef.current?.getVideoElement();
@@ -253,15 +266,16 @@ function AnalyticsContent() {
     const createdByName = profile?.display_name ?? undefined;
     const category: BookmarkCategory = 'goal';
     const comment = `${homeScore} - ${awayScore}`;
+    const sourceFileId = state.activeSourceFileId ?? undefined;
 
     const bookmark = {
       id: localId, time, comment, createdAt: Date.now(),
-      category, ownerId, createdByName,
+      category, ownerId, createdByName, sourceFileId,
     };
     dispatch({ type: 'ADD_BOOKMARK', bookmark });
 
     if (state.sessionId) {
-      createEvent(state.sessionId, { time, comment, category }).then(row => {
+      createEvent(state.sessionId, { time, comment, category, sourceFileId }).then(row => {
         if (row) {
           dispatch({ type: 'REMOVE_BOOKMARK', id: localId });
           dispatch({
@@ -271,7 +285,7 @@ function AnalyticsContent() {
         }
       });
     }
-  }, [state.sessionId, user?.id, profile?.display_name, dispatch]);
+  }, [state.sessionId, state.activeSourceFileId, user?.id, profile?.display_name, dispatch]);
 
   const handleBookmarkSelect = useCallback((selection: BookmarkCategory | 'custom') => {
     setShowBookmarkPicker(false);
@@ -286,16 +300,22 @@ function AnalyticsContent() {
     const ownerId = user?.id;
     const createdByName = profile?.display_name ?? undefined;
 
+    const sourceFileId = state.activeSourceFileId ?? undefined;
+
     if (selection === 'custom') {
       const bookmark = {
         id: localId, time, comment: '', createdAt: Date.now(),
-        ownerId, createdByName,
+        ownerId, createdByName, sourceFileId,
       };
       dispatch({ type: 'ADD_BOOKMARK', bookmark });
+      // Auto-focus the comment field for the new bookmark
+      setBookmarkPanelOpen(true);
+      // Use setTimeout so the BookmarkList renders first, then receives the autoEditId
+      setTimeout(() => setAutoEditBookmarkId(localId), 0);
 
       // Persist to DB
       if (state.sessionId) {
-        createEvent(state.sessionId, { time, comment: '' }).then(row => {
+        createEvent(state.sessionId, { time, comment: '', sourceFileId }).then(row => {
           if (row) {
             // Patch in cloudId by replacing the bookmark
             dispatch({ type: 'REMOVE_BOOKMARK', id: localId });
@@ -318,13 +338,13 @@ function AnalyticsContent() {
     const comment = BOOKMARK_CATEGORY_LABELS[selection].full;
     const bookmark = {
       id: localId, time, comment, createdAt: Date.now(),
-      category: selection, ownerId, createdByName,
+      category: selection, ownerId, createdByName, sourceFileId,
     };
     dispatch({ type: 'ADD_BOOKMARK', bookmark });
 
     // Persist to DB
     if (state.sessionId) {
-      createEvent(state.sessionId, { time, comment, category: selection }).then(row => {
+      createEvent(state.sessionId, { time, comment, category: selection, sourceFileId }).then(row => {
         if (row) {
           dispatch({ type: 'REMOVE_BOOKMARK', id: localId });
           dispatch({
@@ -334,7 +354,7 @@ function AnalyticsContent() {
         }
       });
     }
-  }, [state.bookmarks, state.sessionId, user?.id, profile?.display_name, dispatch]);
+  }, [state.bookmarks, state.sessionId, state.activeSourceFileId, user?.id, profile?.display_name, dispatch]);
 
   return (
     <div style={{
@@ -477,7 +497,7 @@ function AnalyticsContent() {
         </div>
 
         {/* Right: Bookmarks panel or collapsed tab */}
-        {bookmarkCount > 0 && (
+        {(bookmarkCount > 0 || hasSourceFiles) && (
           bookmarkPanelOpen ? (
             <div style={{
               width: 220,
@@ -490,6 +510,7 @@ function AnalyticsContent() {
               <BookmarkList
                 onSeek={seekTo}
                 onClose={() => setBookmarkPanelOpen(false)}
+                autoEditId={autoEditBookmarkId}
                 onLeaveSession={() => {
                   const video = playerRef.current?.getVideoElement();
                   if (video) video.pause();

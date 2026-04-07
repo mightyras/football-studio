@@ -1,4 +1,4 @@
-import { useCallback, useState, useEffect, useRef } from 'react';
+import { useCallback, useState, useEffect, useRef, useMemo } from 'react';
 import { useAnalytics } from '../AnalyticsContext';
 import { formatTime } from '../utils/time';
 import { THEME } from '../../constants/colors';
@@ -21,6 +21,16 @@ export function VideoControls({ playerRef, onScreenshot, onStartRecording, onSto
   const [speedPopoverOpen, setSpeedPopoverOpen] = useState(false);
   const [clipMode, setClipMode] = useState(false);
   const speedRef = useRef<HTMLDivElement>(null);
+
+  // In multi-file mode, filter bookmarks to the active source file
+  const visibleBookmarks = useMemo(() => {
+    if (state.sourceType !== 'uploaded_files' || !state.activeSourceFileId) {
+      return state.bookmarks;
+    }
+    return state.bookmarks.filter(b =>
+      !b.sourceFileId || b.sourceFileId === state.activeSourceFileId
+    );
+  }, [state.bookmarks, state.sourceType, state.activeSourceFileId]);
 
   const handleSeek = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const video = playerRef.current?.getVideoElement();
@@ -493,8 +503,8 @@ export function VideoControls({ playerRef, onScreenshot, onStartRecording, onSto
             }} />
           )}
           {/* Period shading when all standard bookmarks are set */}
-          {state.duration > 0 && hasAllStandardBookmarks(state.bookmarks) && (() => {
-            const std = getStandardBookmarks(state.bookmarks);
+          {state.duration > 0 && hasAllStandardBookmarks(visibleBookmarks) && (() => {
+            const std = getStandardBookmarks(visibleBookmarks);
             const koPct = fullTimeToPct(std.kickoff!.time);
             const htPct = fullTimeToPct(std.halftime!.time);
             const s2hPct = fullTimeToPct(std.start2ndHalf!.time);
@@ -515,7 +525,7 @@ export function VideoControls({ playerRef, onScreenshot, onStartRecording, onSto
             );
           })()}
           {/* Bookmark markers */}
-          {state.duration > 0 && state.bookmarks.map(bookmark => {
+          {state.duration > 0 && visibleBookmarks.map(bookmark => {
             const pct = fullTimeToPct(bookmark.time);
             const isGoal = bookmark.category === 'goal';
 

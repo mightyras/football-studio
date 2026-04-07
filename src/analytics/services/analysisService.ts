@@ -1,5 +1,5 @@
 import { supabase } from '../../lib/supabase';
-import type { UrlMetadata, VideoAnnotation } from '../types';
+import type { UrlMetadata, VideoAnnotation, SessionSourceType } from '../types';
 
 // ============================================================
 // Row types
@@ -11,7 +11,8 @@ export type AnalysisSessionRow = {
   owner_display_name: string | null;
   team_id: string | null;
   name: string;
-  stream_url: string;
+  stream_url: string | null;
+  source_type: SessionSourceType;
   metadata: UrlMetadata | null;
   visibility: 'private' | 'team';
   clip_count: number;
@@ -45,6 +46,18 @@ export type AnalysisEventRow = {
   time: number;
   comment: string;
   category: string | null;
+  source_file_id: string | null;
+  created_at: string;
+};
+
+export type AnalysisSourceFileRow = {
+  id: string;
+  session_id: string;
+  owner_id: string;
+  file_name: string;
+  storage_path: string;
+  file_size: number | null;
+  sort_order: number;
   created_at: string;
 };
 
@@ -52,7 +65,7 @@ export type AnalysisEventRow = {
 // Helpers
 // ============================================================
 
-const SESSION_COLUMNS = 'id, owner_id, team_id, name, stream_url, metadata, visibility, created_at, updated_at, profiles!owner_id(display_name)';
+const SESSION_COLUMNS = 'id, owner_id, team_id, name, stream_url, source_type, metadata, visibility, created_at, updated_at, profiles!owner_id(display_name)';
 
 function mapSessionRow(row: Record<string, unknown>): AnalysisSessionRow {
   const profiles = row.profiles as { display_name: string | null } | null;
@@ -62,7 +75,8 @@ function mapSessionRow(row: Record<string, unknown>): AnalysisSessionRow {
     owner_display_name: profiles?.display_name ?? null,
     team_id: (row.team_id as string) ?? null,
     name: row.name as string,
-    stream_url: row.stream_url as string,
+    stream_url: (row.stream_url as string) ?? null,
+    source_type: (row.source_type as SessionSourceType) ?? 'stream',
     metadata: (row.metadata as UrlMetadata) ?? null,
     visibility: (row.visibility as 'private' | 'team') ?? 'private',
     clip_count: 0, // populated separately when needed
@@ -94,7 +108,7 @@ function mapClipRow(row: Record<string, unknown>): AnalysisClipRow {
   };
 }
 
-const EVENT_COLUMNS = 'id, session_id, owner_id, time, comment, category, created_at, profiles!owner_id(display_name)';
+const EVENT_COLUMNS = 'id, session_id, owner_id, time, comment, category, source_file_id, created_at, profiles!owner_id(display_name)';
 
 function mapEventRow(row: Record<string, unknown>): AnalysisEventRow {
   const profiles = row.profiles as { display_name: string | null } | null;
@@ -106,6 +120,7 @@ function mapEventRow(row: Record<string, unknown>): AnalysisEventRow {
     time: row.time as number,
     comment: (row.comment as string) ?? '',
     category: (row.category as string) ?? null,
+    source_file_id: (row.source_file_id as string) ?? null,
     created_at: row.created_at as string,
   };
 }
@@ -239,9 +254,10 @@ async function populateSessionCounts(
 /** Create a new analysis session. */
 export async function createSession(
   name: string,
-  streamUrl: string,
+  streamUrl: string | null,
   metadata: UrlMetadata | null,
   teamId?: string,
+  sourceType?: SessionSourceType,
 ): Promise<AnalysisSessionRow | null> {
   if (!supabase) return null;
   const { data: { user } } = await supabase.auth.getUser();
@@ -254,6 +270,7 @@ export async function createSession(
     owner_id: user.id,
     name,
     stream_url: streamUrl,
+    source_type: sourceType ?? 'stream',
     metadata: metadata as unknown as Record<string, unknown>,
     bookmarks: [],
   };
@@ -461,7 +478,7 @@ export async function fetchSessionEvents(sessionId: string): Promise<AnalysisEve
 /** Create an event. For category events, soft-deletes the existing one first. */
 export async function createEvent(
   sessionId: string,
-  event: { time: number; comment: string; category?: string | null },
+  event: { time: number; comment: string; category?: string | null; sourceFileId?: string | null },
 ): Promise<AnalysisEventRow | null> {
   if (!supabase) return null;
   const { data: { user } } = await supabase.auth.getUser();
@@ -493,6 +510,7 @@ export async function createEvent(
       time: event.time,
       comment: event.comment,
       category: event.category ?? null,
+      source_file_id: event.sourceFileId ?? null,
     })
     .select(EVENT_COLUMNS)
     .single();
@@ -520,4 +538,95 @@ export async function deleteEvent(id: string): Promise<boolean> {
   if (!supabase) return false;
   const { error } = await supabase.rpc('soft_delete_analysis_event', { p_event_id: id });
   return !error;
+}
+
+// ============================================================
+// SOURCE FILE CRUD (analysis_source_files table)
+// ============================================================
+
+/** Upload a source video file to storage and insert a DB row. */
+export async function uploadSourceFile(
+  sessionId: string,
+  file: File,
+  sortOrder: number,
+): Promise<AnalysisSourceFileRow | null> {
+  if (!supabase) return null;
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return null;
+
+  const fileId = crypto.randomUUID();
+  const ext = file.name.split('.').pop() ?? 'mp4';
+  const storagePath = `${user.id}/sources/${sessionId}/${fileId}.${ext}`;
+
+  // Upload to storage
+  const { error: uploadErr } = await supabase.storage
+    .from('analysis-media')
+    .upload(storagePath, file, {
+      contentType: file.type || 'video/mp4',
+      upsert: false,
+    });
+
+  if (uploadErr) {
+    console.error('Failed to upload source file:', uploadErr);
+    return null;
+  }
+
+  // Insert DB row
+  const { data: row, error } = await supabase
+    .from('analysis_source_files')
+    .insert({
+      id: fileId,
+      session_id: sessionId,
+      owner_id: user.id,
+      file_name: file.name,
+      storage_path: storagePath,
+      file_size: file.size,
+      sort_order: sortOrder,
+    })
+    .select('id, session_id, owner_id, file_name, storage_path, file_size, sort_order, created_at')
+    .single();
+
+  if (error || !row) {
+    console.error('Failed to insert source file row:', error);
+    return null;
+  }
+
+  return row as AnalysisSourceFileRow;
+}
+
+/** Fetch all source files for a session, ordered by sort_order. */
+export async function fetchSessionSourceFiles(sessionId: string): Promise<AnalysisSourceFileRow[]> {
+  const sb = supabase;
+  if (!sb) return [];
+
+  const { data, error } = await sb
+    .from('analysis_source_files')
+    .select('id, session_id, owner_id, file_name, storage_path, file_size, sort_order, created_at')
+    .is('deleted_at', null)
+    .eq('session_id', sessionId)
+    .order('sort_order', { ascending: true });
+
+  if (error || !data) return [];
+  return data as AnalysisSourceFileRow[];
+}
+
+/** Get a signed URL for a source file (60-minute expiry). */
+export async function getSourceFileUrl(storagePath: string): Promise<string | null> {
+  return getClipDownloadUrl(storagePath);
+}
+
+/** Batch-update sort_order for source files after drag reorder. */
+export async function updateSourceFileOrder(
+  updates: { id: string; sortOrder: number }[],
+): Promise<boolean> {
+  if (!supabase || updates.length === 0) return false;
+
+  // Update each file's sort_order individually (Supabase doesn't support batch upsert on non-PK)
+  const results = await Promise.all(
+    updates.map(({ id, sortOrder }) =>
+      supabase!.from('analysis_source_files').update({ sort_order: sortOrder }).eq('id', id)
+    )
+  );
+
+  return results.every(r => !r.error);
 }

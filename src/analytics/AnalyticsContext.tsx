@@ -32,6 +32,10 @@ const initialState: AnalyticsState = {
   sessionOwnerId: null,
   saveStatus: 'idle',
   holdStrokesOnPause: false,
+  sourceType: 'stream',
+  sourceFiles: [],
+  activeSourceFileId: null,
+  localFileHint: null,
 };
 
 function analyticsReducer(state: AnalyticsState, action: AnalyticsAction): AnalyticsState {
@@ -55,6 +59,10 @@ function analyticsReducer(state: AnalyticsState, action: AnalyticsAction): Analy
         sessionName: null,
         sessionOwnerId: null,
         saveStatus: 'idle',
+        sourceType: 'stream',
+        sourceFiles: [],
+        activeSourceFileId: null,
+        localFileHint: null,
       };
     case 'SET_RESOLVED_STREAM_URL':
       return { ...state, resolvedStreamUrl: action.url };
@@ -163,15 +171,19 @@ function analyticsReducer(state: AnalyticsState, action: AnalyticsAction): Analy
             : c
         ),
       };
-    case 'LOAD_SESSION':
+    case 'LOAD_SESSION': {
+      const sourceType = action.sourceType ?? 'stream';
+      const needsFileReselection = sourceType === 'local_file';
+      // For uploaded files, the streamUrl from SessionBrowser is already the resolved signed URL
+      const isUploadedFiles = sourceType === 'uploaded_files';
       return {
         ...state,
         sessionId: action.sessionId,
         sessionName: action.sessionName,
         sessionOwnerId: action.sessionOwnerId,
         streamUrl: action.streamUrl,
-        resolvedStreamUrl: null,
-        streamStatus: 'loading',
+        resolvedStreamUrl: isUploadedFiles ? action.streamUrl : null,
+        streamStatus: needsFileReselection ? 'idle' : (action.streamUrl ? 'loading' : 'idle'),
         streamError: null,
         urlMetadata: action.metadata,
         bookmarks: action.bookmarks,
@@ -184,7 +196,12 @@ function analyticsReducer(state: AnalyticsState, action: AnalyticsAction): Analy
         outPoint: null,
         annotations: [],
         saveStatus: 'idle',
+        sourceType,
+        sourceFiles: action.sourceFiles ?? [],
+        activeSourceFileId: action.sourceFiles?.[0]?.id ?? null,
+        localFileHint: action.localFileHint ?? null,
       };
+    }
     case 'CLEAR_FREEHAND_ANNOTATIONS':
       return { ...state, annotations: state.annotations.filter(a => a.type !== 'freehand' && a.type !== 'spotlight') };
     case 'REMOVE_FADED_ANNOTATIONS': {
@@ -218,6 +235,14 @@ function analyticsReducer(state: AnalyticsState, action: AnalyticsAction): Analy
     }
     case 'SET_HOLD_STROKES_ON_PAUSE':
       return { ...state, holdStrokesOnPause: action.hold };
+    case 'SET_SOURCE_TYPE':
+      return { ...state, sourceType: action.sourceType };
+    case 'SET_SOURCE_FILES':
+      return { ...state, sourceFiles: action.files };
+    case 'SET_ACTIVE_SOURCE_FILE':
+      return { ...state, activeSourceFileId: action.id };
+    case 'SET_LOCAL_FILE_HINT':
+      return { ...state, localFileHint: action.hint };
     case 'UPDATE_STREAM_URL':
       return {
         ...state,

@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAnalytics } from '../AnalyticsContext';
-import { fetchAllVisibleSessions, fetchSessionEvents, deleteSession, fetchSessionClips, getClipThumbnailUrl } from '../services/analysisService';
+import { fetchAllVisibleSessions, fetchSessionEvents, deleteSession, fetchSessionClips, getClipThumbnailUrl, fetchSessionSourceFiles, getSourceFileUrl } from '../services/analysisService';
 import type { AnalysisSessionRow } from '../services/analysisService';
-import type { SessionClip, Bookmark } from '../types';
+import type { SessionClip, Bookmark, SourceFileInfo } from '../types';
 import { ConfirmDialog } from './ConfirmDialog';
 import { useTeam } from '../../state/TeamContext';
 import { useAuth } from '../../state/AuthContext';
@@ -51,10 +51,15 @@ export function SessionBrowser() {
   const handleLoad = useCallback(async (session: AnalysisSessionRow) => {
     setLoadingSessionId(session.id);
 
-    // Fetch clips and events in parallel
-    const [clipRows, eventRows] = await Promise.all([
+    // Fetch clips, events, and source files in parallel
+    const fetchSourceFiles = session.source_type === 'uploaded_files'
+      ? fetchSessionSourceFiles(session.id)
+      : Promise.resolve([]);
+
+    const [clipRows, eventRows, sourceFileRows] = await Promise.all([
       fetchSessionClips(session.id),
       fetchSessionEvents(session.id),
+      fetchSourceFiles,
     ]);
 
     // Convert DB rows to SessionClip objects with signed thumbnail URLs
@@ -94,7 +99,31 @@ export function SessionBrowser() {
       ownerId: row.owner_id,
       createdByName: row.owner_display_name ?? undefined,
       cloudId: row.id,
+      sourceFileId: row.source_file_id ?? undefined,
     }));
+
+    // Convert source file rows
+    const sourceFiles: SourceFileInfo[] = sourceFileRows.map(row => ({
+      id: row.id,
+      fileName: row.file_name,
+      storagePath: row.storage_path,
+      fileSize: row.file_size ?? undefined,
+      sortOrder: row.sort_order,
+    }));
+
+    // For uploaded_files sessions, resolve the first file's URL
+    let streamUrl = session.stream_url;
+    if (session.source_type === 'uploaded_files' && sourceFiles.length > 0) {
+      const firstFileUrl = await getSourceFileUrl(sourceFiles[0].storagePath!);
+      if (firstFileUrl) {
+        streamUrl = firstFileUrl;
+      }
+    }
+
+    // Extract local file hint from metadata for local_file sessions
+    const localFileHint = session.source_type === 'local_file' && session.metadata
+      ? (session.metadata as Record<string, unknown>).localFileHint as { fileName: string; fileSize: number; lastModified: number } | undefined
+      : undefined;
 
     // Load the session into state
     dispatch({
@@ -102,10 +131,13 @@ export function SessionBrowser() {
       sessionId: session.id,
       sessionName: session.name,
       sessionOwnerId: session.owner_id,
-      streamUrl: session.stream_url,
+      streamUrl,
       metadata: session.metadata,
       bookmarks,
       clips,
+      sourceType: session.source_type,
+      sourceFiles,
+      localFileHint: localFileHint ?? null,
     });
 
     setLoadingSessionId(null);
@@ -183,10 +215,18 @@ export function SessionBrowser() {
                 transition: 'background 0.1s',
               }}
             >
-              {/* Icon */}
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={THEME.textMuted} strokeWidth="1.5">
-                <polygon points="5,3 19,12 5,21" />
-              </svg>
+              {/* Icon — file icon for local/uploaded, play icon for streams */}
+              {session.source_type === 'stream' ? (
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={THEME.textMuted} strokeWidth="1.5">
+                  <polygon points="5,3 19,12 5,21" />
+                </svg>
+              ) : (
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={THEME.textMuted} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" />
+                  <polyline points="14 2 14 8 20 8" />
+                  <polygon points="10 12 10 18 15 15" />
+                </svg>
+              )}
 
               {/* Info */}
               <div style={{ flex: 1, minWidth: 0 }}>
@@ -223,6 +263,18 @@ export function SessionBrowser() {
                   gap: 8,
                   flexWrap: 'wrap',
                 }}>
+                  {session.source_type !== 'stream' && (
+                    <span style={{
+                      background: 'rgba(139, 92, 246, 0.15)',
+                      color: 'rgba(139, 92, 246, 0.9)',
+                      borderRadius: 3,
+                      padding: '0 5px',
+                      fontSize: 10,
+                      fontWeight: 600,
+                    }}>
+                      {session.source_type === 'local_file' ? 'Local file' : 'Uploaded files'}
+                    </span>
+                  )}
                   {session.metadata?.competition && (
                     <span style={{
                       background: 'rgba(245, 158, 11, 0.15)',

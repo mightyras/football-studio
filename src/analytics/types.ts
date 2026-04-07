@@ -46,6 +46,23 @@ export type SessionClip = {
   thumbnailStoragePath?: string;
 };
 
+export type SessionSourceType = 'stream' | 'local_file' | 'uploaded_files';
+
+export type SourceFileInfo = {
+  id: string;
+  fileName: string;
+  storagePath?: string;
+  objectUrl?: string;
+  fileSize?: number;
+  sortOrder: number;
+};
+
+export type LocalFileHint = {
+  fileName: string;
+  fileSize: number;
+  lastModified: number;
+};
+
 export type StreamStatus = 'idle' | 'loading' | 'resolving' | 'playing' | 'error';
 export type RecordingStatus = 'idle' | 'recording' | 'processing';
 export type AnalyticsTool = 'select' | 'freehand' | 'arrow' | 'circle' | 'rect' | 'text' | 'eraser';
@@ -80,6 +97,10 @@ export type AnalyticsState = {
   sessionOwnerId: string | null;
   saveStatus: 'idle' | 'saving' | 'saved' | 'error';
   holdStrokesOnPause: boolean;
+  sourceType: SessionSourceType;
+  sourceFiles: SourceFileInfo[];
+  activeSourceFileId: string | null;
+  localFileHint: LocalFileHint | null;
 };
 
 export type AnalyticsAction =
@@ -115,7 +136,11 @@ export type AnalyticsAction =
   | { type: 'SET_SESSION_NAME'; name: string }
   | { type: 'SET_SAVE_STATUS'; status: 'idle' | 'saving' | 'saved' | 'error' }
   | { type: 'SET_CLIP_CLOUD_ID'; localId: string; cloudId: string; storagePath: string; thumbnailStoragePath?: string }
-  | { type: 'LOAD_SESSION'; clips: SessionClip[]; bookmarks: Bookmark[]; streamUrl: string; metadata: UrlMetadata | null; sessionId: string; sessionName: string; sessionOwnerId: string }
+  | { type: 'SET_SOURCE_TYPE'; sourceType: SessionSourceType }
+  | { type: 'SET_SOURCE_FILES'; files: SourceFileInfo[] }
+  | { type: 'SET_ACTIVE_SOURCE_FILE'; id: string | null }
+  | { type: 'SET_LOCAL_FILE_HINT'; hint: LocalFileHint | null }
+  | { type: 'LOAD_SESSION'; clips: SessionClip[]; bookmarks: Bookmark[]; streamUrl: string | null; metadata: UrlMetadata | null; sessionId: string; sessionName: string; sessionOwnerId: string; sourceType?: SessionSourceType; sourceFiles?: SourceFileInfo[]; localFileHint?: LocalFileHint | null }
   | { type: 'CLEAR_FREEHAND_ANNOTATIONS' }
   | { type: 'REMOVE_FADED_ANNOTATIONS'; ids: string[] }
   | { type: 'STAMP_FREEHAND_FADE_START'; time: number; videoTime?: number }
@@ -181,4 +206,6 @@ export type Bookmark = {
   createdByName?: string;
   // Persistence
   cloudId?: string;
+  // Multi-file: which source file this bookmark belongs to
+  sourceFileId?: string;
 };
