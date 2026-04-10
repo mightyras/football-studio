@@ -162,7 +162,7 @@ function MovePlayerOverlayInner({ videoElement }: Props, ref: React.ForwardedRef
       radiusY: ryNorm,
       scale: 1,
     });
-  }, [buildComposite]);
+  }, [buildCompositeFn]);
 
   // Hit-test placed players (returns index or -1)
   const hitTestPlacedPlayers = useCallback((nx: number, ny: number): number => {

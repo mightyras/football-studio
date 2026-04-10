@@ -219,10 +219,7 @@ function AnalyticsContent() {
           break;
         case 'p':
           if (!state.isPlaying && state.streamStatus === 'playing') {
-            dispatch({
-              type: 'SET_ACTIVE_TOOL',
-              tool: state.activeTool === 'move-player' ? 'select' : 'move-player',
-            });
+            dispatch({ type: 'SET_ACTIVE_TOOL', tool: 'move-player' });
           }
           break;
         case 'arrowleft':
