@@ -14,6 +14,7 @@ const PEN_COLORS = [
 export function DrawingToolbar() {
   const { state, dispatch } = useAnalytics();
   const isPenActive = state.activeTool === 'freehand';
+  const isMovePlayerActive = state.activeTool === 'move-player';
   const hasFreehandStrokes = state.annotations.some(a => a.type === 'freehand');
   const isPaused = !state.isPlaying && state.streamStatus === 'playing';
 
@@ -21,6 +22,13 @@ export function DrawingToolbar() {
     dispatch({
       type: 'SET_ACTIVE_TOOL',
       tool: isPenActive ? 'select' : 'freehand',
+    });
+  };
+
+  const toggleMovePlayer = () => {
+    dispatch({
+      type: 'SET_ACTIVE_TOOL',
+      tool: isMovePlayerActive ? 'select' : 'move-player',
     });
   };
 
@@ -68,6 +76,36 @@ export function DrawingToolbar() {
           <path d="M160-120v-170l527-526q12-12 27-18t30-6q16 0 30.5 6t25.5 18l56 56q12 11 18 25.5t6 30.5q0 15-6 30t-18 27L330-120H160Zm80-80h56l393-392-28-29-29-28-392 393v56Zm560-503-57-57 57 57Zm-139 82-29-28 57 57-28-29ZM560-120q74 0 137-37t63-103q0-36-19-62t-51-45l-59 59q23 10 36 22t13 26q0 23-36.5 41.5T560-200q-17 0-28.5 11.5T520-160q0 17 11.5 28.5T560-120ZM183-426l60-60q-20-8-31.5-16.5T200-520q0-12 18-24t76-37q88-38 117-69t29-70q0-55-44-87.5T280-840q-45 0-80.5 16T145-785q-11 13-9 29t15 26q13 11 29 9t27-13q14-14 31-20t42-6q41 0 60.5 12t19.5 28q0 14-17.5 25.5T262-654q-80 35-111 63.5T120-520q0 32 17 54.5t46 39.5Z" />
         </svg>
       </button>
+
+      {/* Move Player button — only when paused */}
+      {isPaused && (
+        <button
+          onClick={toggleMovePlayer}
+          title={isMovePlayerActive ? 'Cancel move player (P)' : 'Move player in frame (P)'}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: 28,
+            height: 28,
+            borderRadius: '50%',
+            background: isMovePlayerActive ? THEME.highlight : 'transparent',
+            border: 'none',
+            color: isMovePlayerActive ? '#000' : 'rgba(255,255,255,0.7)',
+            cursor: 'pointer',
+            padding: 0,
+            transition: 'background 0.15s, color 0.15s',
+          }}
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="9" cy="7" r="4" />
+            <path d="M3 21v-2a4 4 0 0 1 4-4h4" />
+            <path d="M16 16l4 4" />
+            <path d="M20 16l-4 4" />
+            <path d="M16 20l4-4" />
+          </svg>
+        </button>
+      )}
 
       {/* Expanded controls — vertical stack when pen is active */}
       {isPenActive && (

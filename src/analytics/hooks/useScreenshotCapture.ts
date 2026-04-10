@@ -8,6 +8,8 @@ import type { SessionClip } from '../types';
 export function useScreenshotCapture(
   videoRef: React.RefObject<HTMLVideoElement | null>,
   onClipReady?: (clip: SessionClip) => void,
+  /** Optional function that returns a clean composite canvas for the move-player overlay */
+  getOverlayComposite?: () => HTMLCanvasElement | null,
 ) {
   const { state, dispatch } = useAnalytics();
   const sessionIdRef = useRef(state.sessionId);
@@ -27,6 +29,12 @@ export function useScreenshotCapture(
     if (!ctx) return;
 
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+    // Composite move-player overlay if present (clean composite at native resolution)
+    const overlayCanvas = getOverlayComposite?.();
+    if (overlayCanvas && overlayCanvas.width > 0 && overlayCanvas.height > 0) {
+      ctx.drawImage(overlayCanvas, 0, 0, canvas.width, canvas.height);
+    }
 
     // Composite visible freehand strokes and dot markers onto the screenshot
     const freehandAnnotations = state.annotations.filter(a => a.type === 'freehand');
@@ -68,7 +76,7 @@ export function useScreenshotCapture(
         dispatch({ type: 'ADD_SESSION_CLIP', clip });
       }
     }, 'image/png');
-  }, [videoRef, state.annotations, dispatch, onClipReady]);
+  }, [videoRef, state.annotations, dispatch, onClipReady, getOverlayComposite]);
 
   /** Persist a clip to state + Supabase. Called after user confirms in preview. */
   const saveScreenshot = useCallback(async (clip: SessionClip, label: string) => {

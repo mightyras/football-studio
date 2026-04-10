@@ -11,6 +11,7 @@ import { CapturePreview } from './components/CapturePreview';
 import { SaveToast } from './components/SaveToast';
 import { VideoDrawingOverlay } from './components/VideoDrawingOverlay';
 import { DrawingToolbar } from './components/DrawingToolbar';
+import { MovePlayerOverlay, type MovePlayerOverlayHandle } from './components/MovePlayerOverlay';
 import { BookmarkPicker } from './components/BookmarkPicker';
 import { GoalTeamPicker } from './components/GoalTeamPicker';
 import { MatchResultsPanel } from './components/MatchResultsPanel';
@@ -37,6 +38,12 @@ function AnalyticsContent() {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const videoElementRef = useRef<HTMLVideoElement | null>(null);
+  const movePlayerRef = useRef<MovePlayerOverlayHandle>(null);
+
+  // Callback for screenshot capture: returns clean composite from move-player overlay
+  const getMovePlayerComposite = useCallback(() => {
+    return movePlayerRef.current?.buildComposite() ?? null;
+  }, []);
   const [showBookmarkPicker, setShowBookmarkPicker] = useState(false);
   const [showGoalPicker, setShowGoalPicker] = useState(false);
   const bookmarkTimeRef = useRef(0);
@@ -76,7 +83,7 @@ function AnalyticsContent() {
     setPendingClip(clip);
   }, []);
 
-  const { captureScreenshot, saveScreenshot } = useScreenshotCapture(videoElementRef, handleClipReady);
+  const { captureScreenshot, saveScreenshot } = useScreenshotCapture(videoElementRef, handleClipReady, getMovePlayerComposite);
   const { startRecording, stopRecording, saveVideoClip } = useClipRecorder(videoElementRef, handleClipReady);
 
   // Handle save from preview modal
@@ -165,6 +172,9 @@ function AnalyticsContent() {
         return;
       }
 
+      // Block all keys when move-player tool is active (overlay handles its own keys)
+      if (state.activeTool === 'move-player') return;
+
       switch (e.key.toLowerCase()) {
         case ' ':
           e.preventDefault();
@@ -207,6 +217,14 @@ function AnalyticsContent() {
             tool: state.activeTool === 'freehand' ? 'select' : 'freehand',
           });
           break;
+        case 'p':
+          if (!state.isPlaying && state.streamStatus === 'playing') {
+            dispatch({
+              type: 'SET_ACTIVE_TOOL',
+              tool: state.activeTool === 'move-player' ? 'select' : 'move-player',
+            });
+          }
+          break;
         case 'arrowleft':
           if (video) {
             e.preventDefault();
@@ -226,14 +244,19 @@ function AnalyticsContent() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [state.streamStatus, state.inPoint, state.outPoint, state.recordingStatus, state.activeTool, state.selectedClipId, state.annotations, showBookmarkPicker, dispatch, startRecording, stopRecording]);
 
-  // Clear freehand strokes when video resumes playing (unless hold is on)
+  // Clear freehand strokes and move-player state when video resumes playing
   const prevPlayingRef = useRef(state.isPlaying);
   useEffect(() => {
-    if (state.isPlaying && !prevPlayingRef.current && !state.holdStrokesOnPause) {
-      dispatch({ type: 'CLEAR_FREEHAND_ANNOTATIONS' });
+    if (state.isPlaying && !prevPlayingRef.current) {
+      if (!state.holdStrokesOnPause) {
+        dispatch({ type: 'CLEAR_FREEHAND_ANNOTATIONS' });
+      }
+      if (state.movePlayerState) {
+        dispatch({ type: 'CLEAR_MOVE_PLAYER_STATE' });
+      }
     }
     prevPlayingRef.current = state.isPlaying;
-  }, [state.isPlaying, state.holdStrokesOnPause, dispatch]);
+  }, [state.isPlaying, state.holdStrokesOnPause, state.movePlayerState, dispatch]);
 
   const isRecording = state.recordingStatus === 'recording';
   const clipCount = state.sessionClips.length;
@@ -404,6 +427,10 @@ function AnalyticsContent() {
             <VideoDrawingOverlay
               videoElement={videoElementRef.current}
               mode="live"
+            />
+            <MovePlayerOverlay
+              ref={movePlayerRef}
+              videoElement={videoElementRef.current}
             />
             <MatchClock />
             <MatchResultsPanel />

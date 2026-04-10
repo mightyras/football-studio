@@ -65,7 +65,17 @@ export type LocalFileHint = {
 
 export type StreamStatus = 'idle' | 'loading' | 'resolving' | 'playing' | 'error';
 export type RecordingStatus = 'idle' | 'recording' | 'processing';
-export type AnalyticsTool = 'select' | 'freehand' | 'arrow' | 'circle' | 'rect' | 'text' | 'eraser';
+export type AnalyticsTool = 'select' | 'freehand' | 'arrow' | 'circle' | 'rect' | 'text' | 'eraser' | 'move-player';
+
+export type MovePlayerPhase = 'select-first-edge' | 'select-second-edge';
+
+export type MovePlayerState = {
+  phase: MovePlayerPhase;
+  /** First edge click (corner of bounding box) — used during select-second-edge */
+  firstEdge?: { x: number; y: number };
+  /** Number of placed players (for UI reactivity) */
+  moveCount?: number;
+};
 
 export type AnalyticsState = {
   streamUrl: string | null;
@@ -101,6 +111,7 @@ export type AnalyticsState = {
   sourceFiles: SourceFileInfo[];
   activeSourceFileId: string | null;
   localFileHint: LocalFileHint | null;
+  movePlayerState: MovePlayerState | null;
 };
 
 export type AnalyticsAction =
@@ -146,6 +157,9 @@ export type AnalyticsAction =
   | { type: 'STAMP_FREEHAND_FADE_START'; time: number; videoTime?: number }
   | { type: 'UNSTAMP_FREEHAND_FADE' }
   | { type: 'SET_HOLD_STROKES_ON_PAUSE'; hold: boolean }
+  | { type: 'SET_MOVE_PLAYER_STATE'; state: MovePlayerState | null }
+  | { type: 'UPDATE_MOVE_PLAYER_PHASE'; phase: MovePlayerPhase; patch?: Partial<MovePlayerState> }
+  | { type: 'CLEAR_MOVE_PLAYER_STATE' }
   | { type: 'UPDATE_STREAM_URL'; url: string }
   | { type: 'RESET' };
 

@@ -36,6 +36,7 @@ const initialState: AnalyticsState = {
   sourceFiles: [],
   activeSourceFileId: null,
   localFileHint: null,
+  movePlayerState: null,
 };
 
 function analyticsReducer(state: AnalyticsState, action: AnalyticsAction): AnalyticsState {
@@ -63,6 +64,7 @@ function analyticsReducer(state: AnalyticsState, action: AnalyticsAction): Analy
         sourceFiles: [],
         activeSourceFileId: null,
         localFileHint: null,
+        movePlayerState: null,
       };
     case 'SET_RESOLVED_STREAM_URL':
       return { ...state, resolvedStreamUrl: action.url };
@@ -96,8 +98,27 @@ function analyticsReducer(state: AnalyticsState, action: AnalyticsAction): Analy
       };
     case 'SET_RECORDING_ELAPSED':
       return { ...state, recordingElapsed: action.elapsed };
-    case 'SET_ACTIVE_TOOL':
-      return { ...state, activeTool: action.tool, selectedAnnotationId: null };
+    case 'SET_ACTIVE_TOOL': {
+      let movePlayerState = state.movePlayerState;
+      if (action.tool === 'move-player') {
+        // Activate: create fresh state only if none exists
+        if (!movePlayerState) {
+          movePlayerState = { phase: 'select-first-edge', moveCount: 0 };
+        } else {
+          // Re-entering: go back to selection phase
+          movePlayerState = { ...movePlayerState, phase: 'select-first-edge' };
+        }
+      }
+      // When switching away from move-player, keep movePlayerState alive
+      // so the overlay continues rendering the composite.
+      // Only CLEAR_MOVE_PLAYER_STATE fully removes it.
+      return {
+        ...state,
+        activeTool: action.tool,
+        selectedAnnotationId: null,
+        movePlayerState,
+      };
+    }
     case 'SET_ACTIVE_COLOR':
       return { ...state, activeColor: action.color };
     case 'SET_ACTIVE_LINE_WIDTH':
@@ -200,6 +221,7 @@ function analyticsReducer(state: AnalyticsState, action: AnalyticsAction): Analy
         sourceFiles: action.sourceFiles ?? [],
         activeSourceFileId: action.sourceFiles?.[0]?.id ?? null,
         localFileHint: action.localFileHint ?? null,
+        movePlayerState: null,
       };
     }
     case 'CLEAR_FREEHAND_ANNOTATIONS':
@@ -243,6 +265,17 @@ function analyticsReducer(state: AnalyticsState, action: AnalyticsAction): Analy
       return { ...state, activeSourceFileId: action.id };
     case 'SET_LOCAL_FILE_HINT':
       return { ...state, localFileHint: action.hint };
+    case 'SET_MOVE_PLAYER_STATE':
+      return { ...state, movePlayerState: action.state };
+    case 'CLEAR_MOVE_PLAYER_STATE':
+      return { ...state, movePlayerState: null, activeTool: state.activeTool === 'move-player' ? 'select' : state.activeTool };
+    case 'UPDATE_MOVE_PLAYER_PHASE':
+      return {
+        ...state,
+        movePlayerState: state.movePlayerState
+          ? { ...state.movePlayerState, ...action.patch, phase: action.phase }
+          : null,
+      };
     case 'UPDATE_STREAM_URL':
       return {
         ...state,
@@ -256,6 +289,7 @@ function analyticsReducer(state: AnalyticsState, action: AnalyticsAction): Analy
         inPoint: null,
         outPoint: null,
         annotations: [],
+        movePlayerState: null,
       };
     case 'RESET':
       return initialState;
