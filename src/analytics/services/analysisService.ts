@@ -306,10 +306,28 @@ export async function updateSession(
   return !error;
 }
 
-/** Soft-delete a session. */
+/** Hard-delete a session: remove all storage files for its clips and source files, then delete the row (FK cascade removes clips/events/source_files). */
 export async function deleteSession(id: string): Promise<boolean> {
   if (!supabase) return false;
-  const { error } = await supabase.rpc('soft_delete_analysis_session', { p_session_id: id });
+
+  const [{ data: clips }, { data: sources }] = await Promise.all([
+    supabase.from('analysis_clips').select('storage_path, thumbnail_path').eq('session_id', id),
+    supabase.from('analysis_source_files').select('storage_path').eq('session_id', id),
+  ]);
+
+  const paths: string[] = [];
+  for (const c of clips ?? []) {
+    if (c.storage_path) paths.push(c.storage_path as string);
+    if (c.thumbnail_path) paths.push(c.thumbnail_path as string);
+  }
+  for (const s of sources ?? []) {
+    if (s.storage_path) paths.push(s.storage_path as string);
+  }
+  if (paths.length > 0) {
+    await supabase.storage.from('analysis-media').remove(paths);
+  }
+
+  const { error } = await supabase.rpc('delete_analysis_session', { p_session_id: id });
   return !error;
 }
 
@@ -432,10 +450,24 @@ export async function updateClipAnnotations(id: string, annotations: VideoAnnota
   return !error;
 }
 
-/** Soft-delete a clip. */
+/** Hard-delete a clip: remove its storage files, then delete the row. */
 export async function deleteClip(id: string): Promise<boolean> {
   if (!supabase) return false;
-  const { error } = await supabase.rpc('soft_delete_analysis_clip', { p_clip_id: id });
+
+  const { data: clip } = await supabase
+    .from('analysis_clips')
+    .select('storage_path, thumbnail_path')
+    .eq('id', id)
+    .maybeSingle();
+
+  const paths: string[] = [];
+  if (clip?.storage_path) paths.push(clip.storage_path as string);
+  if (clip?.thumbnail_path) paths.push(clip.thumbnail_path as string);
+  if (paths.length > 0) {
+    await supabase.storage.from('analysis-media').remove(paths);
+  }
+
+  const { error } = await supabase.rpc('delete_analysis_clip', { p_clip_id: id });
   return !error;
 }
 
@@ -496,7 +528,7 @@ export async function createEvent(
       .maybeSingle();
 
     if (existing) {
-      await supabase.rpc('soft_delete_analysis_event', { p_event_id: existing.id });
+      await supabase.rpc('delete_analysis_event', { p_event_id: existing.id });
     }
   }
 
@@ -533,10 +565,10 @@ export async function updateEventComment(id: string, comment: string): Promise<b
   return !error;
 }
 
-/** Soft-delete an event. */
+/** Hard-delete an event. */
 export async function deleteEvent(id: string): Promise<boolean> {
   if (!supabase) return false;
-  const { error } = await supabase.rpc('soft_delete_analysis_event', { p_event_id: id });
+  const { error } = await supabase.rpc('delete_analysis_event', { p_event_id: id });
   return !error;
 }
 
